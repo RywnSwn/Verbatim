@@ -52,6 +52,7 @@ struct PastRecordingView: View {
                 Button("Show in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([RecordingStore.audioURL(info.id)])
                 }
+                Button("Move to Trash") { model.delete(info.id) }
             }
             Text("Transcripts come in a later update.")
                 .font(.callout)

@@ -12,7 +12,7 @@ final class RecorderModel {
 
     /// What the status spot in the bottom bar says. `action` adds a text link.
     struct Status: Equatable {
-        enum Action { case stopRecording, resume }
+        enum Action { case stopRecording, resume, undoDelete }
         var text: String
         var action: Action?
         var id = UUID()
@@ -37,6 +37,14 @@ final class RecorderModel {
     private(set) var elapsed: TimeInterval = 0
     private(set) var status: Status?
     private(set) var stoppedNote: StoppedNote?
+    /// Shown for 10 s after Move to Trash, with Undo.
+    struct DeletedNote: Equatable {
+        var info: RecordingInfo
+        var trashURL: URL
+        var id = UUID()
+    }
+
+    private(set) var deletedNote: DeletedNote?
     var recoveryNotice: String?
     private(set) var micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
     private(set) var micName = "MacBook mic"
@@ -109,6 +117,7 @@ final class RecorderModel {
         }
 
         stoppedNote = nil
+        deletedNote = nil
         device = dev
         refreshMicName()
         recordings.insert(info, at: 0)
@@ -239,7 +248,56 @@ final class RecorderModel {
         switch action {
         case .stopRecording: stop()
         case .resume: resume()
+        case .undoDelete: undoDelete()
         }
+    }
+
+    // MARK: - Delete (Move to Trash, with Undo)
+
+    func canDelete(_ id: UUID) -> Bool { id != currentID }
+
+    /// Moves the recording's folder to the Mac's Trash. Undo for 10 s, and it
+    /// stays in the Trash after that. In-app "Recently deleted" comes in step 9.
+    func delete(_ id: UUID) {
+        guard canDelete(id), let i = recordings.firstIndex(where: { $0.id == id }) else { return }
+        let info = recordings[i]
+        var trashed: NSURL?
+        do {
+            try FileManager.default.trashItem(at: RecordingStore.folder(id), resultingItemURL: &trashed)
+        } catch {
+            status = Status(text: "Couldn't move \(info.title) to the Trash: \(error.localizedDescription)")
+            return
+        }
+        recordings.remove(at: i)
+        if selection == id { selection = nil }
+        if stoppedNote?.recordingID == id { stoppedNote = nil }
+        guard let url = trashed as URL? else { return }
+
+        let note = DeletedNote(info: info, trashURL: url)
+        deletedNote = note
+        if isBusy {
+            status = Status(text: "Moved \(info.title) to the Trash.", action: .undoDelete)
+        }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, self.deletedNote == note else { return }
+            self.deletedNote = nil
+            if self.status?.action == .undoDelete { self.status = nil }
+        }
+    }
+
+    func undoDelete() {
+        guard let note = deletedNote else { return }
+        deletedNote = nil
+        if status?.action == .undoDelete { status = nil }
+        do {
+            try FileManager.default.moveItem(at: note.trashURL, to: RecordingStore.folder(note.info.id))
+        } catch {
+            status = Status(text: "Couldn't bring it back. It's still in the Trash.")
+            return
+        }
+        reload()
+        selection = note.info.id
     }
 
     // MARK: - Library

@@ -81,7 +81,9 @@ Ask Mr. Yurt before recording class.
   on sleep, restarts on wake, status says "Mac was asleep X to Y".
 - Mic: default MacBook mic (`Microphones.swift`); Settings > General picks
   another; unplugged falls back to the MacBook mic and says so.
-- Not yet: deleting recordings (step 9, Recently deleted), menu bar
+- Delete: right-click > Move to Trash or Cmd+Delete moves the folder to the
+  macOS Trash, with Undo for 10 s. In-app Recently deleted is still step 9.
+- Not yet: menu bar
   dropdown (step 10), teacher name in subtitle, recording title is always
   "English" (rename from the sidebar right-click menu).
 - Ad-hoc signing changes every build, so macOS may ask for mic permission

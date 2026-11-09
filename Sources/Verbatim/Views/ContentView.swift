@@ -16,7 +16,7 @@ struct ContentView: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if model.isBusy || model.stoppedNote != nil {
+                    if model.isBusy || model.stoppedNote != nil || model.deletedNote != nil {
                         BottomBar()
                     }
                 }

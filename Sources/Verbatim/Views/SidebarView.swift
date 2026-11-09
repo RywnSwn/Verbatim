@@ -33,10 +33,17 @@ struct SidebarView: View {
                                         Button("Show in Finder") {
                                             NSWorkspace.shared.activateFileViewerSelecting([RecordingStore.audioURL(info.id)])
                                         }
+                                        Divider()
+                                        Button("Move to Trash") { model.delete(info.id) }
+                                            .keyboardShortcut(.delete, modifiers: .command)
+                                            .disabled(!model.canDelete(info.id))
                                     }
                             }
                         }
                     }
+                }
+                .onDeleteCommand {
+                    if let id = model.selection { model.delete(id) }
                 }
             }
         }

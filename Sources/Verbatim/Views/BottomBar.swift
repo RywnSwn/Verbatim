@@ -12,7 +12,9 @@ struct BottomBar: View {
                 if model.isBusy {
                     recordingBar
                 } else if let note = model.stoppedNote {
-                    stoppedBar(note)
+                    undoBar(note.text, undo: "Undo Stop") { model.undoStop() }
+                } else if let note = model.deletedNote {
+                    undoBar("Moved \(note.info.title) to the Trash.", undo: "Undo") { model.undoDelete() }
                 }
             }
             .frame(height: 56)
@@ -57,7 +59,7 @@ struct BottomBar: View {
                 Text(status.text)
                     .foregroundStyle(.primary)
                 if let action = status.action {
-                    Button(action == .stopRecording ? "Stop recording" : "Resume") {
+                    Button(Self.linkTitle(action)) {
                         model.perform(action)
                     }
                     .buttonStyle(.link)
@@ -73,12 +75,20 @@ struct BottomBar: View {
         .multilineTextAlignment(.trailing)
     }
 
-    private func stoppedBar(_ note: RecorderModel.StoppedNote) -> some View {
+    private static func linkTitle(_ action: RecorderModel.Status.Action) -> String {
+        switch action {
+        case .stopRecording: "Stop recording"
+        case .resume: "Resume"
+        case .undoDelete: "Undo"
+        }
+    }
+
+    private func undoBar(_ text: String, undo: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 10) {
             Spacer()
-            Text(note.text)
+            Text(text)
                 .font(.callout)
-            Button("Undo Stop") { model.undoStop() }
+            Button(undo, action: action)
                 .buttonStyle(.link)
                 .font(.callout.weight(.medium))
         }
