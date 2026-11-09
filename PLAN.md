@@ -1,7 +1,7 @@
 # Plan
 
-Status: step 1 (skeleton + build) built 2026-11-09, waiting for Ryan to
-download and open it. Next: step 2 once Ryan confirms it opens.
+Status: step 1 done 2026-11-09 (Ryan downloaded v0.1.3 and it opens).
+Next: step 2, Record.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -11,7 +11,7 @@ Order is chosen so Ryan can test real accuracy at home early, before any
 class depends on it.
 
 0. [x] **Layout design.** Approved mockup in `docs/design/`.
-1. [~] **Skeleton + build.** SwiftUI app, GitHub Actions builds a zipped
+1. [x] **Skeleton + build.** SwiftUI app, GitHub Actions builds a zipped
        .app into GitHub Releases. Ryan downloads and opens it.
 2. [ ] **Record.** Record / Pause / Resume / Stop into one crash-safe audio
        file. Sleep prevention, mic picker, level meter, crash recovery.
@@ -63,4 +63,5 @@ Ask Mr. Yurt before recording class.
 - First open of the unsigned app: double-click, then System Settings >
   Privacy & Security > "Open Anyway" (right-click > Open no longer skips
   the warning on recent macOS).
+- No auto update yet: Ryan downloads each new build by hand until step 11.
 - No app icon yet (generic icon). Add in the visual design step.
