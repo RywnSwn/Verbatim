@@ -47,6 +47,12 @@ struct SidebarView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            NewRecordingButton()
+                .padding(.horizontal, 10)
+                .padding(.top, 6)
+                .padding(.bottom, 4)
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 Divider()
@@ -123,5 +129,43 @@ struct SidebarRow: View {
         }
         let day = info.createdAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
         return "\(day), \(RecorderModel.minutesText(info.duration))"
+    }
+}
+
+/// Always at the top of the sidebar, like "New chat" in Claude.
+/// Starts recording in one click; while recording it jumps back to it.
+struct NewRecordingButton: View {
+    @Environment(RecorderModel.self) private var model
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            if model.isBusy {
+                model.selection = model.currentID
+            } else {
+                Task { await model.start() }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: model.isBusy ? "waveform" : "plus")
+                    .fontWeight(.semibold)
+                    .frame(width: 16)
+                Text(model.isBusy ? (model.phase == .paused ? "Paused, go to it" : "Recording now") : "New recording")
+                    .fontWeight(.medium)
+                Spacer()
+                if !model.isBusy {
+                    Text("⌘R")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .background(hovering ? Color.primary.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(model.isBusy ? "Go to the recording in progress" : "Start recording now (⌘R)")
     }
 }
