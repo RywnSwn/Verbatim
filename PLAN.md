@@ -1,11 +1,11 @@
 # Plan
 
-Status (end of chat 2026-11-09, second chat): steps 1, 2, 3, 11 merged
-into `main`. Step 4 (live transcript) built on branch
-`claude/kind-maxwell-oq9tl5`, waiting for Ryan to test (he tests
-tomorrow, together with his step 3 results).
-Next: Ryan's step 3 + step 4 feedback, fix what he reports, merge step 4.
-Then step 2b (visual design) or step 5.
+Status (end of chat 2026-11-09, second chat): steps 1, 2, 3, 4 and 11
+merged into `main` (step 4: RywnSwn/Verbatim#7, which also pulled line
+editing forward from step 6). Ryan tested live text with a documentary:
+works well. Line editing built but not tried on a Mac yet; ask him.
+Step 3 accuracy on a real class Voice Memo still not reported; ask him.
+Next: step 5 (background accurate pass during recording). Then step 2b.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -24,11 +24,11 @@ class depends on it.
        transcript, system font for controls.
 3. [~] **Transcribe a file.** Drop a Voice Memo, WhisperKit transcribes it,
        model download with resume. Ryan tests accuracy on real classes.
-4. [~] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
-       (backup while Parakeet downloads). Built, not tested yet.
+4. [x] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
+       (backup while Parakeet downloads).
 5. [ ] **Background accurate pass.** Voice detector cuts ~5 min chunks at
        pauses, one job at a time, overlap merge, live text upgrades.
-6. [ ] **Transcript tools.** Timestamps, edit + lock, Copy / Copy new,
+6. [ ] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
        export .txt/.md, search.
 7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
 8. [ ] **Corrections memory.** Word list as Whisper hint, confirmed fix
