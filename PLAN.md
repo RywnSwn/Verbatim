@@ -1,13 +1,13 @@
 # Plan
 
-Status (2026-11-09, fifth chat): step 6 built on branch
-`claude/step-6-transcript-tools` (PR open, Ryan to test with the "Step 6
-test list" below). Steps 1, 2, 2b, 3, 4, 5 and 11 merged into `main`. Step 2b merged (Ryan asked to merge before testing; its test
+Status (2026-11-09, fifth chat): steps 1, 2, 2b, 3, 4, 5, 6 and 11 merged
+into `main`. Step 6 merged before testing (Ryan tests through the in-app
+update): ask him to run the "Step 6 test list" below. Step 2b merged (Ryan asked to merge before testing; its test
 list is below). Step 5 is still not tested
 by Ryan: ask him to run the "Step 5 test list" below. Also still
 unanswered: line editing on a real Mac, step 3 accuracy on a real class
 Voice Memo.
-Next: after step 6 is merged, step 7. App icon later.
+Next: step 7. App icon later.
 Question for Ryan: markers (⌘D, "Copy marked parts only") are in the spec
 and layout but in no step. Add them to step 7 or 10, or drop them?
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
@@ -32,8 +32,8 @@ class depends on it.
        (backup while Parakeet downloads).
 5. [x] **Background accurate pass.** Voice detector cuts ~5 min chunks at
        pauses, one job at a time, overlap merge, live text upgrades.
-6. [~] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
-       export .txt/.md, search. Built, waiting for Ryan's test.
+6. [x] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
+       export .txt/.md, search. Merged, not tested by Ryan yet.
 7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
 8. [ ] **Corrections memory.** Word list as Whisper hint, confirmed fix
        rules, Words screen.
