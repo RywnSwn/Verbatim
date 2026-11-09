@@ -1,7 +1,7 @@
 import AVFoundation
 import SwiftUI
 
-/// Settings > General. Only the microphone for now; the rest arrives in step 10.
+/// Settings > General: microphone and times. The rest arrives in step 10.
 struct SettingsView: View {
     var body: some View {
         TabView {
@@ -19,6 +19,8 @@ struct SettingsView: View {
 struct GeneralSettings: View {
     @Environment(RecorderModel.self) private var model
     @AppStorage(Microphones.chosenKey) private var chosenID = ""
+    @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
+    @AppStorage(TimeStyle.copyKey) private var timesInCopies = false
     @State private var mics: [Mic] = []
 
     var body: some View {
@@ -44,6 +46,23 @@ struct GeneralSettings: View {
             .font(.callout)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+                .padding(.vertical, 6)
+
+            Picker("Times:", selection: $timeStyle) {
+                Text("Clock time (10:42)").tag(TimeStyle.clock)
+                Text("Time since start (37:12)").tag(TimeStyle.sinceStart)
+            }
+            .pickerStyle(.radioGroup)
+            Text("Imported files always show time since start.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Toggle("Include times when copying and exporting", isOn: $timesInCopies)
+            Text(timesInCopies ? "Each line starts with its time, like [10:42]." : "Just the words. Cleaner for pasting into Claude.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .formStyle(.columns)
         .padding(24)

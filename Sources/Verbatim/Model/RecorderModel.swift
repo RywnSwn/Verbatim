@@ -13,7 +13,7 @@ final class RecorderModel {
 
     /// What the status spot in the bottom bar says. `action` adds a text link.
     struct Status: Equatable {
-        enum Action { case stopRecording, resume, undoDelete, undoLine }
+        enum Action { case stopRecording, resume, undoDelete, undoLine, showFile }
         var text: String
         var action: Action?
         var id = UUID()
@@ -47,6 +47,35 @@ final class RecorderModel {
 
     private(set) var deletedNote: DeletedNote?
     var recoveryNotice: String?
+
+    /// "Copied 58 lines" on the Copy button for a moment (step 6).
+    struct CopyFeedback: Equatable {
+        var text: String
+        var id = UUID()
+    }
+
+    var copyFeedback: CopyFeedback? {
+        didSet {
+            guard let note = copyFeedback else { return }
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(1.8))
+                if self?.copyFeedback == note { self?.copyFeedback = nil }
+            }
+        }
+    }
+
+    /// Search in the transcript on screen. Cleared when another recording is picked.
+    var searchText = "" {
+        didSet { if searchText != oldValue { matchIndex = 0; matchJump += 1 } }
+    }
+    /// Which hit is the current one (0 based).
+    var matchIndex = 0
+    /// Goes up each time the view should scroll to the current hit.
+    private(set) var matchJump = 0
+    /// Goes up when Cmd+F is pressed, so the view focuses the search field.
+    private(set) var findRequest = 0
+
+    func requestFind() { findRequest += 1 }
     private(set) var micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
     private(set) var micName = "MacBook mic"
 
@@ -60,6 +89,7 @@ final class RecorderModel {
     @ObservationIgnored private var restartedAfterError = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var lineUndo: (() -> Void)?
+    @ObservationIgnored private var fileToShow: URL?
 
     var current: RecordingInfo? { recordings.first { $0.id == currentID } }
     var isBusy: Bool { phase != .idle }
@@ -274,6 +304,9 @@ final class RecorderModel {
             lineUndo?()
             lineUndo = nil
             if status?.action == .undoLine { status = nil }
+        case .showFile:
+            if let url = fileToShow { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            status = nil
         }
     }
 
@@ -432,7 +465,25 @@ final class RecorderModel {
         }
     }
 
+    /// "Saved 2026-11-10 English.md. Show in Finder" for 10 seconds.
+    func showFile(_ url: URL, text: String) {
+        fileToShow = url
+        let s = Status(text: text, action: .showFile)
+        status = s
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            if self?.status == s { self?.status = nil }
+        }
+    }
+
     // MARK: - Library
+
+    /// Where the last copy ended, for "Copy new since last copy".
+    func setCopiedUpTo(_ id: UUID, _ seconds: Double) {
+        guard let i = recordings.firstIndex(where: { $0.id == id }) else { return }
+        recordings[i].copiedUpTo = seconds
+        try? RecordingStore.save(recordings[i])
+    }
 
     func rename(_ id: UUID, to title: String) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)

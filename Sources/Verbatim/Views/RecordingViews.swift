@@ -32,6 +32,7 @@ struct RecordingNowView: View {
     var body: some View {
         VStack(spacing: 0) {
             LiveStatusLine(paused: model.phase == .paused)
+            FindLine(id: info.id)
             if checked.isEmpty, lines.isEmpty, live.volatile.isEmpty {
                 VStack(spacing: 8) {
                     Text(model.phase == .paused ? "Paused." : "Listening.")
@@ -53,10 +54,14 @@ struct RecordingNowView: View {
         .navigationSubtitle(info.startedText)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                CopyAllButton(lines: checked + lines)
+                ExportMenu(hasLines: !(checked + lines).isEmpty)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                CopyButton(id: info.id, hasLines: !(checked + lines).isEmpty)
             }
             .sharedBackgroundVisibility(.hidden)
         }
+        .transcriptSearch()
     }
 
     private var emptyNote: String {
@@ -135,6 +140,7 @@ struct PastRecordingView: View {
     var body: some View {
         VStack(spacing: 0) {
             TranscriptStatusLine(info: info)
+            FindLine(id: info.id)
             if checked.isEmpty, liveLines.isEmpty {
                 emptyState
             } else {
@@ -153,6 +159,7 @@ struct PastRecordingView: View {
                     }
                     .help("New recording (⌘N)")
                 }
+                ExportMenu(hasLines: !(checked + liveLines).isEmpty)
                 Menu {
                     Button("Play audio") { NSWorkspace.shared.open(RecordingStore.audioURL(info.id)) }
                     Button("Show in Finder") {
@@ -170,10 +177,11 @@ struct PastRecordingView: View {
                 .help("Play audio, Show in Finder, Transcribe again, Move to Trash")
             }
             ToolbarItem(placement: .primaryAction) {
-                CopyAllButton(lines: checked + liveLines)
+                CopyButton(id: info.id, hasLines: !(checked + liveLines).isEmpty)
             }
             .sharedBackgroundVisibility(.hidden)
         }
+        .transcriptSearch()
     }
 
     private var subtitle: String {
@@ -287,5 +295,67 @@ struct MicBlockedView: View {
         }
         .multilineTextAlignment(.center)
         .padding(40)
+    }
+}
+
+/// Cmd+F search in the toolbar. Enter goes to the next hit, Esc clears it.
+struct TranscriptSearch: ViewModifier {
+    @Environment(RecorderModel.self) private var model
+    @FocusState private var focused: Bool
+
+    func body(content: Content) -> some View {
+        @Bindable var model = model
+        content
+            .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search transcript")
+            .searchFocused($focused)
+            .onSubmit(of: .search) { model.nextMatch(1) }
+            .onChange(of: model.findRequest) { focused = true }
+    }
+}
+
+extension View {
+    func transcriptSearch() -> some View { modifier(TranscriptSearch()) }
+}
+
+/// "2 of 7" with up and down arrows, under the toolbar while searching.
+/// A plain line like the other status lines, no box.
+struct FindLine: View {
+    @Environment(RecorderModel.self) private var model
+    let id: UUID
+
+    var body: some View {
+        if !model.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+            let count = model.searchMatches(id).count
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Text(count == 0 ? "No matches" : "\(min(model.matchIndex, count - 1) + 1) of \(count)")
+                        .font(.callout)
+                        .monospacedDigit()
+                    if count > 1 {
+                        HStack(spacing: 2) {
+                            Button { model.nextMatch(-1) } label: {
+                                Image(systemName: "chevron.up").frame(width: 24, height: 24)
+                            }
+                            .help("Previous match (⇧⌘G)")
+                            .accessibilityLabel("Previous match")
+                            Button { model.nextMatch(1) } label: {
+                                Image(systemName: "chevron.down").frame(width: 24, height: 24)
+                            }
+                            .help("Next match (⌘G or Enter)")
+                            .accessibilityLabel("Next match")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    Spacer(minLength: 0)
+                    Button("Done") { model.searchText = "" }
+                        .buttonStyle(.link)
+                        .font(.callout.weight(.medium))
+                        .help("Stop searching (Esc in the search field)")
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 6)
+                Divider()
+            }
+        }
     }
 }

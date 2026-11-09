@@ -43,10 +43,10 @@ extension RecorderModel {
         Self.replace(id, source, start: start, with: line)
     }
 
-    func copyLines(_ lines: [Transcript.Line]) {
+    func copyLines(_ info: RecordingInfo, _ lines: [Transcript.Line]) {
         guard !lines.isEmpty else { return }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(lines.map(\.text).joined(separator: "\n"), forType: .string)
+        NSPasteboard.general.setString(Self.text(lines, info: info, markdown: false), forType: .string)
         flash(lines.count == 1 ? "Copied the line." : "Copied \(lines.count) lines.")
     }
 

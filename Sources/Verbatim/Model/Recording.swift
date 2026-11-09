@@ -28,6 +28,8 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     var events: [Event] = []
     /// File name of the Voice Memo (or other file) this was imported from.
     var importedFrom: String?
+    /// Where the last copy ended (seconds into the audio), for "Copy new since last copy".
+    var copiedUpTo: Double?
 
     var duration: TimeInterval { Double(samples) / Double(sampleRate) }
     var isActive: Bool { state != .stopped }

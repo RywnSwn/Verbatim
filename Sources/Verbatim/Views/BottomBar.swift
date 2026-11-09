@@ -112,6 +112,7 @@ struct BottomBar: View {
         case .stopRecording: "Stop recording"
         case .resume: "Resume"
         case .undoDelete, .undoLine: "Undo"
+        case .showFile: "Show in Finder"
         }
     }
 

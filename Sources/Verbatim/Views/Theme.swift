@@ -14,6 +14,10 @@ enum Theme {
     /// Links, focus and the edit underline.
     static let accent = dynamic(light: 0x24427A, dark: 0x8FA9DD)
 
+    /// Search hits, and the current hit (stronger).
+    static let highlight = dynamic(light: 0xFBE9A6, dark: 0x5C4B16)
+    static let highlightCurrent = dynamic(light: 0xF2C230, dark: 0x9A7514)
+
     /// Transcript text: serif, a bit bigger than normal text so it reads like notes.
     static let transcript = Font.system(size: 17, design: .serif)
     static let transcriptLineSpacing: CGFloat = 5
