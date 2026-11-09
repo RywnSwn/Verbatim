@@ -11,8 +11,9 @@ plain words. Never use em dashes in anything written for Ryan.
 UX matters a lot to him. He hates apps that don't consider the user.
 
 ## Current state
-Planning done, no code yet. See `PLAN.md` for build order and progress,
-`docs/spec.md` for behaviour and edge cases, `DECISIONS.md` for what was
+Planning and layout done, no code yet. See `PLAN.md` for build order and progress,
+`docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
+to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).
 
 ## Key facts

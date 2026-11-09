@@ -77,3 +77,19 @@ accuracy on real Voice Memos at home early.
 No themes, accounts, cloud, summaries or in-app AI chat. Undo instead of
 confirm popups (only exception: quitting while recording). Full list of
 small behaviours in `docs/spec.md`.
+
+## Layout approved (2026-11-09)
+Mockup in `docs/design/`. Design first so later chats build to a written
+layout instead of drifting. Ryan's calls: no red recording UI, mono waveform
+as the signature, no soft bordered boxes, messages in the status spot instead
+of popups or banners, menu bar dropdown instead of a mini window (Ryan rated
+the mini window poorly), MacBook mic default (AirPods mics not trusted),
+editorial serif only for big moments. Features added because Ryan would use
+them in class: copy options (new / last 10 min / marked), markers, right-click
+line menu ("copy from here down"), a few shortcuts. Cut as decoration: stats
+inspector, timeline waveform.
+
+## OpenWhispr (2026-11-09)
+Ryan asked about it. It's an Electron dictation app (wrong job, wrong stack),
+but its models (Whisper, NVIDIA Parakeet) are separate and free. Parakeet is
+a live engine candidate.

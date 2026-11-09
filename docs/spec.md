@@ -11,8 +11,7 @@ Rule of thumb for UX: prefer **undo** over "are you sure?" popups, show
 
 ## 1. First launch (onboarding)
 
-Three short steps, then straight into the app. Skippable steps stay
-reachable later from Settings.
+One screen, no tour (see `docs/design/`). It shows:
 
 1. **Microphone permission.** One sentence on why, then the system prompt.
    If denied: a clear screen with a button that opens
@@ -25,8 +24,7 @@ reachable later from Settings.
    - the app is usable while it downloads (live transcript works, accurate
      pass waits and says so)
    - Apple's speech assets (for the live engine) download the same way
-3. **Quick test.** "Say something." Live text appears. Builds trust before
-   using it in class.
+3. No separate test step; Ryan tests with Voice Memos instead.
 
 ## 2. Main window
 
@@ -49,12 +47,12 @@ reachable later from Settings.
 | Lid closed (MacBook sleeps, mic stops) | Can't be prevented. On wake, recording continues and the transcript shows a divider: "Mac was asleep 10:42 to 10:45". Tip shown once: keep the lid open. |
 | App crashes or Mac shuts off | Audio is written to disk continuously, transcript autosaved every few seconds. Next launch: "Recover unfinished recording from 10:05?" |
 | Cmd+Q while recording | Asks: "Recording in progress. Stop and save, or keep recording?" (the one popup worth having) |
-| Window closed while recording | Keeps recording. Menu bar icon shows a red dot + timer, click to reopen. |
+| Window closed while recording | Keeps recording. Menu bar icon shows a tiny waveform + timer; its dropdown has copy, marker, pause, stop. |
 | Pressed Stop by accident | Toast: "Recording saved. Undo" for ~10 s. Undo continues the same recording. |
 | Forgot to press Stop after class | After ~10 min of silence: notification "Still recording?". Hard stop at a max length (default 3 h). |
 | Forgot to Pause during work time | Fine. Silence and quiet chatter are skipped by the voice detector, so no junk text. |
 | Pause/Resume | Still one audio file. Transcript shows "Paused 10:12 to 10:20". |
-| AirPods connect mid-class | Doesn't auto-switch the mic (Bluetooth mics sound worse). Stays on the chosen mic. If the chosen mic disappears, falls back to built-in and shows a notice. Never stops recording. |
+| AirPods connect mid-class | MacBook mic is always the default. Never auto-switches to AirPods (worse quality). AirPods only if picked by hand, with a warning. If the chosen mic disappears, falls back to the MacBook mic and says so in the status spot. Never stops recording. |
 | Low battery | Warn at 15%. In Low Power Mode, the background accurate pass pauses and catches up at Stop. |
 | Disk almost full | Check before starting (need ~200 MB per hour). Warn if low. |
 | Starting a second recording | Not allowed while one is running. |
@@ -86,8 +84,12 @@ reachable later from Settings.
 - **Copy** copies everything so far in script format:
   `[Mr. Yurt]: "text"`. Shows "Copied 42 lines". Disabled (with a hint)
   when there's nothing yet.
-- **Copy new** (small option): only lines since your last copy, for
-  sending follow-up chunks to Claude mid-class.
+- Copy menu also has: **Copy new since last copy**, **Copy last 10
+  minutes**, **Copy marked parts only**.
+- **Markers** (⌘D): flag a moment; shows as a flag next to the time and is
+  included in copies.
+- **Messages** (mic changes, battery, falling behind, long silence) appear
+  in the bottom bar status spot, never as popups.
 - **Export** .txt or .md, same script format, no intro, no headings.
   File name: `2026-11-10 English.md`. If it exists: `... (2).md`. Never
   overwrite silently.
@@ -129,7 +131,7 @@ reachable later from Settings.
 
 **General**
 - Teacher name (default Mr. Yurt), student label (default Student)
-- Microphone (default: built-in)
+- Microphone (default: MacBook mic, never auto-switches to AirPods)
 - Timestamps: clock time / time since start
 
 **Transcription**
