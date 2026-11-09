@@ -48,6 +48,8 @@ struct DetailView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(Theme.ink)
+        .background(Theme.paper)
     }
 }
 
@@ -70,6 +72,6 @@ struct NoticeLine: View {
             .padding(.vertical, 10)
             Divider()
         }
-        .background(.background)
+        .background(Theme.paper)
     }
 }

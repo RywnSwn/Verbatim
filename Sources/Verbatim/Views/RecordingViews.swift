@@ -52,9 +52,10 @@ struct RecordingNowView: View {
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(info.startedText)
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItem(placement: .primaryAction) {
                 CopyAllButton(lines: checked + lines)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
     }
 
@@ -167,9 +168,11 @@ struct PastRecordingView: View {
                     Label("More", systemImage: "ellipsis.circle")
                 }
                 .help("Play audio, Show in Finder, Transcribe again, Move to Trash")
-
+            }
+            ToolbarItem(placement: .primaryAction) {
                 CopyAllButton(lines: checked + liveLines)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
     }
 
@@ -188,8 +191,7 @@ struct PastRecordingView: View {
             } else if transcript == nil, !transcriber.isQueued(info.id), transcriber.active?.id != info.id,
                       !transcriber.importing.contains(info.id), transcriber.errors[info.id] == nil {
                 Button("Transcribe") { transcriber.enqueue(info.id) }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(.inkLarge)
             } else {
                 Text("Text shows up here as it goes.")
                     .foregroundStyle(.secondary)
@@ -280,8 +282,7 @@ struct MicBlockedView: View {
             Text("Microphone access is off for Verbatim. Turn it on, then come back.")
                 .foregroundStyle(.secondary)
             Button("Open Microphone settings") { model.openMicSettings() }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.inkLarge)
                 .padding(.top, 6)
         }
         .multilineTextAlignment(.center)

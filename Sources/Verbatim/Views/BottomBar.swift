@@ -37,7 +37,7 @@ struct BottomBar: View {
             .frame(height: 56)
             .padding(.horizontal, 20)
         }
-        .background(.background)
+        .background(Theme.paper)
     }
 
     private var paused: Bool { model.phase == .paused }

@@ -1,11 +1,12 @@
 # Plan
 
-Status (end of chat 2026-11-09, third chat): steps 1, 2, 3, 4, 5 and 11
-merged into `main` (step 5: RywnSwn/Verbatim#8). Step 5 merged before
-Ryan tested it: ask him to run the "Step 5 test list" below and fix what
-he reports first. Also still unanswered: line editing on a real Mac, step 3
-accuracy on a real class Voice Memo.
-Next: step 2b (visual design), then step 6.
+Status (end of chat 2026-11-09, fourth chat): steps 1, 2, 2b, 3, 4, 5 and 11
+merged into `main`. Step 2b merged (Ryan asked to merge before testing; its test
+list is below). Step 5 is still not tested
+by Ryan: ask him to run the "Step 5 test list" below. Also still
+unanswered: line editing on a real Mac, step 3 accuracy on a real class
+Voice Memo.
+Next: step 6. App icon later.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -19,9 +20,9 @@ class depends on it.
        .app into GitHub Releases. Ryan downloads and opens it.
 2. [x] **Record.** Record / Pause / Resume / Stop into one crash-safe audio
        file. Sleep prevention, mic picker, level meter, crash recovery.
-2b. [ ] **Visual design.** Fonts, colors, spacing on the real SwiftUI app
-       (not a web mockup). Ideas: serif for big moments and maybe the
-       transcript, system font for controls.
+2b. [x] **Visual design.** "Notebook" look picked by Ryan and built.
+       App icon still to do (Ryan didn't like the first try: a waveform
+       turning into text lines; do it later, show him options first).
 3. [~] **Transcribe a file.** Drop a Voice Memo, WhisperKit transcribes it,
        model download with resume. Ryan tests accuracy on real classes.
 4. [x] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
@@ -42,6 +43,10 @@ class depends on it.
 ## Nice to have (after the above)
 - [ ] Timeline: click a line's time to hear that bit of audio (clicking the text edits it).
 - [ ] Engine comparison screen for live engines.
+- [ ] Auto-name recordings from what was said (Ryan's ask), e.g.
+      "English: Anansi and the sky god", with Apple's on-device
+      Foundation Models (offline, free). Needs Apple Intelligence on.
+      Ryan can still rename.
 
 ## Open questions
 - Is Parakeet's live text good enough in a real class? Is 2 s delay OK?
@@ -69,7 +74,7 @@ Ask Mr. Yurt before recording class.
   Privacy & Security > "Open Anyway" (right-click > Open no longer skips
   the warning on recent macOS).
 - No auto update yet: Ryan downloads each new build by hand until step 11.
-- No app icon yet (generic icon). Add in the visual design step.
+- No app icon yet (generic icon). Ryan wants to pick one later.
 
 ## How recording works (step 2)
 - Audio: `AVCaptureSession` on the chosen mic, converted to 16 kHz mono
@@ -286,3 +291,30 @@ Ask Mr. Yurt before recording class.
    waits. Stop: it catches up.
 8. Import a Voice Memo, then start recording: the recording's checks still
    happen during the import.
+
+## How the look works (step 2b)
+- Ryan compared three looks on a preview page
+  (https://claude.ai/artifact/WQapwdfhQBtu6R5yFrHHuN): A Notebook, B Plain
+  Mac, C Graphite. He picked A, but asked why Copy all was blue, so the
+  main button is ink instead.
+- `Views/Theme.swift`: colors (paper, ink, line, accent ink blue) with
+  light and dark values, transcript font (New York serif 17, line spacing
+  5, 14 between lines), `InkButtonStyle` (`.ink`, `.inkLarge`) for the one
+  main button per screen.
+- Main area and bottom bar on paper; sidebar, Settings and menus stay
+  standard Mac. App tint is the ink blue (links, progress, toggles).
+- Copy all sits in its own toolbar item with the glass background hidden,
+  so it shows as an ink capsule.
+- "Checked up to" divider in serif italic. Live text 62% ink, half-said
+  words 45%.
+- App icon: not yet. First try (waveform bars + text lines, drawn with
+  Pillow) was rejected by Ryan. Next time show a few options first; to
+  add one, put `AppIcon.icns` in `Support/`, copy it in
+  `scripts/build-app.sh`, and set `CFBundleIconFile` in Info.plist.
+
+## Step 2b test list for Ryan
+1. Update, open an old transcript: serif text, warm white, ink Copy all.
+2. Switch the Mac to dark mode (System Settings > Appearance): still
+   easy to read? Copy all turns light.
+3. Record a minute: live grey text readable? "Checked up to" line looks OK?
+4. Anything that looks off or cramped: tell Claude in plain words.

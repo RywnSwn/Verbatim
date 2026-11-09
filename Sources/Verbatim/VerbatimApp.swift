@@ -17,6 +17,7 @@ struct VerbatimApp: App {
                 .environment(live)
                 .environment(updater)
                 .frame(minWidth: 820, minHeight: 540)
+                .tint(Theme.accent)
                 .task { updater.startAutomaticChecks() }
         }
         .defaultSize(width: 1200, height: 780)

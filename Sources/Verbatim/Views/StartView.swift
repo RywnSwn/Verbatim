@@ -26,12 +26,10 @@ struct StartView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Text("Start recording")
-                        Text("⌘R").foregroundStyle(.white.opacity(0.75))
+                        Text("⌘R").foregroundStyle(Theme.paper.opacity(0.65))
                     }
-                    .padding(.horizontal, 6)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.inkLarge)
 
                 Text("Or drop a Voice Memo here to transcribe it.")
                     .font(.callout)
@@ -150,7 +148,7 @@ struct ModelStatusLine: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: transcriber.isModelReady ? "checkmark" : "arrow.down")
                 .fontWeight(.semibold)
-                .foregroundStyle(transcriber.isModelReady ? Color.green : Color.accentColor)
+                .foregroundStyle(transcriber.isModelReady ? Color.green : Theme.accent)
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 6) {
                 content
@@ -222,7 +220,7 @@ struct LiveModelStatusLine: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: live.isModelReady ? "checkmark" : "arrow.down")
                 .fontWeight(.semibold)
-                .foregroundStyle(live.isModelReady ? Color.green : Color.accentColor)
+                .foregroundStyle(live.isModelReady ? Color.green : Theme.accent)
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 6) {
                 content
