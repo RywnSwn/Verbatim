@@ -23,7 +23,7 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     private var levelCount = 0
     private var failed = false
 
-    /// Called on a background queue about 8 times a second: level 0...1, samples so far.
+    /// Called on a background queue 20 times a second: level 0...1, samples so far.
     var onLevel: (@Sendable (Float, Int64) -> Void)?
     /// Called on a background queue when writing fails (disk full).
     var onWriteError: (@Sendable (Error) -> Void)?
@@ -156,7 +156,7 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
             sumSquares += v * v
         }
         levelCount += samples.count
-        if levelCount >= 2_000 { // 1/8 s at 16 kHz
+        if levelCount >= 800 { // 1/20 s at 16 kHz: the waveform moves 20 bars a second
             let rms = (sumSquares / Double(levelCount)).squareRoot() / 32_768
             let db = 20 * log10(max(rms, 1e-7))
             let level = Float(min(max((db + 55) / 45, 0), 1))
