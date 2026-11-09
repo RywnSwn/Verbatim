@@ -40,7 +40,7 @@ class depends on it.
 11. [x] **Updates.** In-app update button (own updater, not Sparkle).
 
 ## Nice to have (after the above)
-- [ ] Timeline: click a line to hear that bit of audio.
+- [ ] Timeline: click a line's time to hear that bit of audio (clicking the text edits it).
 - [ ] Engine comparison screen for live engines.
 
 ## Open questions
@@ -202,7 +202,8 @@ Ask Mr. Yurt before recording class.
   he deleted), or his changes come back.
 
 ## Editing lines (pulled forward from step 6, Ryan's ask while testing step 4)
-- Double-click a line: inline field. Enter saves, Esc cancels, clicking away
+- Click a line (one click, Ryan's ask; was double-click): inline field.
+  Text cursor shows over lines. Enter saves, Esc cancels, clicking away
   saves, emptying it deletes. Right-click: Copy this line, Copy from here
   down, Edit line, Delete line, Unlock.
 - Works on live and accurate lines, while recording and after.
@@ -213,8 +214,8 @@ Ask Mr. Yurt before recording class.
 - Transcriber re-reads the lines on screen before adding each piece, so
   edits made while it transcribes are kept. "Transcribe again" still
   throws edits away (explicit action).
-- Text in lines is no longer selectable outside edit mode (double-click
-  would select a word instead of editing). Copy this line / Copy from here
+- Text in lines is no longer selectable outside edit mode (a click
+  would select text instead of editing). Copy this line / Copy from here
   down / edit mode cover copying part of it.
 
 ## Step 4 test list for Ryan
@@ -229,7 +230,7 @@ Ask Mr. Yurt before recording class.
 7. Activity Monitor > Memory: how much Verbatim uses while recording.
 8. If you record before Parakeet finishes: a line says it's using the
    Mac's built-in engine. Does that text look OK?
-9. While recording, double-click a line, fix a word, press Enter: lock
+9. While recording, click a line, fix a word, press Enter: lock
    shows, new words keep coming below. Undo in the bottom bar works.
 10. Right-click a line > Delete line, then Undo.
 

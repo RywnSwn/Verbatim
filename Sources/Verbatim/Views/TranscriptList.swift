@@ -6,7 +6,7 @@ import SwiftUI
 /// Follows new text only if you're already at the bottom; otherwise a
 /// "Jump to live" button shows.
 ///
-/// Editing: double-click a line (Enter saves, Esc cancels, clicking away
+/// Editing: click a line (Enter saves, Esc cancels, clicking away
 /// saves), or right-click for Copy / Edit / Delete. Edited lines turn full ink
 /// and get a lock; later passes never change them. Every change has Undo in
 /// the bottom bar.
@@ -154,6 +154,7 @@ struct TranscriptList: View {
                     .lineSpacing(3)
                     .foregroundStyle(grey ? AnyShapeStyle(HierarchicalShapeStyle.primary.opacity(0.62)) : AnyShapeStyle(.primary))
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .pointerStyle(.horizontalText) // text cursor: says "you can type here"
             }
             if line.isLocked, !isEditing {
                 Button {
@@ -171,7 +172,7 @@ struct TranscriptList: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { if !isEditing { begin(line, source) } }
+        .onTapGesture { if !isEditing { begin(line, source) } }
         .contextMenu {
             Button("Copy this line") { model.copyLines([line]) }
             Button("Copy from here down") { model.copyLines(linesFrom(line, source)) }
