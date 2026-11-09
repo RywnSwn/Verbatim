@@ -1,0 +1,59 @@
+name: Build
+
+# Every push builds the app.
+# - main: publishes a numbered release ("Verbatim 0.1.N").
+# - any other branch: replaces the single "Test build" pre-release, so Ryan
+#   can try a change before it is merged.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show tools
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Build Verbatim.app
+        run: scripts/build-app.sh "0.1.${{ github.run_number }}" "${{ github.run_number }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Verbatim
+          path: build/Verbatim.zip
+
+      - name: Publish release (main)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v0.1.${{ github.run_number }}" build/Verbatim.zip \
+            --target "$GITHUB_SHA" \
+            --title "Verbatim 0.1.${{ github.run_number }}" \
+            --notes "Download Verbatim.zip below, double-click it, and drag Verbatim into Applications." \
+            --latest
+
+      - name: Publish test build (other branches)
+        if: github.ref != 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete test-build --cleanup-tag --yes || true
+          gh release create test-build build/Verbatim.zip \
+            --target "$GITHUB_SHA" \
+            --title "Test build (${GITHUB_REF_NAME}, build ${{ github.run_number }})" \
+            --notes "Not final. Built from branch ${GITHUB_REF_NAME} to try a change before it goes into the main version." \
+            --prerelease
