@@ -93,3 +93,9 @@ inspector, timeline waveform.
 Ryan asked about it. It's an Electron dictation app (wrong job, wrong stack),
 but its models (Whisper, NVIDIA Parakeet) are separate and free. Parakeet is
 a live engine candidate.
+
+## How Ryan gets builds (2026-11-09)
+Every push builds on GitHub's macos-26 runner and publishes a GitHub Release
+with Verbatim.zip, so Ryan just downloads from the Releases page. Branch
+builds are pre-releases so he can test before anything is merged. Apple
+Silicon only (arm64), ad-hoc signed, no paid Apple developer account.
