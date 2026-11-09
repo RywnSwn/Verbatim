@@ -1,8 +1,10 @@
+import AVFoundation
 import SwiftUI
 
 /// First launch / empty screen. Layout follows docs/design/Empty.dc.html.
-/// Step 1 is only the skeleton: the Start button is shown but not wired up yet.
 struct StartView: View {
+    @Environment(RecorderModel.self) private var model
+
     var body: some View {
         VStack(spacing: 28) {
             VStack(spacing: 26) {
@@ -20,28 +22,28 @@ struct StartView: View {
                     .accessibilityHidden(true)
 
                 Button {
+                    Task { await model.start() }
                 } label: {
-                    Text("Start recording")
-                        .padding(.horizontal, 6)
+                    HStack(spacing: 10) {
+                        Text("Start recording")
+                        Text("⌘R").foregroundStyle(.white.opacity(0.75))
+                    }
+                    .padding(.horizontal, 6)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .keyboardShortcut("r", modifiers: .command)
-                .disabled(true)
+
+                if let status = model.status {
+                    Text(status.text)
+                        .font(.callout)
+                        .multilineTextAlignment(.center)
+                }
             }
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
                 Divider()
-                    .padding(.bottom, 12)
-                Text("Test build")
-                    .font(.body.weight(.medium))
-                Text("Verbatim installs and opens. Recording comes in the next update.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Text("Version \(AppInfo.version)")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                    .padding(.bottom, 18)
+                MicStatusLine(permission: model.micPermission, micName: model.micName)
             }
             .frame(width: 460, alignment: .leading)
         }
@@ -100,6 +102,34 @@ struct WaveToWords: View {
         let wave = abs(sin(Double(t) * 0.45 + Double(i) * 0.9))
         let scale = 0.4 + Double(i % 5) / 6
         return 4 + (wave * 30 * scale).rounded()
+    }
+}
+
+/// Under the thin line: is the mic ready, and which one.
+struct MicStatusLine: View {
+    let permission: AVAuthorizationStatus
+    let micName: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: permission == .authorized ? "checkmark" : "mic")
+                .fontWeight(.semibold)
+                .foregroundStyle(permission == .authorized ? Color.green : Color.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(permission == .authorized ? "Microphone allowed" : "Microphone")
+                    .font(.body.weight(.medium))
+                Text(permission == .authorized
+                     ? "Using the \(micName). Change it in Settings (⌘,)."
+                     : "Your Mac asks to use the mic the first time you press Start.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Text("Version \(AppInfo.version)")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
     }
 }
 

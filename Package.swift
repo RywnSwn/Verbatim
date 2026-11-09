@@ -7,7 +7,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Verbatim",
-            path: "Sources/Verbatim"
+            path: "Sources/Verbatim",
+            swiftSettings: [.swiftLanguageMode(.v5)]
         )
     ]
 )

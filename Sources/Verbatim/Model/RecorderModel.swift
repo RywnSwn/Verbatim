@@ -1,0 +1,500 @@
+import AVFoundation
+import AppKit
+import Observation
+
+/// The app's recording state. One recording at a time.
+@MainActor
+@Observable
+final class RecorderModel {
+    static let shared = RecorderModel()
+
+    enum Phase { case idle, recording, paused }
+
+    /// What the status spot in the bottom bar says. `action` adds a text link.
+    struct Status: Equatable {
+        enum Action { case stopRecording, resume }
+        var text: String
+        var action: Action?
+        var id = UUID()
+    }
+
+    /// Shown for 10 s after Stop, with Undo Stop.
+    struct StoppedNote: Equatable {
+        var recordingID: UUID
+        var text: String
+    }
+
+    static let barCount = 40
+    static let maxLength: TimeInterval = 3 * 3600
+    static let quietLimit: TimeInterval = 10 * 60
+    static let bytesPerHour: Int64 = 16_000 * 2 * 3600
+
+    private(set) var phase: Phase = .idle
+    private(set) var recordings: [RecordingInfo] = []
+    private(set) var currentID: UUID?
+    var selection: UUID?
+    private(set) var levels: [Float] = Array(repeating: 0, count: RecorderModel.barCount)
+    private(set) var elapsed: TimeInterval = 0
+    private(set) var status: Status?
+    private(set) var stoppedNote: StoppedNote?
+    var recoveryNotice: String?
+    private(set) var micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
+    private(set) var micName = "MacBook mic"
+
+    @ObservationIgnored private let pipeline = AudioPipeline()
+    @ObservationIgnored private var device: AVCaptureDevice?
+    @ObservationIgnored private var activity: NSObjectProtocol?
+    @ObservationIgnored private var lastSave = Date.distantPast
+    @ObservationIgnored private var lastLoud = Date()
+    @ObservationIgnored private var quietWarned = false
+    @ObservationIgnored private var asleepSince: Date?
+    @ObservationIgnored private var restartedAfterError = false
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+
+    var current: RecordingInfo? { recordings.first { $0.id == currentID } }
+    var isBusy: Bool { phase != .idle }
+
+    private init() {
+        recoverUnfinished()
+        recordings = RecordingStore.loadAll()
+        refreshMicName()
+        wirePipeline()
+        observeSystem()
+    }
+
+    // MARK: - Start / Pause / Stop
+
+    func toggleRecording() {
+        if isBusy { stop() } else { Task { await start() } }
+    }
+
+    func togglePause() {
+        switch phase {
+        case .recording: pause()
+        case .paused: resume()
+        case .idle: break
+        }
+    }
+
+    func start() async {
+        guard phase == .idle else { return }
+
+        if micPermission == .notDetermined {
+            _ = await AVCaptureDevice.requestAccess(for: .audio)
+            micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
+        }
+        guard micPermission == .authorized, phase == .idle else {
+            selection = nil
+            return
+        }
+
+        let (dev, fellBack) = Microphones.resolve()
+        guard let dev else {
+            status = Status(text: "No microphone found. Plug one in, then press Start again.")
+            return
+        }
+
+        let now = Date()
+        var info = RecordingInfo(id: UUID(), title: "English", createdAt: now, state: .recording)
+        info.events.append(.init(kind: .started, at: now, sample: 0, note: Microphones.mic(for: dev).displayName))
+        do {
+            try RecordingStore.create(info)
+            let writer = try WavWriter(creating: RecordingStore.audioURL(info.id))
+            pipeline.attach(writer)
+            try pipeline.startCapture(device: dev)
+        } catch {
+            pipeline.detach()
+            status = Status(text: "Couldn't start recording: \(error.localizedDescription)")
+            return
+        }
+
+        stoppedNote = nil
+        device = dev
+        refreshMicName()
+        recordings.insert(info, at: 0)
+        currentID = info.id
+        selection = info.id
+        elapsed = 0
+        levels = Array(repeating: 0, count: Self.barCount)
+        lastLoud = Date()
+        quietWarned = false
+        phase = .recording
+        beginKeepAwake()
+
+        if fellBack {
+            status = Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.")
+        } else if let free = RecordingStore.freeSpace(), free < Self.bytesPerHour * 3 {
+            let hours = Double(free) / Double(Self.bytesPerHour)
+            status = Status(text: String(format: "Disk is almost full: room for about %.1f hours of audio.", hours))
+        } else {
+            status = nil
+        }
+    }
+
+    func pause() {
+        guard phase == .recording else { return }
+        pipeline.stopCapture()
+        pipeline.flush()
+        addEvent(.paused)
+        updateCurrent { $0.state = .paused }
+        phase = .paused
+        levels = Array(repeating: 0, count: Self.barCount)
+        saveCurrent()
+        if status?.action == .stopRecording { status = nil }
+    }
+
+    func resume() {
+        guard phase == .paused else { return }
+        let (dev, fellBack) = Microphones.resolve()
+        guard let dev else {
+            status = Status(text: "No microphone found. Plug one in, then press Resume.")
+            return
+        }
+        do {
+            try pipeline.startCapture(device: dev)
+        } catch {
+            status = Status(text: "Couldn't use the mic: \(error.localizedDescription)", action: .resume)
+            return
+        }
+        device = dev
+        refreshMicName()
+        addEvent(.resumed)
+        updateCurrent { $0.state = .recording }
+        phase = .recording
+        lastLoud = Date()
+        quietWarned = false
+        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.") : nil
+        saveCurrent()
+    }
+
+    func stop(note: String? = nil) {
+        guard isBusy, let id = currentID else { return }
+        let samples = pipeline.detach()
+        let now = Date()
+        updateCurrent {
+            $0.samples = samples
+            $0.state = .stopped
+            $0.endedAt = now
+        }
+        addEvent(.stopped)
+        saveCurrent()
+        endKeepAwake()
+
+        let info = current
+        phase = .idle
+        currentID = nil
+        device = nil
+        status = nil
+        levels = Array(repeating: 0, count: Self.barCount)
+
+        let title = info?.title ?? "Recording"
+        let length = Self.minutesText(info?.duration ?? 0)
+        let text = note ?? "Saved \(title), \(length)."
+        let stopped = StoppedNote(recordingID: id, text: text)
+        stoppedNote = stopped
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            if self?.stoppedNote == stopped { self?.stoppedNote = nil }
+        }
+    }
+
+    /// Continues the recording that was just stopped, in the same audio file.
+    func undoStop() {
+        guard phase == .idle, let note = stoppedNote,
+              let info = recordings.first(where: { $0.id == note.recordingID }) else { return }
+        stoppedNote = nil
+        let (dev, fellBack) = Microphones.resolve()
+        guard let dev else {
+            status = Status(text: "No microphone found, so the recording stayed stopped.")
+            return
+        }
+        do {
+            let writer = try WavWriter(appendingTo: RecordingStore.audioURL(info.id))
+            pipeline.attach(writer)
+            try pipeline.startCapture(device: dev)
+        } catch {
+            pipeline.detach()
+            status = Status(text: "Couldn't continue the recording: \(error.localizedDescription)")
+            return
+        }
+        currentID = info.id
+        selection = info.id
+        device = dev
+        refreshMicName()
+        updateCurrent {
+            $0.state = .recording
+            $0.endedAt = nil
+        }
+        addEvent(.undoStop)
+        elapsed = info.duration
+        lastLoud = Date()
+        quietWarned = false
+        phase = .recording
+        beginKeepAwake()
+        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.") : nil
+        saveCurrent()
+    }
+
+    func perform(_ action: Status.Action) {
+        switch action {
+        case .stopRecording: stop()
+        case .resume: resume()
+        }
+    }
+
+    // MARK: - Library
+
+    func rename(_ id: UUID, to title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
+        recordings[i].title = trimmed
+        try? RecordingStore.save(recordings[i])
+    }
+
+    func reload() {
+        let active = current
+        var list = RecordingStore.loadAll()
+        if let active, let i = list.firstIndex(where: { $0.id == active.id }) {
+            list[i] = active // the live copy is newer than the file
+        }
+        recordings = list
+        if let s = selection, !list.contains(where: { $0.id == s }) { selection = nil }
+    }
+
+    /// Settings changed the mic. Switch now if recording, so it takes effect right away.
+    func micSettingChanged() {
+        refreshMicName()
+        guard phase == .recording else { return }
+        let (dev, _) = Microphones.resolve()
+        guard let dev, dev.uniqueID != device?.uniqueID else { return }
+        switchMic(to: dev, message: "Switched to the \(Microphones.mic(for: dev).displayName).")
+    }
+
+    func refreshPermission() {
+        micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
+    }
+
+    func openMicSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    // MARK: - Audio callbacks
+
+    private func wirePipeline() {
+        pipeline.onLevel = { [weak self] level, samples in
+            Task { @MainActor in self?.receive(level: level, samples: samples) }
+        }
+        pipeline.onWriteError = { [weak self] _ in
+            Task { @MainActor in self?.writeFailed() }
+        }
+        pipeline.onRuntimeError = { [weak self] in
+            MainActor.assumeIsolated { self?.captureFailed() }
+        }
+    }
+
+    private func receive(level: Float, samples: Int64) {
+        guard phase == .recording else { return }
+        levels.removeFirst()
+        levels.append(level)
+        elapsed = Double(samples) / 16_000
+        restartedAfterError = false
+
+        if level > 0.3 {
+            lastLoud = Date()
+            if quietWarned {
+                quietWarned = false
+                if status?.action == .stopRecording { status = nil }
+            }
+        } else if !quietWarned, Date().timeIntervalSince(lastLoud) > Self.quietLimit {
+            quietWarned = true
+            status = Status(text: "Quiet for 10 minutes. Still in class?", action: .stopRecording)
+        }
+
+        if Date().timeIntervalSince(lastSave) > 10 {
+            updateCurrent { $0.samples = samples }
+            saveCurrent()
+        }
+        if elapsed >= Self.maxLength {
+            stop(note: "Stopped at 3 hours, the longest a recording can be. Saved.")
+        }
+    }
+
+    private func writeFailed() {
+        guard phase == .recording else { return }
+        pipeline.stopCapture()
+        addEvent(.paused, note: "write failed")
+        updateCurrent { $0.state = .paused }
+        phase = .paused
+        saveCurrent()
+        status = Status(text: "Can't save audio, the disk is full. Free up space, then", action: .resume)
+    }
+
+    private func captureFailed() {
+        guard phase == .recording, let dev = device ?? Microphones.builtIn() else { return }
+        if restartedAfterError {
+            pause()
+            status = Status(text: "The mic stopped working. Check it, then", action: .resume)
+            return
+        }
+        restartedAfterError = true
+        switchMic(to: dev, message: "The mic stopped for a moment. Recording again.")
+    }
+
+    private func switchMic(to dev: AVCaptureDevice, message: String) {
+        do {
+            try pipeline.startCapture(device: dev)
+            device = dev
+            refreshMicName()
+            addEvent(.micChanged, note: Microphones.mic(for: dev).displayName)
+            saveCurrent()
+            status = Status(text: message)
+        } catch {
+            pause()
+            status = Status(text: "Couldn't use the mic. Plug it back in, then", action: .resume)
+        }
+    }
+
+    // MARK: - Sleep, unplugged mics, app active
+
+    private func observeSystem() {
+        let ws = NSWorkspace.shared.notificationCenter
+        observers.append(ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.willSleep() }
+        })
+        observers.append(ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.didWake() }
+        })
+        let nc = NotificationCenter.default
+        observers.append(nc.addObserver(forName: .AVCaptureDeviceWasDisconnected, object: nil, queue: .main) { [weak self] note in
+            let id = (note.object as? AVCaptureDevice)?.uniqueID
+            MainActor.assumeIsolated { self?.deviceDisconnected(id) }
+        })
+        observers.append(nc.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.refreshPermission()
+                self?.reload()
+            }
+        })
+    }
+
+    private func willSleep() {
+        guard phase == .recording else { return }
+        pipeline.stopCapture()
+        pipeline.flush()
+        asleepSince = Date()
+        addEvent(.asleep)
+        saveCurrent()
+    }
+
+    private func didWake() {
+        guard let since = asleepSince else { return }
+        asleepSince = nil
+        guard phase == .recording else { return }
+        let dev = Microphones.resolve().device ?? device
+        guard let dev else { pause(); return }
+        do {
+            try pipeline.startCapture(device: dev)
+            device = dev
+        } catch {
+            pause()
+            status = Status(text: "Couldn't restart the mic after sleep.", action: .resume)
+            return
+        }
+        addEvent(.woke)
+        saveCurrent()
+        let t = Date.FormatStyle(date: .omitted, time: .shortened)
+        status = Status(text: "Mac was asleep \(since.formatted(t)) to \(Date().formatted(t)). Keep the lid open in class.")
+    }
+
+    private func deviceDisconnected(_ id: String?) {
+        guard isBusy, let id, id == device?.uniqueID else { return }
+        guard let fallback = Microphones.builtIn(), fallback.uniqueID != id else {
+            pause()
+            status = Status(text: "Mic unplugged and no other mic found. Plug one in, then", action: .resume)
+            return
+        }
+        if phase == .recording {
+            switchMic(to: fallback, message: "Mic unplugged. Using the MacBook mic.")
+        } else {
+            device = fallback
+            status = Status(text: "Mic unplugged. Resume will use the MacBook mic.")
+        }
+    }
+
+    // MARK: - Crash recovery
+
+    /// Anything still marked as recording when the app starts was cut off by a
+    /// crash or power loss. Fix the audio file and mark it stopped.
+    private func recoverUnfinished() {
+        var notices: [String] = []
+        for var info in RecordingStore.loadAll() where info.isActive {
+            let audio = RecordingStore.audioURL(info.id)
+            let samples = (try? WavWriter.repair(audio)) ?? info.samples
+            let modified = (try? audio.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            let endedAt = modified ?? info.createdAt.addingTimeInterval(info.duration)
+            info.samples = samples
+            info.state = .stopped
+            info.endedAt = endedAt
+            info.events.append(.init(kind: .recovered, at: Date(), sample: samples))
+            try? RecordingStore.save(info)
+            let time = endedAt.formatted(date: .omitted, time: .shortened)
+            notices.append("Verbatim quit during \(info.title) at \(time). The audio up to then was saved.")
+        }
+        recoveryNotice = notices.last
+    }
+
+    // MARK: - Helpers
+
+    private func updateCurrent(_ change: (inout RecordingInfo) -> Void) {
+        guard let id = currentID, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
+        change(&recordings[i])
+    }
+
+    private func addEvent(_ kind: RecordingInfo.Event.Kind, note: String? = nil) {
+        let sample = pipeline.samplesWritten
+        updateCurrent {
+            if sample > 0 { $0.samples = max($0.samples, sample) }
+            $0.events.append(.init(kind: kind, at: Date(), sample: $0.samples, note: note))
+        }
+    }
+
+    private func saveCurrent() {
+        guard let info = current else { return }
+        try? RecordingStore.save(info)
+        lastSave = Date()
+    }
+
+    private func refreshMicName() {
+        if let device {
+            micName = Microphones.mic(for: device).displayName
+        } else if let d = Microphones.resolve().device {
+            micName = Microphones.mic(for: d).displayName
+        }
+    }
+
+    private func beginKeepAwake() {
+        guard activity == nil else { return }
+        activity = ProcessInfo.processInfo.beginActivity(
+            options: [.idleSystemSleepDisabled, .userInitiated],
+            reason: "Recording a class"
+        )
+    }
+
+    private func endKeepAwake() {
+        if let activity { ProcessInfo.processInfo.endActivity(activity) }
+        activity = nil
+    }
+
+    static func minutesText(_ seconds: TimeInterval) -> String {
+        let m = Int(seconds / 60)
+        if m < 1 { return "under 1 min" }
+        return "\(m) min"
+    }
+
+    static func clock(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds)
+        return String(format: "%02d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
+    }
+}
