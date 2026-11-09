@@ -115,6 +115,7 @@ final class RecorderModel {
             pipeline.attach(writer)
             LiveTranscriber.shared.recordingStarted(info.id, samples: 0)
             try pipeline.startCapture(device: dev)
+            Transcriber.shared.recordingStarted(info.id)
         } catch {
             pipeline.detach()
             LiveTranscriber.shared.recordingStopped()
@@ -213,8 +214,9 @@ final class RecorderModel {
             try? await Task.sleep(for: .seconds(10))
             guard let self, self.stoppedNote == stopped else { return }
             self.stoppedNote = nil
-            // Undo Stop is no longer possible, so the recording is final: transcribe it.
-            Transcriber.shared.enqueue(id)
+            // Undo Stop is no longer possible, so the recording is final: check the
+            // rest of it (the 5 minute chunks during class did the start).
+            Transcriber.shared.recordingFinal(id)
         }
     }
 
@@ -233,6 +235,7 @@ final class RecorderModel {
             pipeline.attach(writer)
             LiveTranscriber.shared.recordingStarted(info.id, samples: writer.samplesWritten)
             try pipeline.startCapture(device: dev)
+            Transcriber.shared.recordingStarted(info.id)
         } catch {
             pipeline.detach()
             LiveTranscriber.shared.recordingStopped()
@@ -499,6 +502,7 @@ final class RecorderModel {
         if Date().timeIntervalSince(lastSave) > 10 {
             updateCurrent { $0.samples = samples }
             saveCurrent()
+            if let id = currentID { Transcriber.shared.audioGrew(id) }
         }
         if elapsed >= Self.maxLength {
             stop(note: "Stopped at 3 hours, the longest a recording can be. Saved.")

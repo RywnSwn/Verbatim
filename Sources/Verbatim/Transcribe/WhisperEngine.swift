@@ -40,8 +40,16 @@ actor WhisperEngine {
     }
 
     /// Transcribes one piece of audio (16 kHz mono). Times are seconds into the piece.
-    func transcribe(_ samples: [Float]) async throws -> [Transcript.Line] {
+    /// `prompt` is the text just before this piece: Whisper reads it as context,
+    /// which helps with names and with carrying a sentence across the cut.
+    func transcribe(_ samples: [Float], prompt: String? = nil) async throws -> [WhisperSegment] {
         guard let pipe else { throw CocoaError(.featureUnsupported) }
+        var promptTokens: [Int]?
+        if let prompt, !prompt.isEmpty, let tokenizer = pipe.tokenizer {
+            let limit = tokenizer.specialTokens.specialTokenBegin
+            let tokens = tokenizer.encode(text: " " + prompt).filter { $0 < limit }
+            if !tokens.isEmpty { promptTokens = Array(tokens.suffix(Self.promptTokenLimit)) }
+        }
         let options = DecodingOptions(
             task: .transcribe,
             language: "en",
@@ -49,13 +57,36 @@ actor WhisperEngine {
             usePrefillPrompt: true,
             detectLanguage: false,
             skipSpecialTokens: true,
+            wordTimestamps: true,
+            promptTokens: promptTokens,
             chunkingStrategy: .vad
         )
         let results = try await pipe.transcribe(audioArray: samples, decodeOptions: options)
+        let echo = prompt.map(Self.key) ?? ""
         return results
             .flatMap(\.segments)
-            .map { Transcript.Line(start: Double($0.start), end: Double($0.end), text: Self.clean($0.text)) }
-            .filter { !$0.text.isEmpty && !Self.isJunk($0.text) }
+            .compactMap { segment -> WhisperSegment? in
+                let text = Self.clean(segment.text)
+                guard !text.isEmpty, !Self.isJunk(text) else { return nil }
+                // With a prompt, Whisper sometimes just repeats it on unclear audio.
+                let k = Self.key(text)
+                if k.count > 20, echo.contains(k) { return nil }
+                let words = (segment.words ?? []).compactMap { w -> WhisperWord? in
+                    let word = Self.cleanWord(w.word)
+                    guard !word.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+                    return WhisperWord(text: word, start: Double(w.start), end: Double(w.end))
+                }
+                return WhisperSegment(start: Double(segment.start), end: Double(segment.end), text: text, words: words)
+            }
+    }
+
+    /// Whisper allows up to 223 prompt tokens; a short one is safer (long
+    /// prompts make it more likely to copy the prompt instead of listening).
+    private static let promptTokenLimit = 120
+
+    /// Removes special tokens but keeps the leading space that separates words.
+    private static func cleanWord(_ text: String) -> String {
+        text.replacingOccurrences(of: "<\\|[^|]*\\|>", with: "", options: .regularExpression)
     }
 
     private static func clean(_ text: String) -> String {
@@ -71,10 +102,31 @@ actor WhisperEngine {
     ]
 
     private static func isJunk(_ text: String) -> Bool {
-        let key = text.lowercased()
+        let k = key(text)
+        return k.isEmpty || junk.contains(k)
+    }
+
+    /// Lowercase letters and spaces only, for comparing text.
+    private static func key(_ text: String) -> String {
+        text.lowercased()
             .components(separatedBy: CharacterSet.letters.union(.whitespaces).union(CharacterSet(charactersIn: "_")).inverted)
             .joined()
             .trimmingCharacters(in: .whitespaces)
-        return key.isEmpty || junk.contains(key)
     }
+}
+
+/// One stretch of Whisper text. Times are seconds into the piece of audio.
+struct WhisperSegment: Sendable {
+    var start: Double
+    var end: Double
+    var text: String
+    /// Each word with its time. Words keep their leading space (" hello").
+    /// Can be empty if Whisper couldn't time them.
+    var words: [WhisperWord]
+}
+
+struct WhisperWord: Sendable {
+    var text: String
+    var start: Double
+    var end: Double
 }

@@ -16,6 +16,8 @@ struct TranscriptList: View {
     let info: RecordingInfo
     let checked: [Transcript.Line]
     let live: [Transcript.Line]
+    /// Where the checked text ends (seconds into the audio), for the divider.
+    var checkedUpTo: Double?
     var volatile: String = ""
     var isLive = false
 
@@ -46,8 +48,8 @@ struct TranscriptList: View {
 
     private var rows: [Row] {
         var rows = checked.map { Row.line($0, .checked) }
-        if !checked.isEmpty, !live.isEmpty, let last = checked.last {
-            rows.append(.checkedUpTo(last.end))
+        if !checked.isEmpty, !live.isEmpty || !volatile.isEmpty, let last = checked.last {
+            rows.append(.checkedUpTo(checkedUpTo ?? last.end))
         }
         rows += live.map { Row.line($0, .live) }
         let v = volatile.trimmingCharacters(in: .whitespaces)

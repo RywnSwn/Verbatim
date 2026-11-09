@@ -6,6 +6,7 @@ import SwiftUI
 struct BottomBar: View {
     @Environment(RecorderModel.self) private var model
     @Environment(Updater.self) private var updater
+    @Environment(Transcriber.self) private var transcriber
 
     var body: some View {
         VStack(spacing: 0) {
@@ -82,13 +83,28 @@ struct BottomBar: View {
                     .fontWeight(.medium)
                 }
             } else {
-                Text(paused ? "Paused. Nothing is being recorded." : "Saved as you go, works offline")
+                Text(quietText)
                     .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
         .font(.callout)
         .lineLimit(2)
         .multilineTextAlignment(.trailing)
+    }
+
+    /// The normal message when nothing needs attention.
+    private var quietText: String {
+        if paused { return "Paused. Nothing is being recorded." }
+        if let info = model.current {
+            if let job = transcriber.active, job.id == info.id, job.pieceEnd > job.pieceStart {
+                return "Checking \(info.timeLabel(job.pieceStart)) to \(info.timeLabel(job.pieceEnd))"
+            }
+            if transcriber.lowPower {
+                return "Low Power Mode: checking waits until you stop"
+            }
+        }
+        return "Saved as you go, works offline"
     }
 
     private static func linkTitle(_ action: RecorderModel.Status.Action) -> String {

@@ -13,19 +13,26 @@ extension RecordingInfo {
     }
 }
 
-/// Main area while recording: the live transcript, a little grey, with a plain
-/// status line on top only when live text isn't coming from Parakeet.
+/// Main area while recording: checked (accurate) text in full ink, then the
+/// live text after it, a little grey. Every 5 minutes the background pass
+/// replaces the oldest grey part. A plain status line on top only when live
+/// text isn't coming from Parakeet.
 struct RecordingNowView: View {
     @Environment(RecorderModel.self) private var model
     @Environment(LiveTranscriber.self) private var live
+    @Environment(Transcriber.self) private var transcriber
     let info: RecordingInfo
 
-    private var lines: [Transcript.Line] { live.lines(info.id) }
+    private var transcript: Transcript? { transcriber.transcripts[info.id] }
+    private var checked: [Transcript.Line] { transcript?.lines ?? [] }
+    private var lines: [Transcript.Line] {
+        live.texts[info.id]?.unchecked(after: transcript?.doneUpTo ?? 0) ?? []
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             LiveStatusLine(paused: model.phase == .paused)
-            if lines.isEmpty, live.volatile.isEmpty {
+            if checked.isEmpty, lines.isEmpty, live.volatile.isEmpty {
                 VStack(spacing: 8) {
                     Text(model.phase == .paused ? "Paused." : "Listening.")
                         .font(.title3)
@@ -36,14 +43,17 @@ struct RecordingNowView: View {
                 .padding(40)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                TranscriptList(info: info, checked: [], live: lines, volatile: live.volatile, isLive: true)
+                TranscriptList(
+                    info: info, checked: checked, live: lines, checkedUpTo: transcript?.doneUpTo,
+                    volatile: live.volatile, isLive: true
+                )
             }
         }
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(info.startedText)
         .toolbar {
             ToolbarItemGroup {
-                CopyAllButton(lines: lines)
+                CopyAllButton(lines: checked + lines)
             }
         }
     }
@@ -118,8 +128,7 @@ struct PastRecordingView: View {
     /// Live lines the accurate pass hasn't reached yet.
     private var liveLines: [Transcript.Line] {
         if transcript?.finished == true { return [] }
-        let done = transcript?.doneUpTo ?? 0
-        return live.lines(info.id).filter { $0.start >= done }
+        return live.texts[info.id]?.unchecked(after: transcript?.doneUpTo ?? 0) ?? []
     }
 
     var body: some View {
@@ -128,7 +137,7 @@ struct PastRecordingView: View {
             if checked.isEmpty, liveLines.isEmpty {
                 emptyState
             } else {
-                TranscriptList(info: info, checked: checked, live: liveLines)
+                TranscriptList(info: info, checked: checked, live: liveLines, checkedUpTo: transcript?.doneUpTo)
             }
         }
         .navigationTitle(info.fullTitle)
@@ -150,7 +159,8 @@ struct PastRecordingView: View {
                     }
                     Divider()
                     Button("Transcribe again") { transcriber.redo(info.id) }
-                        .disabled(transcriber.active?.id == info.id || transcriber.importing.contains(info.id))
+                        .disabled(transcriber.active?.id == info.id || transcriber.importing.contains(info.id)
+                            || transcriber.isGrowing(info.id))
                     Divider()
                     Button("Move to Trash") { model.delete(info.id) }
                 } label: {
@@ -227,6 +237,8 @@ struct TranscriptStatusLine: View {
     private var message: (String, String?, (() -> Void)?)? {
         let id = info.id
         let original = info.importedFrom == nil ? "" : " Your original file isn't touched."
+        // Just stopped (Undo Stop still possible): the rest is checked in a moment.
+        if transcriber.isGrowing(id), transcriber.errors[id] == nil { return nil }
         if transcriber.importing.contains(id) {
             return ("Importing \(info.importedFrom ?? info.title).\(original)", nil, nil)
         }

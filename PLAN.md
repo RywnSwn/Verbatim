@@ -1,11 +1,10 @@
 # Plan
 
-Status (end of chat 2026-11-09, second chat): steps 1, 2, 3, 4 and 11
-merged into `main` (step 4: RywnSwn/Verbatim#7, which also pulled line
-editing forward from step 6). Ryan tested live text with a documentary:
-works well. Line editing built but not tried on a Mac yet; ask him.
-Step 3 accuracy on a real class Voice Memo still not reported; ask him.
-Next: step 5 (background accurate pass during recording). Then step 2b.
+Status (chat 2026-11-09, third chat): step 5 (background accurate pass)
+built on branch `claude/step-5-accurate-pass`, PR open, waiting for Ryan
+to test. Steps 1, 2, 3, 4 and 11 merged. Still unanswered from Ryan: line
+editing on a real Mac, step 3 accuracy on a real class Voice Memo.
+Next after step 5 merges: step 2b (visual design), then step 6.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -26,7 +25,7 @@ class depends on it.
        model download with resume. Ryan tests accuracy on real classes.
 4. [x] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
        (backup while Parakeet downloads).
-5. [ ] **Background accurate pass.** Voice detector cuts ~5 min chunks at
+5. [~] **Background accurate pass.** Voice detector cuts ~5 min chunks at
        pauses, one job at a time, overlap merge, live text upgrades.
 6. [ ] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
        export .txt/.md, search.
@@ -232,3 +231,56 @@ Ask Mr. Yurt before recording class.
 9. While recording, double-click a line, fix a word, press Enter: lock
    shows, new words keep coming below. Undo in the bottom bar works.
 10. Right-click a line > Delete line, then Undo.
+
+## How the background accurate pass works (step 5)
+- `Transcriber.growing`: recordings still getting audio (recording, paused,
+  or in the 10 s Undo Stop window). `RecorderModel` calls
+  `recordingStarted` (start, Undo Stop), `audioGrew` (every 10 s) and
+  `recordingFinal` (when Undo Stop expires; replaces the old enqueue).
+- A chunk starts once there are 5 min + 15 s of unchecked audio
+  (`chunkSeconds`, `settleSeconds`). The 15 s lets live text for that bit
+  become final.
+- Cut: the longest gap between live lines in the 30 s before the 5 min
+  mark, at its quietest 0.1 s, so live lines are never split. No live text:
+  quietest moment in the 20 s before the mark (`WavReader.quietPoint`).
+- Overlap: each piece starts 1 s before the cut. Whisper runs with word
+  timestamps; `Transcribe/ChunkMerge.swift` drops words whose middle is
+  before the cut, inside a deleted live line (`LiveText.removed`) or inside
+  a locked live line, then adds the locked live lines as they are. A line
+  belongs to the side of the cut its middle is on (`Line.middle`,
+  `LiveText.unchecked(after:)`).
+- Prompt: the last 3 checked lines (max 300 chars, 120 tokens) go to
+  Whisper as context. Segments that just repeat the prompt are dropped.
+  Step 8 adds the word list in `Transcriber.promptText`.
+- While Ryan edits a live line inside the chunk, the merge waits until he
+  is done. Undo of a live edit/delete after the line got upgraded applies
+  to the checked text (`LineEdits.restore`).
+- The recording in progress jumps ahead of imports: a file job yields after
+  its current piece when a recording chunk is ready.
+- Memory: Whisper loads for each chunk and unloads after (queue empty), so
+  during class it is in memory only while checking. Parakeet stays loaded.
+- Low Power Mode: chunks wait, bottom bar says so, and everything catches
+  up after Stop (spec). Turning it off starts a waiting chunk.
+- Screen: recording view shows checked text, the "Checked up to" divider,
+  then grey live text. Bottom bar status spot: "Checking 10:40 to 10:45".
+- Post-stop and imported files use the same code (2 min pieces, overlap,
+  word merge).
+- Not done: "falling behind" message, Settings choice for the 5 min
+  (both step 10). Possible screen jump when a chunk lands while scrolled up:
+  ask Ryan.
+
+## Step 5 test list for Ryan
+1. Record 12+ min (a video or podcast is fine). Around 5:15 the bottom
+   right says "Checking ..." for a bit, then the top part turns from grey
+   to black with "Checked up to ..." under it. Again around 10:30.
+2. Read the seam around the 5 min mark: any doubled or missing words?
+3. While recording, delete a grey line and edit another one before they
+   get checked. After the check: deleted stays gone, edited stays as you
+   wrote it with the lock.
+4. Scroll up while a check lands: does the screen jump?
+5. Stop: the last few minutes get checked within a minute or so.
+6. Activity Monitor: memory while "Checking" shows vs between checks.
+7. Turn on Low Power Mode while recording: bottom right says checking
+   waits. Stop: it catches up.
+8. Import a Voice Memo, then start recording: the recording's checks still
+   happen during the import.

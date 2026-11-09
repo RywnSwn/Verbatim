@@ -67,12 +67,20 @@ enum WavReader {
     /// The quietest 0.1 s moment in the few seconds before `target`, so pieces
     /// are cut between words, not through them.
     static func quietPoint(_ url: URL, before target: Int64, searchSeconds: Int64 = 8) -> Int64 {
+        quietest(url, from: max(0, target - searchSeconds * rate), to: target) ?? target
+    }
+
+    /// The middle of the quietest 0.1 s between `from` and `to` (samples).
+    /// `to` if the stretch is too short to look at.
+    static func quietPoint(_ url: URL, from: Int64, to: Int64) -> Int64 {
+        quietest(url, from: from, to: to) ?? to
+    }
+
+    private static func quietest(_ url: URL, from: Int64, to: Int64) -> Int64? {
         let window: Int64 = 1_600
-        let from = max(0, target - searchSeconds * rate)
-        guard let samples = try? samples(url, from: from, count: target - from), samples.count >= Int(window) else {
-            return target
-        }
-        var best = target
+        guard to - from >= window, let samples = try? samples(url, from: from, count: to - from),
+              samples.count >= Int(window) else { return nil }
+        var best: Int64?
         var bestEnergy = Float.greatestFiniteMagnitude
         var i = 0
         while i + Int(window) <= samples.count {
@@ -82,7 +90,7 @@ enum WavReader {
                 bestEnergy = energy
                 best = from + Int64(i) + window / 2
             }
-            i += Int(window) / 2
+            i += Int(window) / 4
         }
         return best
     }

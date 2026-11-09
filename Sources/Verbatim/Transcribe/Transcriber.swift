@@ -20,9 +20,21 @@ final class Transcriber {
         var doneSeconds: Double
         var totalSeconds: Double
         var secondsLeft: Double?
+        /// The bit of audio being checked right now (seconds into audio.wav).
+        var pieceStart: Double = 0
+        var pieceEnd: Double = 0
     }
 
+    /// Piece size for a finished recording or an imported file.
     static let pieceSeconds: Int64 = 120
+    /// While recording: check every 5 minutes of new audio.
+    static let chunkSeconds: Int64 = 300
+    /// While recording: leave the newest audio alone until live text for it is
+    /// final, so the cut can be placed between live lines.
+    static let settleSeconds: Int64 = 15
+    /// Each piece starts this much before the cut, so Whisper hears the first
+    /// word whole. Words before the cut are dropped when merging.
+    static let overlapSeconds = 1.0
 
     private(set) var modelState: ModelState = .downloading(fraction: 0, secondsLeft: nil)
     private(set) var queue: [UUID] = []
@@ -30,6 +42,11 @@ final class Transcriber {
     private(set) var importing: Set<UUID> = []
     private(set) var transcripts: [UUID: Transcript] = [:]
     private(set) var errors: [UUID: String] = [:]
+    /// Recordings still getting audio (recording, paused, or in the 10 s Undo Stop
+    /// window). Checked in 5 minute chunks; the newest bit waits for Stop.
+    private(set) var growing: Set<UUID> = []
+    /// Low Power Mode: chunks wait during recording and catch up at Stop.
+    private(set) var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
 
     @ObservationIgnored private let engine = WhisperEngine()
     @ObservationIgnored private var downloadTask: Task<Void, Never>?
@@ -37,6 +54,7 @@ final class Transcriber {
     @ObservationIgnored private var cancelRequested: Set<UUID> = []
     @ObservationIgnored private var progressSamples: [(Date, Double)] = []
     @ObservationIgnored private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var powerObserver: NSObjectProtocol?
 
     private static let folderKey = "modelFolder"
     private static let preparedKey = "modelPrepared"
@@ -56,7 +74,20 @@ final class Transcriber {
 
     var isModelReady: Bool { modelState == .ready }
 
-    private init() {}
+    private init() {
+        powerObserver = NotificationCenter.default.addObserver(
+            forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { Transcriber.shared.powerChanged() }
+        }
+    }
+
+    private func powerChanged() {
+        lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        if !lowPower {
+            for id in growing where chunkReady(id) { enqueue(id) }
+        }
+    }
 
     /// Called once at launch with the saved recordings.
     func start(with recordings: [RecordingInfo]) {
@@ -177,7 +208,7 @@ final class Transcriber {
 
     /// Throws away the transcript and does it again.
     func redo(_ id: UUID) {
-        guard active?.id != id else { return }
+        guard active?.id != id, !growing.contains(id) else { return }
         transcripts[id] = nil
         try? FileManager.default.removeItem(at: TranscriptStore.url(id))
         enqueue(id)
@@ -197,6 +228,7 @@ final class Transcriber {
     func forget(_ id: UUID) {
         if active?.id == id { cancelRequested.insert(id) }
         queue.removeAll { $0 == id }
+        growing.remove(id)
         transcripts[id] = nil
         errors[id] = nil
     }
@@ -210,6 +242,58 @@ final class Transcriber {
     }
 
     func isQueued(_ id: UUID) -> Bool { queue.contains(id) }
+
+    func isGrowing(_ id: UUID) -> Bool { growing.contains(id) }
+
+    // MARK: - While recording
+
+    /// Recording started, or carried on after Undo Stop.
+    func recordingStarted(_ id: UUID) {
+        growing.insert(id)
+    }
+
+    /// Called every few seconds while recording. Starts a chunk once there are
+    /// 5 minutes of new audio.
+    func audioGrew(_ id: UUID) {
+        guard growing.contains(id), active?.id != id, !queue.contains(id), chunkReady(id) else { return }
+        enqueue(id)
+    }
+
+    /// Stopped for good (Undo Stop expired): check the rest, to the end.
+    func recordingFinal(_ id: UUID) {
+        growing.remove(id)
+        enqueue(id)
+    }
+
+    /// A growing recording has a full chunk waiting.
+    private func chunkReady(_ id: UUID) -> Bool {
+        guard growing.contains(id), !lowPower, transcripts[id]?.stoppedByUser != true else { return false }
+        let total = WavReader.sampleCount(RecordingStore.audioURL(id))
+        let done = Int64((transcripts[id]?.doneUpTo ?? 0) * Double(WavReader.rate))
+        return total - done >= (Self.chunkSeconds + Self.settleSeconds) * WavReader.rate
+    }
+
+    /// Where to end a chunk: in the longest gap between live lines in the 30 s
+    /// before `target` (so live lines never get split), at its quietest moment.
+    /// Without live text, the quietest moment in the 20 s before `target`.
+    private func cutPoint(_ id: UUID, audio: URL, target: Int64, after pos: Int64) -> Int64 {
+        let rate = Double(WavReader.rate)
+        let high = Double(target) / rate
+        let low = max(high - 30, Double(pos) / rate + 60)
+        let lines = LiveTranscriber.shared.texts[id]?.lines ?? []
+        var best: (from: Double, to: Double)?
+        for (a, b) in zip(lines, lines.dropFirst()) where b.start > a.end {
+            let mid = (a.end + b.start) / 2
+            guard mid > low, mid < high else { continue }
+            if best == nil || b.start - a.end > best!.to - best!.from { best = (a.end, b.start) }
+        }
+        if let best, best.to - best.from >= 0.25 {
+            let cut = WavReader.quietPoint(audio, from: Int64(best.from * rate), to: Int64(best.to * rate))
+            if cut > pos { return cut }
+        }
+        let cut = WavReader.quietPoint(audio, before: target, searchSeconds: 20)
+        return cut > pos ? cut : target
+    }
 
     // MARK: - Editing lines
 
@@ -245,55 +329,85 @@ final class Transcriber {
     private func runQueue() {
         guard workTask == nil, modelState == .ready, !queue.isEmpty else { return }
         workTask = Task {
-            while let id = queue.first {
-                await transcribe(id)
-                if queue.first == id { queue.removeFirst() }
+            while let id = nextJob() {
+                let result = await transcribe(id)
+                // A finished file, or a recording with no full chunk left: done for
+                // now. Skipped for the recording in progress: comes back later.
+                if result == .done { queue.removeAll { $0 == id } }
             }
-            await engine.unload() // free the memory until the next recording
+            await engine.unload() // free the memory until the next chunk or recording
             workTask = nil
             runQueue()
         }
     }
 
-    private func transcribe(_ id: UUID) async {
+    /// The recording in progress goes first, so its text upgrades during class
+    /// even while an imported file is being transcribed.
+    private func nextJob() -> UUID? {
+        queue.first { growing.contains($0) && chunkReady($0) } ?? queue.first
+    }
+
+    private enum JobResult { case done, yielded }
+
+    private func transcribe(_ id: UUID) async -> JobResult {
         let audio = RecordingStore.audioURL(id)
-        guard FileManager.default.fileExists(atPath: audio.path) else { return }
+        guard FileManager.default.fileExists(atPath: audio.path) else { return .done }
         var t = transcripts[id] ?? Transcript(model: WhisperEngine.variant)
-        guard !t.finished else { return }
+        guard !t.finished else { return .done }
+        if growing.contains(id), !chunkReady(id) { return .done }
         cancelRequested.remove(id)
 
-        let total = WavReader.sampleCount(audio)
-        var pos = min(Int64(t.doneUpTo * Double(WavReader.rate)), total)
         let rate = Double(WavReader.rate)
+        var total = WavReader.sampleCount(audio)
+        var pos = min(Int64(t.doneUpTo * rate), total)
         active = Job(id: id, doneSeconds: Double(pos) / rate, totalSeconds: Double(total) / rate)
 
-        guard let folder = modelFolder else { active = nil; return }
+        guard let folder = modelFolder else { active = nil; return .done }
         do {
             try await engine.load(folder: folder, base: Self.modelBase)
         } catch {
             errors[id] = "Couldn't load the model: \(error.localizedDescription)"
             active = nil
-            return
+            return .done
         }
 
         let started = Date()
         let startPos = pos
-        while pos < total {
-            if cancelRequested.contains(id) { break }
-            var end = min(pos + Self.pieceSeconds * WavReader.rate, total)
-            if end < total { end = WavReader.quietPoint(audio, before: end) }
-            if end <= pos { end = min(pos + Self.pieceSeconds * WavReader.rate, total) }
+        var result = JobResult.done
+        while !cancelRequested.contains(id) {
+            total = WavReader.sampleCount(audio)
+            let isGrowing = growing.contains(id)
+            var end: Int64
+            if isGrowing {
+                guard chunkReady(id) else { break }
+                end = cutPoint(id, audio: audio, target: pos + Self.chunkSeconds * WavReader.rate, after: pos)
+            } else {
+                guard pos < total else { break }
+                end = min(pos + Self.pieceSeconds * WavReader.rate, total)
+                if end < total { end = WavReader.quietPoint(audio, before: end) }
+                if end <= pos { end = min(pos + Self.pieceSeconds * WavReader.rate, total) }
+            }
+            active = Job(
+                id: id,
+                doneSeconds: Double(pos) / rate,
+                totalSeconds: Double(total) / rate,
+                secondsLeft: active?.secondsLeft,
+                pieceStart: Double(pos) / rate,
+                pieceEnd: Double(end) / rate
+            )
 
             if end - pos >= WavReader.rate / 2 { // skip a final crumb under half a second
                 do {
-                    let samples = try WavReader.samples(audio, from: pos, count: end - pos)
-                    let offset = Double(pos) / rate
-                    let lines = try await engine.transcribe(samples)
+                    let from = max(0, pos - Int64(Self.overlapSeconds * rate))
+                    let samples = try WavReader.samples(audio, from: from, count: end - from)
+                    let segments = try await engine.transcribe(samples, prompt: promptText(id, t, before: Double(pos) / rate))
+                    if cancelRequested.contains(id) { break }
+                    await waitWhileEditing(id, before: Double(end) / rate)
                     if cancelRequested.contains(id) { break }
                     // Start from what's on screen now, so edits and deletes made
                     // while this piece was transcribing are kept.
                     t.lines = (transcripts[id]?.lines ?? t.lines)
-                        + lines.map { .init(start: $0.start + offset, end: $0.end + offset, text: $0.text) }
+                        + merged(id, segments, offset: Double(from) / rate, from: Double(pos) / rate, to: Double(end) / rate)
                 } catch {
                     errors[id] = "Transcribing stopped: \(error.localizedDescription)"
                     break
@@ -301,7 +415,7 @@ final class Transcriber {
             }
             pos = end
             t.doneUpTo = Double(pos) / rate
-            t.finished = pos >= total
+            t.finished = !growing.contains(id) && pos >= WavReader.sampleCount(audio)
             transcripts[id] = t
             try? TranscriptStore.save(t, for: id)
 
@@ -311,11 +425,47 @@ final class Transcriber {
                 id: id,
                 doneSeconds: Double(pos) / rate,
                 totalSeconds: Double(total) / rate,
-                secondsLeft: done > 0 ? elapsed / done * Double(total - pos) : nil
+                secondsLeft: !isGrowing && done > 0 ? elapsed / done * Double(max(0, total - pos)) : nil
             )
+
+            // The recording in progress has a chunk waiting: do that first, then
+            // carry on with this one.
+            if !isGrowing, queue.contains(where: { $0 != id && chunkReady($0) }) {
+                result = .yielded
+                break
+            }
         }
         cancelRequested.remove(id)
         active = nil
+        return result
+    }
+
+    /// The last bit of checked text before `seconds`, as context for Whisper.
+    /// Step 8 adds the word list here.
+    private func promptText(_ id: UUID, _ t: Transcript, before seconds: Double) -> String? {
+        let previous = (transcripts[id] ?? t).lines.filter { $0.end <= seconds + 0.5 }.suffix(3)
+        let text = previous.map(\.text).joined(separator: " ")
+        return text.isEmpty ? nil : String(text.suffix(300))
+    }
+
+    /// If Ryan is editing a live line in this piece, wait until he's done, so
+    /// his edit is kept (the line moves into the checked text locked).
+    private func waitWhileEditing(_ id: UUID, before seconds: Double) async {
+        while let e = LiveTranscriber.shared.editing, e.id == id, e.start < seconds, !cancelRequested.contains(id) {
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+    }
+
+    /// Whisper's words for [from, to), minus lines Ryan deleted, plus lines he
+    /// edited in the live text (kept as he wrote them).
+    private func merged(_ id: UUID, _ segments: [WhisperSegment], offset: Double, from: Double, to: Double) -> [Transcript.Line] {
+        let live = LiveTranscriber.shared.texts[id]
+        let lockedLines = (live?.lines ?? []).filter(\.isLocked)
+        let overlaps = { (s: Double, e: Double) in e >= offset && s <= to }
+        let skip = (live?.removed ?? []).filter { overlaps($0.start, $0.end) }
+            + lockedLines.filter { overlaps($0.start, $0.end) }.map { ChunkMerge.Span(start: $0.start, end: $0.end) }
+        let keep = lockedLines.filter { $0.middle >= from && $0.middle < to }
+        return ChunkMerge.lines(segments, offset: offset, keepFrom: from, skip: skip, locked: keep)
     }
 }
 
