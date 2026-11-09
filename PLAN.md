@@ -1,10 +1,13 @@
 # Plan
 
-Status: steps 1, 2, 3 built 2026-11-09, step 11 (updates) pulled forward
-and built the same day because manual installs were annoying Ryan.
-SIGNING_CERT_P12 secret added by Ryan. He installs the first signed
-build by hand once; after that updates are in-app. Step 3 not tested yet.
-Next: step 4 (live).
+Status (end of chat 2026-11-09): steps 1, 2, 3 and 11 built. Ryan tested
+recording (works) and the in-app updater (works: signed v0.1.15 installed
+by hand, updated in-app to v0.1.18). Step 3 (transcription) built but not
+reported on yet: ask Ryan how the model download and accuracy went.
+Next: step 4 (live transcript). Step 2b (visual design) after that.
+Work is in stacked PRs RywnSwn/Verbatim#3 (steps 1-2), #4 (step 3),
+#5 (step 11 + sidebar buttons); merge in that order. If they aren't merged
+yet, branch the next step from `claude/step-11-updates`, not `main`.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -37,7 +40,7 @@ class depends on it.
        Recently deleted, Export everything.
 10. [ ] **Polish.** First-launch screen, menu bar dropdown, Settings, notifications,
         all the edge cases in `docs/spec.md` that aren't done yet.
-11. [~] **Updates.** In-app update button (own updater, not Sparkle).
+11. [x] **Updates.** In-app update button (own updater, not Sparkle).
 
 ## Nice to have (after the above)
 - [ ] Timeline: click a line to hear that bit of audio.
@@ -156,3 +159,9 @@ Ask Mr. Yurt before recording class.
 - `Updates/Uninstaller.swift`: Verbatim > Remove Verbatim and Its Data
   trashes the app, App Support/Verbatim, caches, prefs, saved state and
   resets the mic permission (tccutil).
+
+## Sidebar buttons (added at the end of chat 2026-11-09, Ryan's asks)
+- Top: "+ New recording ⌘R", like New chat in Claude. One click starts
+  recording; while recording it reads "Recording now" and jumps to it.
+- Bottom: "Transcribe a file…" (same as Cmd+O / drag and drop).
+- Updater says "Updated to version X" once after an update.
