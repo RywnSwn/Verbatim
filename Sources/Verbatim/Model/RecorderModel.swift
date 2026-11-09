@@ -70,6 +70,7 @@ final class RecorderModel {
         wirePipeline()
         observeSystem()
         Transcriber.shared.start(with: recordings)
+        LiveTranscriber.shared.start(with: recordings)
     }
 
     // MARK: - Start / Pause / Stop
@@ -111,9 +112,11 @@ final class RecorderModel {
             try RecordingStore.create(info)
             let writer = try WavWriter(creating: RecordingStore.audioURL(info.id))
             pipeline.attach(writer)
+            LiveTranscriber.shared.recordingStarted(info.id, samples: 0)
             try pipeline.startCapture(device: dev)
         } catch {
             pipeline.detach()
+            LiveTranscriber.shared.recordingStopped()
             status = Status(text: "Couldn't start recording: \(error.localizedDescription)")
             return
         }
@@ -146,6 +149,7 @@ final class RecorderModel {
         guard phase == .recording else { return }
         pipeline.stopCapture()
         pipeline.flush()
+        LiveTranscriber.shared.micStopped()
         addEvent(.paused)
         updateCurrent { $0.state = .paused }
         phase = .paused
@@ -181,6 +185,7 @@ final class RecorderModel {
     func stop(note: String? = nil) {
         guard isBusy, let id = currentID else { return }
         let samples = pipeline.detach()
+        LiveTranscriber.shared.recordingStopped()
         let now = Date()
         updateCurrent {
             $0.samples = samples
@@ -225,9 +230,11 @@ final class RecorderModel {
         do {
             let writer = try WavWriter(appendingTo: RecordingStore.audioURL(info.id))
             pipeline.attach(writer)
+            LiveTranscriber.shared.recordingStarted(info.id, samples: writer.samplesWritten)
             try pipeline.startCapture(device: dev)
         } catch {
             pipeline.detach()
+            LiveTranscriber.shared.recordingStopped()
             status = Status(text: "Couldn't continue the recording: \(error.localizedDescription)")
             return
         }
@@ -275,6 +282,7 @@ final class RecorderModel {
         }
         recordings.remove(at: i)
         Transcriber.shared.forget(id)
+        LiveTranscriber.shared.forget(id)
         if selection == id { selection = nil }
         if stoppedNote?.recordingID == id { stoppedNote = nil }
         guard let url = trashed as URL? else { return }
@@ -304,6 +312,7 @@ final class RecorderModel {
         }
         reload()
         Transcriber.shared.reload(note.info.id)
+        LiveTranscriber.shared.reload(note.info.id)
         selection = note.info.id
     }
 
@@ -434,6 +443,8 @@ final class RecorderModel {
         pipeline.onWriteError = { [weak self] _ in
             Task { @MainActor in self?.writeFailed() }
         }
+        let live = LiveTranscriber.shared.feed
+        pipeline.onSamples = { live.yield(.samples($0)) }
         pipeline.onRuntimeError = { [weak self] in
             MainActor.assumeIsolated { self?.captureFailed() }
         }
@@ -469,6 +480,7 @@ final class RecorderModel {
     private func writeFailed() {
         guard phase == .recording else { return }
         pipeline.stopCapture()
+        LiveTranscriber.shared.micStopped()
         addEvent(.paused, note: "write failed")
         updateCurrent { $0.state = .paused }
         phase = .paused
@@ -528,6 +540,7 @@ final class RecorderModel {
         guard phase == .recording else { return }
         pipeline.stopCapture()
         pipeline.flush()
+        LiveTranscriber.shared.micStopped()
         asleepSince = Date()
         addEvent(.asleep)
         saveCurrent()

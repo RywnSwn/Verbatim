@@ -6,6 +6,7 @@ struct VerbatimApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = RecorderModel.shared
     @State private var transcriber = Transcriber.shared
+    @State private var live = LiveTranscriber.shared
     @State private var updater = Updater.shared
 
     var body: some Scene {
@@ -13,6 +14,7 @@ struct VerbatimApp: App {
             ContentView()
                 .environment(model)
                 .environment(transcriber)
+                .environment(live)
                 .environment(updater)
                 .frame(minWidth: 820, minHeight: 540)
                 .task { updater.startAutomaticChecks() }

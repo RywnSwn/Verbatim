@@ -13,42 +13,122 @@ extension RecordingInfo {
     }
 }
 
-/// Main area while recording. The live transcript replaces this in step 4.
+/// Main area while recording: the live transcript, a little grey, with a plain
+/// status line on top only when live text isn't coming from Parakeet.
 struct RecordingNowView: View {
+    @Environment(RecorderModel.self) private var model
+    @Environment(LiveTranscriber.self) private var live
     let info: RecordingInfo
 
+    private var lines: [Transcript.Line] { live.lines(info.id) }
+
     var body: some View {
-        VStack(spacing: 8) {
-            Text("Live text comes in a later update.")
-                .font(.title3)
-            Text("The text for this recording appears 10 seconds after you press Stop.")
-                .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            LiveStatusLine(paused: model.phase == .paused)
+            if lines.isEmpty, live.volatile.isEmpty {
+                VStack(spacing: 8) {
+                    Text(model.phase == .paused ? "Paused." : "Listening.")
+                        .font(.title3)
+                    Text(emptyNote)
+                        .foregroundStyle(.secondary)
+                }
+                .multilineTextAlignment(.center)
+                .padding(40)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                TranscriptList(info: info, checked: [], live: lines, volatile: live.volatile, isLive: true)
+            }
         }
-        .multilineTextAlignment(.center)
-        .padding(40)
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(info.startedText)
+        .toolbar {
+            ToolbarItemGroup {
+                CopyAllButton(lines: lines)
+            }
+        }
+    }
+
+    private var emptyNote: String {
+        if model.phase == .paused { return "Nothing is being recorded. Press Resume to carry on." }
+        switch live.status {
+        case .listening, .starting, nil: return "Words show up here a couple of seconds after they're said."
+        case .off: return "Your audio is being saved. The text comes after you press Stop."
+        }
+    }
+}
+
+/// Says where live text is coming from, only when it isn't the normal case.
+struct LiveStatusLine: View {
+    @Environment(LiveTranscriber.self) private var live
+    let paused: Bool
+
+    var body: some View {
+        if let text = message {
+            VStack(spacing: 0) {
+                HStack {
+                    Text(text)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 10)
+                Divider()
+            }
+        }
+    }
+
+    private var message: String? {
+        guard !paused else { return nil }
+        switch live.status {
+        case .starting:
+            return "Getting live text ready. Your audio is already being saved."
+        case .listening(let engine) where engine == AppleSpeechEngine.name:
+            if live.isModelReady {
+                return "Live text is using your Mac's built-in engine. Parakeet takes over after you pause or stop."
+            }
+            return "Live text is using your Mac's built-in engine until Parakeet finishes downloading\(percentText)."
+        case .off(let reason):
+            return "No live text right now: \(reason). Your audio is saved, and the text comes after you press Stop."
+        default:
+            return nil
+        }
+    }
+
+    private var percentText: String {
+        switch live.modelState {
+        case .downloading(let f, _), .paused(let f), .failed(let f): " (\(Int(f * 100))%)"
+        default: ""
+        }
     }
 }
 
 /// A finished recording: its transcript, with a plain status line on top while
 /// it is being transcribed. Layout follows docs/design/Transcript.dc.html.
+/// Until the accurate pass gets to a part, the live text for it shows in grey.
 struct PastRecordingView: View {
     @Environment(RecorderModel.self) private var model
     @Environment(Transcriber.self) private var transcriber
+    @Environment(LiveTranscriber.self) private var live
     let info: RecordingInfo
-    @State private var copiedLabel: String?
 
     private var transcript: Transcript? { transcriber.transcripts[info.id] }
-    private var lines: [Transcript.Line] { transcript?.lines ?? [] }
+    private var checked: [Transcript.Line] { transcript?.lines ?? [] }
+
+    /// Live lines the accurate pass hasn't reached yet.
+    private var liveLines: [Transcript.Line] {
+        if transcript?.finished == true { return [] }
+        let done = transcript?.doneUpTo ?? 0
+        return live.lines(info.id).filter { $0.start >= done }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             TranscriptStatusLine(info: info)
-            if lines.isEmpty {
+            if checked.isEmpty, liveLines.isEmpty {
                 emptyState
             } else {
-                transcriptList
+                TranscriptList(info: info, checked: checked, live: liveLines)
             }
         }
         .navigationTitle(info.fullTitle)
@@ -78,11 +158,7 @@ struct PastRecordingView: View {
                 }
                 .help("Play audio, Show in Finder, Transcribe again, Move to Trash")
 
-                Button(copiedLabel ?? "Copy all") { copyAll() }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut("c", modifiers: [.command, .shift])
-                    .disabled(lines.isEmpty)
-                    .help(lines.isEmpty ? "Nothing to copy yet" : "Copy the whole transcript (⇧⌘C)")
+                CopyAllButton(lines: checked + liveLines)
             }
         }
     }
@@ -90,31 +166,6 @@ struct PastRecordingView: View {
     private var subtitle: String {
         if let name = info.importedFrom { return "From \(name), \(RecorderModel.minutesText(info.duration))" }
         return "\(info.startedText), \(RecorderModel.minutesText(info.duration))"
-    }
-
-    private var transcriptList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                    HStack(alignment: .firstTextBaseline, spacing: 18) {
-                        Text(timeLabel(line.start))
-                            .font(.callout)
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(width: 52, alignment: .trailing)
-                        Text(line.text)
-                            .font(.system(size: 15))
-                            .lineSpacing(3)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-            .frame(maxWidth: 760, alignment: .leading)
-            .padding(.horizontal, 32)
-            .padding(.vertical, 24)
-            .frame(maxWidth: .infinity)
-        }
     }
 
     @ViewBuilder private var emptyState: some View {
@@ -136,29 +187,6 @@ struct PastRecordingView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    /// Clock time (10:42) for recordings, time since start (37:12) for imported files.
-    private func timeLabel(_ seconds: Double) -> String {
-        if info.importedFrom != nil {
-            let s = Int(seconds)
-            return s >= 3600
-                ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
-                : String(format: "%d:%02d", s / 60, s % 60)
-        }
-        return info.wallTime(atSecond: seconds).formatted(.dateTime.hour().minute())
-    }
-
-    private func copyAll() {
-        guard let transcript, !transcript.lines.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(transcript.plainText, forType: .string)
-        let label = "Copied \(transcript.lines.count) lines"
-        copiedLabel = label
-        Task {
-            try? await Task.sleep(for: .seconds(1.8))
-            if copiedLabel == label { copiedLabel = nil }
-        }
     }
 }
 

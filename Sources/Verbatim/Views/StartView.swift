@@ -43,6 +43,7 @@ struct StartView: View {
                     .padding(.bottom, 18)
                 VStack(alignment: .leading, spacing: 16) {
                     MicStatusLine(permission: model.micPermission, micName: model.micName)
+                    LiveModelStatusLine()
                     ModelStatusLine()
                 }
             }
@@ -161,7 +162,7 @@ struct ModelStatusLine: View {
         switch transcriber.modelState {
         case .ready:
             title("Accurate model ready")
-            note("Recordings turn into text after you press Stop. Works offline.")
+            note("After you press Stop, it checks the whole recording again more carefully. Works offline.")
         case .preparing:
             title("Getting the model ready")
             note("First time only, this can take a few minutes. Keep Verbatim open.")
@@ -208,6 +209,78 @@ struct ModelStatusLine: View {
 
     static func progressText(_ fraction: Double, _ left: Double?) -> String {
         let percent = "\(Int(fraction * 100))% of \(WhisperEngine.sizeText)"
+        guard let left, left.isFinite else { return percent }
+        return "\(percent), \(Transcriber.leftText(left))"
+    }
+}
+
+/// The live model (Parakeet): downloading, paused, getting ready, or ready.
+struct LiveModelStatusLine: View {
+    @Environment(LiveTranscriber.self) private var live
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: live.isModelReady ? "checkmark" : "arrow.down")
+                .fontWeight(.semibold)
+                .foregroundStyle(live.isModelReady ? Color.green : Color.accentColor)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 6) {
+                content
+            }
+        }
+    }
+
+    @ViewBuilder private var content: some View {
+        switch live.modelState {
+        case .ready:
+            title("Live text ready")
+            note("Words show up a couple of seconds after they're said. Works offline.")
+        case .preparing:
+            title("Getting live text ready")
+            note("First time only, this can take a few minutes. Keep Verbatim open.")
+        case .downloading(let fraction, let left):
+            HStack {
+                title("Downloading live text model")
+                Spacer()
+                Text(Self.progressText(fraction, left))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            ProgressView(value: fraction)
+                .progressViewStyle(.linear)
+                .controlSize(.small)
+            note("One time only, picks up where it left off. Until it's done, live text uses your Mac's built-in speech engine.")
+            Button("Pause download") { live.pauseDownload() }
+                .buttonStyle(.link)
+                .font(.caption.weight(.medium))
+        case .paused(let fraction):
+            title("Live text download paused at \(Int(fraction * 100))%")
+            Button("Resume download") { live.startDownload() }
+                .buttonStyle(.link)
+                .font(.caption.weight(.medium))
+        case .failed(let fraction):
+            title("Live text download stopped at \(Int(fraction * 100))%")
+            note("Probably the internet. Trying again by itself every 20 seconds.")
+            Button("Try now") { live.startDownload() }
+                .buttonStyle(.link)
+                .font(.caption.weight(.medium))
+        }
+    }
+
+    private func title(_ s: String) -> some View {
+        Text(s).font(.body.weight(.medium))
+    }
+
+    private func note(_ s: String) -> some View {
+        Text(s)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    static func progressText(_ fraction: Double, _ left: Double?) -> String {
+        let percent = "\(Int(fraction * 100))% of \(ParakeetEngine.sizeText)"
         guard let left, left.isFinite else { return percent }
         return "\(percent), \(Transcriber.leftText(left))"
     }
