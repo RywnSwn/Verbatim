@@ -29,6 +29,8 @@ struct VerbatimApp: App {
                 Button("Remove Verbatim and Its Data…") { Uninstaller.run() }
             }
             CommandGroup(replacing: .newItem) {
+                Button("New Recording") { model.showNewRecording() }
+                    .keyboardShortcut("n", modifiers: .command)
                 Button("Transcribe a Recording…") { model.chooseFilesToImport() }
                     .keyboardShortcut("o", modifiers: .command)
             }

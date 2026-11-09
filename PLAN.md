@@ -165,8 +165,10 @@ Ask Mr. Yurt before recording class.
   resets the mic permission (tccutil).
 
 ## Sidebar buttons (added at the end of chat 2026-11-09, Ryan's asks)
-- Top: "+ New recording ⌘R", like New chat in Claude. One click starts
-  recording; while recording it reads "Recording now" and jumps to it.
+- Top: "+ New recording ⌘N", like New chat in Claude. Opens the start
+  screen; recording begins from its Start recording button (⌘R still
+  starts/stops directly). Ryan's ask in step 2b: it used to start at once.
+  While recording it reads "Recording now" and jumps to it.
 - Bottom: "Transcribe a file…" (same as Cmd+O / drag and drop).
 - Updater says "Updated to version X" once after an update.
 
@@ -305,7 +307,9 @@ Ask Mr. Yurt before recording class.
   standard Mac. App tint is the ink blue (links, progress, toggles).
 - Copy all sits in its own toolbar item with the glass background hidden,
   so it shows as an ink capsule.
-- "Checked up to" divider in serif italic. Live text 62% ink, half-said
+- "Checked up to" divider in serif italic.
+- Start screen animation (Ryan: it stopped abruptly): speech eases in and
+  out, pauses at commas and full stops, words hold then fade, then repeat. Live text 62% ink, half-said
   words 45%.
 - App icon: not yet. First try (waveform bars + text lines, drawn with
   Pillow) was rejected by Ryan. Next time show a few options first; to

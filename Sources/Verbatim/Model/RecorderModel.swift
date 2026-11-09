@@ -88,6 +88,11 @@ final class RecorderModel {
         }
     }
 
+    /// "New recording": show the start screen, or the recording in progress.
+    func showNewRecording() {
+        selection = isBusy ? currentID : nil
+    }
+
     func start() async {
         guard phase == .idle else { return }
 

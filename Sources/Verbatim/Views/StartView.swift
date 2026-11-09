@@ -53,35 +53,59 @@ struct StartView: View {
 }
 
 /// The signature: grey bars while someone talks, dots when quiet,
-/// and the words appearing next to it.
+/// and the words appearing next to it. Speech eases in and out, pauses a
+/// moment at commas and full stops, and the words fade before it repeats.
 struct WaveToWords: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let line = "\u{201C}Anansi has just made his deal with Nyankupon, the sky god. Write this down.\u{201D}"
+    private static let line = "\u{201C}Anansi has just made his deal with Nyankupon, the sky god. Write this down.\u{201D}"
+    private static let charTime = 0.065
+    private static let punctuationPause = 0.45
+    private static let hold = 1.8, fade = 0.6, rest = 0.7
     private let barCount = 22
-    private let tick = 0.07
+
+    /// When each character appears, and the stretches of time with talking.
+    private static let schedule: (times: [Double], talking: [ClosedRange<Double>], end: Double) = {
+        var times: [Double] = []
+        var talking: [ClosedRange<Double>] = []
+        var t = 0.3, segmentStart = t
+        for ch in line {
+            times.append(t)
+            t += charTime
+            if ch == "," || ch == "." {
+                talking.append(segmentStart...t)
+                t += punctuationPause
+                segmentStart = t
+            }
+        }
+        if segmentStart < t { talking.append(segmentStart...t) }
+        return (times, talking, t)
+    }()
+
+    private static var cycle: Double { schedule.end + hold + fade + rest }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: tick, paused: reduceMotion)) { context in
-            let frame = reduceMotion
-                ? line.count
-                : Int(context.date.timeIntervalSinceReferenceDate / tick) % (line.count + 30)
-            let talking = !reduceMotion && frame < line.count
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+            let t = reduceMotion ? Self.schedule.end + 0.1 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.cycle)
+            let shown = Self.schedule.times.filter { $0 <= t }.count
+            let wordsOpacity = textOpacity(at: t)
+            let level = loudness(at: t)
 
             HStack(spacing: 14) {
                 HStack(spacing: 3) {
                     ForEach(0..<barCount, id: \.self) { i in
-                        let h = barHeight(index: i, frame: frame, talking: talking)
+                        let h = barHeight(index: i, time: t, loudness: level)
                         RoundedRectangle(cornerRadius: 1.5)
-                            .fill(h > 3 ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                            .fill(h > 4 ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                             .frame(width: 3, height: h)
                     }
                 }
                 .frame(height: 40)
 
-                Text(String(line.prefix(min(frame, line.count))))
+                Text(String(Self.line.prefix(shown)))
                     .font(.system(size: 16))
                     .foregroundStyle(.secondary)
+                    .opacity(wordsOpacity)
                     .lineLimit(1)
                     .fixedSize()
                 Spacer(minLength: 0)
@@ -97,11 +121,32 @@ struct WaveToWords: View {
         }
     }
 
-    private func barHeight(index i: Int, frame t: Int, talking: Bool) -> CGFloat {
-        guard talking else { return 3 }
-        let wave = abs(sin(Double(t) * 0.45 + Double(i) * 0.9))
+    /// 0 when quiet, 1 mid-sentence, easing in and out at each pause.
+    private func loudness(at t: Double) -> Double {
+        var best = 0.0
+        for seg in Self.schedule.talking {
+            let rise = smooth((t - seg.lowerBound) / 0.25)
+            let fall = smooth((seg.upperBound + 0.1 - t) / 0.35)
+            best = max(best, min(rise, fall))
+        }
+        return best
+    }
+
+    private func textOpacity(at t: Double) -> Double {
+        let fadeStart = Self.schedule.end + Self.hold
+        if t < fadeStart { return 1 }
+        return 1 - smooth((t - fadeStart) / Self.fade)
+    }
+
+    private func smooth(_ x: Double) -> Double {
+        let c = min(max(x, 0), 1)
+        return c * c * (3 - 2 * c)
+    }
+
+    private func barHeight(index i: Int, time t: Double, loudness: Double) -> CGFloat {
+        let wave = abs(sin(t * 6.3 + Double(i) * 0.9)) * (0.6 + 0.4 * abs(sin(t * 2.1 + Double(i) * 0.37)))
         let scale = 0.4 + Double(i % 5) / 6
-        return 4 + (wave * 30 * scale).rounded()
+        return 3 + (wave * 30 * scale * loudness).rounded()
     }
 }
 

@@ -143,18 +143,15 @@ struct SidebarRow: View {
 }
 
 /// Always at the top of the sidebar, like "New chat" in Claude.
-/// Starts recording in one click; while recording it jumps back to it.
+/// Opens the start screen (recording begins from its Start button, Ryan's
+/// ask); while recording it jumps back to it.
 struct NewRecordingButton: View {
     @Environment(RecorderModel.self) private var model
     @State private var hovering = false
 
     var body: some View {
         Button {
-            if model.isBusy {
-                model.selection = model.currentID
-            } else {
-                Task { await model.start() }
-            }
+            model.showNewRecording()
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: model.isBusy ? "waveform" : "plus")
@@ -164,7 +161,7 @@ struct NewRecordingButton: View {
                     .fontWeight(.medium)
                 Spacer()
                 if !model.isBusy {
-                    Text("⌘R")
+                    Text("⌘N")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -176,6 +173,6 @@ struct NewRecordingButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(model.isBusy ? "Go to the recording in progress" : "Start recording now (⌘R)")
+        .help(model.isBusy ? "Go to the recording in progress" : "Open a new recording (⌘N)")
     }
 }

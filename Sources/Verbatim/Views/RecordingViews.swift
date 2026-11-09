@@ -147,11 +147,11 @@ struct PastRecordingView: View {
             ToolbarItemGroup {
                 if !model.isBusy {
                     Button {
-                        Task { await model.start() }
+                        model.showNewRecording()
                     } label: {
-                        Label("New recording", systemImage: "mic")
+                        Label("New recording", systemImage: "plus")
                     }
-                    .help("Start a new recording (⌘R)")
+                    .help("New recording (⌘N)")
                 }
                 Menu {
                     Button("Play audio") { NSWorkspace.shared.open(RecordingStore.audioURL(info.id)) }
