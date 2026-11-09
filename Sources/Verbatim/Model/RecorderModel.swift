@@ -13,7 +13,7 @@ final class RecorderModel {
 
     /// What the status spot in the bottom bar says. `action` adds a text link.
     struct Status: Equatable {
-        enum Action { case stopRecording, resume, undoDelete }
+        enum Action { case stopRecording, resume, undoDelete, undoLine }
         var text: String
         var action: Action?
         var id = UUID()
@@ -59,6 +59,7 @@ final class RecorderModel {
     @ObservationIgnored private var asleepSince: Date?
     @ObservationIgnored private var restartedAfterError = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private var lineUndo: (() -> Void)?
 
     var current: RecordingInfo? { recordings.first { $0.id == currentID } }
     var isBusy: Bool { phase != .idle }
@@ -261,6 +262,10 @@ final class RecorderModel {
         case .stopRecording: stop()
         case .resume: resume()
         case .undoDelete: undoDelete()
+        case .undoLine:
+            lineUndo?()
+            lineUndo = nil
+            if status?.action == .undoLine { status = nil }
         }
     }
 
@@ -395,6 +400,29 @@ final class RecorderModel {
     }
 
     func clearStatus() { status = nil }
+
+    /// A short note that goes away by itself, even while recording.
+    func flash(_ text: String) {
+        let s = Status(text: text)
+        status = s
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            if self?.status == s { self?.status = nil }
+        }
+    }
+
+    /// "Line edited. Undo" in the status spot for 10 seconds.
+    func offerLineUndo(_ text: String, undo: @escaping () -> Void) {
+        lineUndo = undo
+        let s = Status(text: text, action: .undoLine)
+        status = s
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, self.status == s else { return }
+            self.status = nil
+            self.lineUndo = nil
+        }
+    }
 
     // MARK: - Library
 

@@ -5,7 +5,14 @@ import SwiftUI
 /// in full ink; live text is a little grey, under a thin "Checked up to" line.
 /// Follows new text only if you're already at the bottom; otherwise a
 /// "Jump to live" button shows.
+///
+/// Editing: double-click a line (Enter saves, Esc cancels, clicking away
+/// saves), or right-click for Copy / Edit / Delete. Edited lines turn full ink
+/// and get a lock; later passes never change them. Every change has Undo in
+/// the bottom bar.
 struct TranscriptList: View {
+    @Environment(RecorderModel.self) private var model
+    @Environment(LiveTranscriber.self) private var liveTranscriber
     let info: RecordingInfo
     let checked: [Transcript.Line]
     let live: [Transcript.Line]
@@ -14,15 +21,23 @@ struct TranscriptList: View {
 
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
+    @State private var editing: EditKey?
+    @State private var draft = ""
+    @FocusState private var fieldFocused: Bool
+
+    private struct EditKey: Hashable {
+        var source: LineSource
+        var start: Double
+    }
 
     private enum Row: Identifiable {
-        case line(Transcript.Line, live: Bool, index: Int)
+        case line(Transcript.Line, LineSource)
         case checkedUpTo(Double)
         case volatile(String)
 
         var id: String {
             switch self {
-            case .line(_, let live, let i): "\(live ? "l" : "c")\(i)"
+            case .line(let l, let s): "\(s == .live ? "l" : "c")\(l.start)"
             case .checkedUpTo: "checked"
             case .volatile: "volatile"
             }
@@ -30,11 +45,11 @@ struct TranscriptList: View {
     }
 
     private var rows: [Row] {
-        var rows = checked.enumerated().map { Row.line($0.element, live: false, index: $0.offset) }
+        var rows = checked.map { Row.line($0, .checked) }
         if !checked.isEmpty, !live.isEmpty, let last = checked.last {
             rows.append(.checkedUpTo(last.end))
         }
-        rows += live.enumerated().map { Row.line($0.element, live: true, index: $0.offset) }
+        rows += live.map { Row.line($0, .live) }
         let v = volatile.trimmingCharacters(in: .whitespaces)
         if !v.isEmpty { rows.append(.volatile(v)) }
         return rows
@@ -45,8 +60,8 @@ struct TranscriptList: View {
             LazyVStack(alignment: .leading, spacing: 12) {
                 ForEach(rows) { row in
                     switch row {
-                    case .line(let line, let isLiveLine, _):
-                        lineView(time: info.timeLabel(line.start), text: line.text, live: isLiveLine)
+                    case .line(let line, let source):
+                        lineRow(line, source)
                     case .checkedUpTo(let seconds):
                         HStack(spacing: 10) {
                             Text("Checked up to \(info.timeLabel(seconds))")
@@ -57,8 +72,14 @@ struct TranscriptList: View {
                         .padding(.leading, 70)
                         .padding(.vertical, 4)
                     case .volatile(let text):
-                        lineView(time: "", text: text, live: true)
-                            .opacity(0.6)
+                        HStack(alignment: .firstTextBaseline, spacing: 18) {
+                            Color.clear.frame(width: 52, height: 1)
+                            Text(text)
+                                .font(.system(size: 15))
+                                .lineSpacing(3)
+                                .foregroundStyle(.tertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
             }
@@ -74,11 +95,16 @@ struct TranscriptList: View {
             atBottom = bottom
         }
         .onChange(of: live.count + checked.count) {
-            if isLive, atBottom { withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(edge: .bottom) } }
+            if followsLive { withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(edge: .bottom) } }
         }
         .onChange(of: volatile) {
-            if isLive, atBottom { position.scrollTo(edge: .bottom) }
+            if followsLive { position.scrollTo(edge: .bottom) }
         }
+        .onChange(of: fieldFocused) {
+            // Clicking somewhere else saves, like a text field in Notes.
+            if !fieldFocused, editing != nil { save() }
+        }
+        .onDisappear { if editing != nil { save() } }
         .overlay(alignment: .bottom) {
             if isLive, !atBottom {
                 Button {
@@ -94,20 +120,102 @@ struct TranscriptList: View {
         }
     }
 
-    private func lineView(time: String, text: String, live: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 18) {
-            Text(time)
+    /// Don't scroll away from a line you're editing.
+    private var followsLive: Bool { isLive && atBottom && editing == nil }
+
+    private func lineRow(_ line: Transcript.Line, _ source: LineSource) -> some View {
+        let key = EditKey(source: source, start: line.start)
+        let isEditing = editing == key
+        let grey = source == .live && !line.isLocked
+        return HStack(alignment: .firstTextBaseline, spacing: 18) {
+            Text(info.timeLabel(line.start))
                 .font(.callout)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .frame(width: 52, alignment: .trailing)
-            Text(text)
-                .font(.system(size: 15))
-                .lineSpacing(3)
-                .foregroundStyle(live ? AnyShapeStyle(HierarchicalShapeStyle.primary.opacity(0.62)) : AnyShapeStyle(.primary))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if isEditing {
+                TextField("Line", text: $draft, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 15))
+                    .lineSpacing(3)
+                    .focused($fieldFocused)
+                    .onSubmit { save() }
+                    .onExitCommand { cancel() }
+                    .padding(.vertical, 2)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Color.accentColor).frame(height: 1).offset(y: 3)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(line.text)
+                    .font(.system(size: 15))
+                    .lineSpacing(3)
+                    .foregroundStyle(grey ? AnyShapeStyle(HierarchicalShapeStyle.primary.opacity(0.62)) : AnyShapeStyle(.primary))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if line.isLocked, !isEditing {
+                Button {
+                    model.unlockLine(info.id, source, start: line.start)
+                } label: {
+                    Image(systemName: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help("You edited this line, so later passes won't change it. Click to unlock.")
+                .accessibilityLabel("Unlock line")
+            }
         }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { if !isEditing { begin(line, source) } }
+        .contextMenu {
+            Button("Copy this line") { model.copyLines([line]) }
+            Button("Copy from here down") { model.copyLines(linesFrom(line, source)) }
+            Divider()
+            Button("Edit line") { begin(line, source) }
+            Button("Delete line") { model.deleteLine(info.id, source, start: line.start) }
+            if line.isLocked {
+                Divider()
+                Button("Unlock") { model.unlockLine(info.id, source, start: line.start) }
+            }
+        }
+        .accessibilityAction(named: "Edit line") { begin(line, source) }
+        .accessibilityAction(named: "Delete line") { model.deleteLine(info.id, source, start: line.start) }
+    }
+
+    private func linesFrom(_ line: Transcript.Line, _ source: LineSource) -> [Transcript.Line] {
+        let all = checked + live
+        let index = source == .checked
+            ? checked.firstIndex { $0.start == line.start }
+            : live.firstIndex { $0.start == line.start }.map { $0 + checked.count }
+        guard let index else { return [line] }
+        return Array(all[index...])
+    }
+
+    private func begin(_ line: Transcript.Line, _ source: LineSource) {
+        if editing != nil { save() }
+        draft = line.text
+        editing = EditKey(source: source, start: line.start)
+        if source == .live { liveTranscriber.editing = (info.id, line.start) }
+        Task { @MainActor in fieldFocused = true }
+    }
+
+    private func save() {
+        guard let key = editing else { return }
+        finish()
+        model.editLine(info.id, key.source, start: key.start, text: draft)
+    }
+
+    private func cancel() {
+        finish()
+    }
+
+    private func finish() {
+        editing = nil
+        fieldFocused = false
+        liveTranscriber.editing = nil
     }
 }
 

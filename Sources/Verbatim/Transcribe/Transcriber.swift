@@ -211,6 +211,37 @@ final class Transcriber {
 
     func isQueued(_ id: UUID) -> Bool { queue.contains(id) }
 
+    // MARK: - Editing lines
+
+    /// Replaces the line that starts at `start`. Returns the old line.
+    @discardableResult
+    func replaceLine(_ id: UUID, start: Double, with line: Transcript.Line) -> Transcript.Line? {
+        guard var t = transcripts[id], let i = t.lines.firstIndex(where: { $0.start == start }) else { return nil }
+        let old = t.lines[i]
+        t.lines[i] = line
+        commit(t, id)
+        return old
+    }
+
+    func removeLine(_ id: UUID, start: Double) -> Transcript.Line? {
+        guard var t = transcripts[id], let i = t.lines.firstIndex(where: { $0.start == start }) else { return nil }
+        let old = t.lines.remove(at: i)
+        commit(t, id)
+        return old
+    }
+
+    func insertLine(_ id: UUID, _ line: Transcript.Line) {
+        guard var t = transcripts[id] else { return }
+        let i = t.lines.firstIndex { $0.start > line.start } ?? t.lines.count
+        t.lines.insert(line, at: i)
+        commit(t, id)
+    }
+
+    private func commit(_ t: Transcript, _ id: UUID) {
+        transcripts[id] = t
+        try? TranscriptStore.save(t, for: id)
+    }
+
     private func runQueue() {
         guard workTask == nil, modelState == .ready, !queue.isEmpty else { return }
         workTask = Task {
@@ -259,7 +290,10 @@ final class Transcriber {
                     let offset = Double(pos) / rate
                     let lines = try await engine.transcribe(samples)
                     if cancelRequested.contains(id) { break }
-                    t.lines += lines.map { .init(start: $0.start + offset, end: $0.end + offset, text: $0.text) }
+                    // Start from what's on screen now, so edits and deletes made
+                    // while this piece was transcribing are kept.
+                    t.lines = (transcripts[id]?.lines ?? t.lines)
+                        + lines.map { .init(start: $0.start + offset, end: $0.end + offset, text: $0.text) }
                 } catch {
                     errors[id] = "Transcribing stopped: \(error.localizedDescription)"
                     break

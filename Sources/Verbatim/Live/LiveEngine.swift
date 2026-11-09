@@ -33,6 +33,14 @@ struct LiveText: Codable, Equatable {
     var lines: [Transcript.Line] = []
     /// Which engines wrote it, for comparing them later.
     var engines: [String] = []
+    /// Lines Ryan deleted (seconds into audio.wav), so the accurate pass in
+    /// step 5 doesn't bring them back. nil in files from before editing.
+    var removed: [Span]?
+
+    struct Span: Codable, Equatable {
+        var start: Double
+        var end: Double
+    }
 }
 
 enum LiveStore {
@@ -59,10 +67,12 @@ enum LineBuilder {
     static let sentenceMin = 70
     static let hardMax = 260
 
-    static func add(_ piece: LivePiece, to lines: inout [Transcript.Line]) {
+    /// `extendLast` is false while the last line is being edited or was edited:
+    /// new words then start a new line instead of changing Ryan's text.
+    static func add(_ piece: LivePiece, to lines: inout [Transcript.Line], extendLast: Bool = true) {
         let text = piece.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        if let last = lines.last, !shouldBreak(after: last, before: piece, adding: text) {
+        if extendLast, let last = lines.last, !last.isLocked, !shouldBreak(after: last, before: piece, adding: text) {
             lines[lines.count - 1].text = last.text + " " + text
             lines[lines.count - 1].end = max(last.end, piece.end)
         } else {

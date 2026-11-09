@@ -18,7 +18,11 @@ struct BottomBar: View {
                 } else if let note = model.deletedNote {
                     undoBar("Moved \(note.info.title) to the Trash.", undo: "Undo") { model.undoDelete() }
                 } else if let status = model.status {
-                    undoBar(status.text, undo: "OK") { model.clearStatus() }
+                    if let action = status.action {
+                        undoBar(status.text, undo: Self.linkTitle(action)) { model.perform(action) }
+                    } else {
+                        undoBar(status.text, undo: "OK") { model.clearStatus() }
+                    }
                 } else if case .ready(let version) = updater.state {
                     if let problem = updater.installProblem {
                         undoBar("Version \(version) is ready. \(problem)", undo: "Show app") {
@@ -91,7 +95,7 @@ struct BottomBar: View {
         switch action {
         case .stopRecording: "Stop recording"
         case .resume: "Resume"
-        case .undoDelete: "Undo"
+        case .undoDelete, .undoLine: "Undo"
         }
     }
 

@@ -64,6 +64,8 @@ final class LiveTranscriber {
     /// Words Apple's engine is still working out. Shown after the last line.
     private(set) var volatile = ""
     private(set) var activeID: UUID?
+    /// The line being edited right now (recording, line start). New words never go into it.
+    var editing: (id: UUID, start: Double)?
 
     /// Written to from the audio thread.
     nonisolated let feed = LiveFeed()
@@ -135,6 +137,39 @@ final class LiveTranscriber {
 
     func forget(_ id: UUID) { texts[id] = nil }
 
+    // MARK: - Editing lines
+
+    /// Replaces the line that starts at `start`. Returns the old line.
+    @discardableResult
+    func replaceLine(_ id: UUID, start: Double, with line: Transcript.Line) -> Transcript.Line? {
+        guard var t = texts[id], let i = t.lines.firstIndex(where: { $0.start == start }) else { return nil }
+        let old = t.lines[i]
+        t.lines[i] = line
+        commit(t, id)
+        return old
+    }
+
+    func removeLine(_ id: UUID, start: Double) -> Transcript.Line? {
+        guard var t = texts[id], let i = t.lines.firstIndex(where: { $0.start == start }) else { return nil }
+        let old = t.lines.remove(at: i)
+        t.removed = (t.removed ?? []) + [LiveText.Span(start: old.start, end: old.end)]
+        commit(t, id)
+        return old
+    }
+
+    func insertLine(_ id: UUID, _ line: Transcript.Line) {
+        guard var t = texts[id] else { return }
+        let i = t.lines.firstIndex { $0.start > line.start } ?? t.lines.count
+        t.lines.insert(line, at: i)
+        t.removed?.removeAll { $0.start == line.start }
+        commit(t, id)
+    }
+
+    private func commit(_ t: LiveText, _ id: UUID) {
+        texts[id] = t
+        try? LiveStore.save(t, for: id)
+    }
+
     func reload(_ id: UUID) { texts[id] = LiveStore.load(id) }
 
     // MARK: - From the runner
@@ -147,7 +182,8 @@ final class LiveTranscriber {
     fileprivate func apply(_ out: LiveOutput, offset: Double, engine: String, to id: UUID, run: Int) {
         guard var t = texts[id] else { return }
         for p in out.finals {
-            LineBuilder.add(LivePiece(text: p.text, start: p.start + offset, end: p.end + offset), to: &t.lines)
+            let extend = !(editing?.id == id && editing?.start == t.lines.last?.start)
+            LineBuilder.add(LivePiece(text: p.text, start: p.start + offset, end: p.end + offset), to: &t.lines, extendLast: extend)
         }
         if !out.finals.isEmpty, t.engines.last != engine { t.engines.append(engine) }
         texts[id] = t

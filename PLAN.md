@@ -197,7 +197,25 @@ Ask Mr. Yurt before recording class.
   "Jump to live". Copy all works while recording. After Stop, live lines
   the accurate pass hasn't reached show grey under "Checked up to 10:40".
 - Step 5 should replace the grey live part with Whisper text as each chunk
-  finishes, during recording.
+  finishes, during recording. It must keep lines with `locked: true`
+  (Ryan edited them) and skip text inside `LiveText.removed` spans (lines
+  he deleted), or his changes come back.
+
+## Editing lines (pulled forward from step 6, Ryan's ask while testing step 4)
+- Double-click a line: inline field. Enter saves, Esc cancels, clicking away
+  saves, emptying it deletes. Right-click: Copy this line, Copy from here
+  down, Edit line, Delete line, Unlock.
+- Works on live and accurate lines, while recording and after.
+- Edited lines get `locked: true`, turn full ink, show a lock (click to
+  unlock). New live words never go into a line being edited or locked.
+- "Line edited. Undo" / "Deleted a line. Undo" in the bottom bar for 10 s.
+- Lines are found by their start time (`Model/LineEdits.swift`).
+- Transcriber re-reads the lines on screen before adding each piece, so
+  edits made while it transcribes are kept. "Transcribe again" still
+  throws edits away (explicit action).
+- Text in lines is no longer selectable outside edit mode (double-click
+  would select a word instead of editing). Copy this line / Copy from here
+  down / edit mode cover copying part of it.
 
 ## Step 4 test list for Ryan
 1. Start screen: "Downloading live text model" line with %, Pause works.
@@ -211,3 +229,6 @@ Ask Mr. Yurt before recording class.
 7. Activity Monitor > Memory: how much Verbatim uses while recording.
 8. If you record before Parakeet finishes: a line says it's using the
    Mac's built-in engine. Does that text look OK?
+9. While recording, double-click a line, fix a word, press Enter: lock
+   shows, new words keep coming below. Undo in the bottom bar works.
+10. Right-click a line > Delete line, then Undo.
