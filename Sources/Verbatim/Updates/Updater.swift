@@ -50,8 +50,21 @@ final class Updater {
         return nil
     }
 
+    /// After an update, say so once, so Ryan knows it worked.
+    private func announceIfUpdated() {
+        let key = "lastLaunchedBuild"
+        let last = UserDefaults.standard.integer(forKey: key)
+        if last > 0, Self.currentBuild > last {
+            RecorderModel.shared.show("Updated to version \(Self.currentVersion).")
+        }
+        UserDefaults.standard.set(Self.currentBuild, forKey: key)
+        // Clean up the downloaded copy of the version now running.
+        try? FileManager.default.removeItem(at: Self.updatesFolder.appending(path: String(Self.currentBuild)))
+    }
+
     func startAutomaticChecks() {
         guard loop == nil else { return }
+        announceIfUpdated()
         loop = Task {
             try? await Task.sleep(for: .seconds(5)) // let the app finish opening first
             while !Task.isCancelled {
