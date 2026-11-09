@@ -29,6 +29,9 @@ decided and why (read it before re-arguing a choice).
 - One task per chat. At the end of each session, update `PLAN.md` (and
   `DECISIONS.md` if something was decided) so the next chat can continue.
 - Keep this file short. Details go in `PLAN.md`, `DECISIONS.md`, `docs/`.
+- Tell Ryan clearly when a step is complete and when to switch to a new
+  chat. Let him review before moving on. Explain every UX idea in plain
+  words, and use the ux-planner skill for UI work.
 - No pull requests for small things (docs, plan updates, small fixes).
   Ryan is not a dev; only open a PR for a real milestone, or if he asks.
 - Pin library versions. Read a library's real source/docs instead of
