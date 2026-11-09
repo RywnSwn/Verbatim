@@ -1,9 +1,13 @@
 # Plan
 
-Status: steps 1, 2, 3 built 2026-11-09 (one chat). Ryan tested step 2
-(records, plays back; asked for delete and a faster waveform, both done).
-Step 3 waiting for Ryan to test (list below). Next: fixes from his test,
-then step 4 (live). Step 2b (visual design) moved after step 3.
+Status (end of chat 2026-11-09): steps 1, 2, 3 and 11 built. Ryan tested
+recording (works) and the in-app updater (works: signed v0.1.15 installed
+by hand, updated in-app to v0.1.18). Step 3 (transcription) built but not
+reported on yet: ask Ryan how the model download and accuracy went.
+Next: step 4 (live transcript). Step 2b (visual design) after that.
+Work is in stacked PRs RywnSwn/Verbatim#3 (steps 1-2), #4 (step 3),
+#5 (step 11 + sidebar buttons); merge in that order. If they aren't merged
+yet, branch the next step from `claude/step-11-updates`, not `main`.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -36,7 +40,7 @@ class depends on it.
        Recently deleted, Export everything.
 10. [ ] **Polish.** First-launch screen, menu bar dropdown, Settings, notifications,
         all the edge cases in `docs/spec.md` that aren't done yet.
-11. [ ] **Updates.** In-app update button (Sparkle).
+11. [x] **Updates.** In-app update button (own updater, not Sparkle).
 
 ## Nice to have (after the above)
 - [ ] Timeline: click a line to hear that bit of audio.
@@ -132,3 +136,32 @@ Ask Mr. Yurt before recording class.
 4. Drop a real class Voice Memo: accuracy? names? how long did it take?
 5. Copy all, paste into Claude.
 6. Cancel halfway, then Continue.
+
+## How updates work (step 11, pulled forward)
+- `Updates/Updater.swift`: on launch and every 4 h, reads
+  api.github.com/repos/RywnSwn/Verbatim/releases, picks the highest build
+  number (tag v0.1.N) above CFBundleVersion, including pre-releases when
+  "Include test builds" is on (default on: Ryan tests branch builds).
+  Downloads Verbatim.zip to App Support/Verbatim/Updates/<N>/, unzips with
+  ditto, checks `codesign --verify -R=<this app's designated requirement>`
+  (identifier only while builds are ad-hoc). Bottom bar: "Version X is
+  ready. Restart to update". A bash script waits for quit, swaps the app
+  (old kept until the swap works), clears quarantine, reopens.
+- Caveat: newest build number wins across branches, so a docs push to
+  main after a step branch build can "update" to a build without that
+  step. Keep branch work merged promptly.
+- Signing: self-signed code signing cert "Verbatim (RywnSwn)", SHA-1
+  92:25:9A:B0:98:12:A9:30:E5:E2:9E:81:9F:43:E8:54:E3:F6:BB:04, valid to
+  2046. The p12 (password `verbatim`) is only in the GitHub secret
+  SIGNING_CERT_P12, never in the repo. CI imports it into a temp
+  keychain; without the secret, builds fall back to ad-hoc. Same cert ==
+  stable designated requirement == macOS keeps the mic permission.
+- `Updates/Uninstaller.swift`: Verbatim > Remove Verbatim and Its Data
+  trashes the app, App Support/Verbatim, caches, prefs, saved state and
+  resets the mic permission (tccutil).
+
+## Sidebar buttons (added at the end of chat 2026-11-09, Ryan's asks)
+- Top: "+ New recording ⌘R", like New chat in Claude. One click starts
+  recording; while recording it reads "Recording now" and jumps to it.
+- Bottom: "Transcribe a file…" (same as Cmd+O / drag and drop).
+- Updater says "Updated to version X" once after an update.

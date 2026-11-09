@@ -110,3 +110,10 @@ Silicon only (arm64), ad-hoc signed, no paid Apple developer account.
 - Delete moves to the macOS Trash with Undo (added early because Ryan
   needed it; in-app Recently deleted still in step 9).
 - Visual design (2b) moved after step 3 so it polishes more real screens.
+
+## Updates pulled forward, own updater instead of Sparkle (2026-11-09)
+Ryan found download + unzip + Open Anyway + mic prompt on every build
+annoying, so step 11 moved before step 4. Own small updater on GitHub
+Releases instead of Sparkle: no appcast or EdDSA key to manage, and the
+update is checked by code signature against a stable self-signed
+certificate (which also stops the mic prompt after every update).
