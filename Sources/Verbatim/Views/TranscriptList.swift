@@ -59,7 +59,7 @@ struct TranscriptList: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: Theme.lineGap) {
                 ForEach(rows) { row in
                     switch row {
                     case .line(let line, let source):
@@ -67,9 +67,9 @@ struct TranscriptList: View {
                     case .checkedUpTo(let seconds):
                         HStack(spacing: 10) {
                             Text("Checked up to \(info.timeLabel(seconds))")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                            VStack { Divider() }
+                                .font(.system(size: 13, design: .serif).italic())
+                                .foregroundStyle(.secondary)
+                            Rectangle().fill(Theme.line).frame(height: 1)
                         }
                         .padding(.leading, 70)
                         .padding(.vertical, 4)
@@ -77,9 +77,9 @@ struct TranscriptList: View {
                         HStack(alignment: .firstTextBaseline, spacing: 18) {
                             Color.clear.frame(width: 52, height: 1)
                             Text(text)
-                                .font(.system(size: 15))
-                                .lineSpacing(3)
-                                .foregroundStyle(.tertiary)
+                                .font(Theme.transcript)
+                                .lineSpacing(Theme.transcriptLineSpacing)
+                                .foregroundStyle(Theme.ink.opacity(0.45))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
@@ -91,6 +91,7 @@ struct TranscriptList: View {
             .frame(maxWidth: .infinity)
         }
         .scrollPosition($position)
+        .background(Theme.paper)
         .onScrollGeometryChange(for: Bool.self) { geo in
             geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 60
         } action: { _, bottom in
@@ -114,8 +115,8 @@ struct TranscriptList: View {
                 } label: {
                     Label("Jump to live", systemImage: "arrow.down")
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
+                .buttonStyle(.ink)
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
                 .padding(.bottom, 14)
                 .transition(.opacity)
             }
@@ -138,21 +139,21 @@ struct TranscriptList: View {
             if isEditing {
                 TextField("Line", text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 15))
-                    .lineSpacing(3)
+                    .font(Theme.transcript)
+                    .lineSpacing(Theme.transcriptLineSpacing)
                     .focused($fieldFocused)
                     .onSubmit { save() }
                     .onExitCommand { cancel() }
                     .padding(.vertical, 2)
                     .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.accentColor).frame(height: 1).offset(y: 3)
+                        Rectangle().fill(Theme.accent).frame(height: 1).offset(y: 3)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text(line.text)
-                    .font(.system(size: 15))
-                    .lineSpacing(3)
-                    .foregroundStyle(grey ? AnyShapeStyle(HierarchicalShapeStyle.primary.opacity(0.62)) : AnyShapeStyle(.primary))
+                    .font(Theme.transcript)
+                    .lineSpacing(Theme.transcriptLineSpacing)
+                    .foregroundStyle(grey ? Theme.ink.opacity(0.62) : Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .pointerStyle(.horizontalText) // text cursor: says "you can type here"
             }
@@ -242,7 +243,7 @@ struct CopyAllButton: View {
 
     var body: some View {
         Button(copiedLabel ?? "Copy all") { copy() }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.ink)
             .keyboardShortcut("c", modifiers: [.command, .shift])
             .disabled(lines.isEmpty)
             .help(lines.isEmpty ? "Nothing to copy yet" : "Copy the whole transcript (⇧⌘C)")

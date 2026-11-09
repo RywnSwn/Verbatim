@@ -136,3 +136,11 @@ didn't pick: Parakeet only, or a Settings switch to compare both.
 - Whisper is loaded only while a chunk is being checked, then freed (8 GB
   Mac). Costs a few seconds per chunk, saves ~1 GB most of the class.
 - The recording in progress goes before imported files in the queue.
+
+## Visual design: "Notebook" (2026-11-09)
+Ryan picked look A from three (Notebook, Plain Mac, Graphite): New York
+serif transcript at 17 pt, warm white paper, ink text, system font for
+controls. He questioned the blue Copy all, so the main button is ink
+(matching the mono waveform); bright Mac blue is gone, links use a dark
+ink blue. Sidebar and Settings stay standard Mac so the app still feels
+native. Auto-naming recordings with on-device AI added to nice-to-haves.

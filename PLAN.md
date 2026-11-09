@@ -1,11 +1,12 @@
 # Plan
 
-Status (end of chat 2026-11-09, third chat): steps 1, 2, 3, 4, 5 and 11
-merged into `main` (step 5: RywnSwn/Verbatim#8). Step 5 merged before
-Ryan tested it: ask him to run the "Step 5 test list" below and fix what
-he reports first. Also still unanswered: line editing on a real Mac, step 3
-accuracy on a real class Voice Memo.
-Next: step 2b (visual design), then step 6.
+Status (end of chat 2026-11-09, fourth chat): steps 1, 2, 3, 4, 5 and 11
+merged into `main`. Step 2b built on branch `claude/step-2b-visual-design`
+(PR open), waiting for Ryan to try the build. Step 5 is still not tested
+by Ryan: ask him to run the "Step 5 test list" below. Also still
+unanswered: line editing on a real Mac, step 3 accuracy on a real class
+Voice Memo.
+Next: Ryan reviews 2b, merge, then step 6.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -19,9 +20,8 @@ class depends on it.
        .app into GitHub Releases. Ryan downloads and opens it.
 2. [x] **Record.** Record / Pause / Resume / Stop into one crash-safe audio
        file. Sleep prevention, mic picker, level meter, crash recovery.
-2b. [ ] **Visual design.** Fonts, colors, spacing on the real SwiftUI app
-       (not a web mockup). Ideas: serif for big moments and maybe the
-       transcript, system font for controls.
+2b. [~] **Visual design.** "Notebook" look picked by Ryan, built, app
+       icon added. Waiting for Ryan's review of the real build.
 3. [~] **Transcribe a file.** Drop a Voice Memo, WhisperKit transcribes it,
        model download with resume. Ryan tests accuracy on real classes.
 4. [x] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
@@ -42,6 +42,10 @@ class depends on it.
 ## Nice to have (after the above)
 - [ ] Timeline: click a line's time to hear that bit of audio (clicking the text edits it).
 - [ ] Engine comparison screen for live engines.
+- [ ] Auto-name recordings from what was said (Ryan's ask), e.g.
+      "English: Anansi and the sky god", with Apple's on-device
+      Foundation Models (offline, free). Needs Apple Intelligence on.
+      Ryan can still rename.
 
 ## Open questions
 - Is Parakeet's live text good enough in a real class? Is 2 s delay OK?
@@ -286,3 +290,29 @@ Ask Mr. Yurt before recording class.
    waits. Stop: it catches up.
 8. Import a Voice Memo, then start recording: the recording's checks still
    happen during the import.
+
+## How the look works (step 2b)
+- Ryan compared three looks on a preview page
+  (https://claude.ai/artifact/WQapwdfhQBtu6R5yFrHHuN): A Notebook, B Plain
+  Mac, C Graphite. He picked A, but asked why Copy all was blue, so the
+  main button is ink instead.
+- `Views/Theme.swift`: colors (paper, ink, line, accent ink blue) with
+  light and dark values, transcript font (New York serif 17, line spacing
+  5, 14 between lines), `InkButtonStyle` (`.ink`, `.inkLarge`) for the one
+  main button per screen.
+- Main area and bottom bar on paper; sidebar, Settings and menus stay
+  standard Mac. App tint is the ink blue (links, progress, toggles).
+- Copy all sits in its own toolbar item with the glass background hidden,
+  so it shows as an ink capsule.
+- "Checked up to" divider in serif italic. Live text 62% ink, half-said
+  words 45%.
+- App icon: `scripts/make-icon.py` (Pillow) draws `Support/AppIcon.icns`
+  (waveform turning into lines of text). The build copies it in.
+
+## Step 2b test list for Ryan
+1. Update, open an old transcript: serif text, warm white, ink Copy all.
+2. Switch the Mac to dark mode (System Settings > Appearance): still
+   easy to read? Copy all turns light.
+3. Record a minute: live grey text readable? "Checked up to" line looks OK?
+4. Dock icon: new waveform icon shows (may need a restart of the Dock).
+5. Anything that looks off or cramped: tell Claude in plain words.
