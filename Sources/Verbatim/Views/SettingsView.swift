@@ -102,6 +102,7 @@ struct UpdateSettings: View {
                     Text(statusText)
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -115,8 +116,9 @@ struct UpdateSettings: View {
         case .downloading(let v): return "Downloading \(v)…"
         case .ready(let v): return "\(v) is ready. Restart from the bar at the bottom of the window."
         case .idle:
+            if let problem = updater.problem { return problem }
             guard let last = updater.lastChecked else { return "" }
-            return "Last checked \(last.formatted(date: .omitted, time: .shortened))"
+            return "You have the newest version. Last checked \(last.formatted(date: .omitted, time: .shortened))"
         }
     }
 }

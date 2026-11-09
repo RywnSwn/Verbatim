@@ -23,6 +23,13 @@ final class Updater {
 
     private(set) var state: State = .idle
     private(set) var lastChecked: Date?
+    /// What went wrong last time, in plain words. nil = last check worked.
+    private(set) var problem: String?
+
+    /// A failure with a message Ryan can act on.
+    private struct Problem: Error {
+        let text: String
+    }
 
     @ObservationIgnored private var staged: URL?
     @ObservationIgnored private var loop: Task<Void, Never>?
@@ -90,17 +97,22 @@ final class Updater {
         do {
             guard let release = try await newestRelease() else {
                 state = .idle
+                problem = nil
                 if userInitiated { RecorderModel.shared.show("You have the newest version (\(Self.currentVersion)).") }
                 return
             }
             state = .downloading(version: release.version)
+            if userInitiated { RecorderModel.shared.show("Downloading version \(release.version)…") }
             staged = try await download(release)
+            problem = nil
             state = .ready(version: release.version)
         } catch {
             state = .idle
-            if userInitiated {
-                RecorderModel.shared.show("Couldn't check for updates. Check the internet and try again.")
-            }
+            let text = (error as? Problem)?.text
+                ?? "Couldn't reach GitHub. Check the internet and try again."
+            problem = text
+            // Say it even when the check ran by itself, so updates never fail silently.
+            RecorderModel.shared.show("Update didn't work: \(text)")
         }
     }
 
@@ -145,7 +157,11 @@ final class Updater {
         request.setValue("Verbatim-updater", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 30
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if code == 403 || code == 429 {
+            throw Problem(text: "GitHub says too many checks from this internet connection. Try again in an hour.")
+        }
+        guard code == 200 else { throw Problem(text: "GitHub answered with error \(code). Try again later.") }
         let includeTest = UserDefaults.standard.bool(forKey: Self.testBuildsKey)
         return try JSONDecoder().decode([Release].self, from: data)
             .filter { !$0.draft && $0.zip != nil && (includeTest || !$0.prerelease) }
@@ -178,7 +194,7 @@ final class Updater {
         try? FileManager.default.removeItem(at: zip)
         guard ok else {
             try? FileManager.default.removeItem(at: folder)
-            throw CocoaError(.fileReadCorruptFile)
+            throw Problem(text: "The download didn't pass the safety check (signature), so it wasn't installed. Tell Claude.")
         }
         return app
     }
