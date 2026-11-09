@@ -1,10 +1,11 @@
 # Plan
 
-Status (chat 2026-11-09, third chat): step 5 (background accurate pass)
-built on branch `claude/step-5-accurate-pass`, PR open, waiting for Ryan
-to test. Steps 1, 2, 3, 4 and 11 merged. Still unanswered from Ryan: line
-editing on a real Mac, step 3 accuracy on a real class Voice Memo.
-Next after step 5 merges: step 2b (visual design), then step 6.
+Status (end of chat 2026-11-09, third chat): steps 1, 2, 3, 4, 5 and 11
+merged into `main` (step 5: RywnSwn/Verbatim#8). Step 5 merged before
+Ryan tested it: ask him to run the "Step 5 test list" below and fix what
+he reports first. Also still unanswered: line editing on a real Mac, step 3
+accuracy on a real class Voice Memo.
+Next: step 2b (visual design), then step 6.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -25,7 +26,7 @@ class depends on it.
        model download with resume. Ryan tests accuracy on real classes.
 4. [x] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
        (backup while Parakeet downloads).
-5. [~] **Background accurate pass.** Voice detector cuts ~5 min chunks at
+5. [x] **Background accurate pass.** Voice detector cuts ~5 min chunks at
        pauses, one job at a time, overlap merge, live text upgrades.
 6. [ ] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
        export .txt/.md, search.
