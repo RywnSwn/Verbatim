@@ -71,7 +71,7 @@ final class RecorderModel {
     /// Which hit is the current one (0 based).
     var matchIndex = 0
     /// Goes up each time the view should scroll to the current hit.
-    private(set) var matchJump = 0
+    var matchJump = 0
     /// Goes up when Cmd+F is pressed, so the view focuses the search field.
     private(set) var findRequest = 0
 

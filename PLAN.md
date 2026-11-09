@@ -1,12 +1,15 @@
 # Plan
 
-Status (end of chat 2026-11-09, fourth chat): steps 1, 2, 2b, 3, 4, 5 and 11
-merged into `main`. Step 2b merged (Ryan asked to merge before testing; its test
+Status (2026-11-09, fifth chat): step 6 built on branch
+`claude/step-6-transcript-tools` (PR open, Ryan to test with the "Step 6
+test list" below). Steps 1, 2, 2b, 3, 4, 5 and 11 merged into `main`. Step 2b merged (Ryan asked to merge before testing; its test
 list is below). Step 5 is still not tested
 by Ryan: ask him to run the "Step 5 test list" below. Also still
 unanswered: line editing on a real Mac, step 3 accuracy on a real class
 Voice Memo.
-Next: step 6. App icon later.
+Next: after step 6 is merged, step 7. App icon later.
+Question for Ryan: markers (⌘D, "Copy marked parts only") are in the spec
+and layout but in no step. Add them to step 7 or 10, or drop them?
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -29,8 +32,8 @@ class depends on it.
        (backup while Parakeet downloads).
 5. [x] **Background accurate pass.** Voice detector cuts ~5 min chunks at
        pauses, one job at a time, overlap merge, live text upgrades.
-6. [ ] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
-       export .txt/.md, search.
+6. [~] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
+       export .txt/.md, search. Built, waiting for Ryan's test.
 7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
 8. [ ] **Corrections memory.** Word list as Whisper hint, confirmed fix
        rules, Words screen.
@@ -315,6 +318,45 @@ Ask Mr. Yurt before recording class.
   Pillow) was rejected by Ryan. Next time show a few options first; to
   add one, put `AppIcon.icns` in `Support/`, copy it in
   `scripts/build-app.sh`, and set `CFBundleIconFile` in Info.plist.
+
+## How transcript tools work (step 6)
+- `Model/TranscriptTools.swift`: `shownLines(id)` = checked lines + live
+  lines not checked yet (what the screen shows, minus half-said words).
+  Copy, export and search all use it.
+- Copy: ink split button in the toolbar (`CopyButton`), arrow menu has
+  Copy all, Copy new since last copy, Copy last 10 minutes. Also in the
+  Transcript menu: ⇧⌘C, ⌥⌘C. Button says "Copied 58 lines" /
+  "Nothing new since last copy" for 1.8 s (`copyFeedback`).
+- Copy new: `RecordingInfo.copiedUpTo` (saved in recording.json) = end of
+  the last copied line, from any copy. Copy new takes lines whose middle
+  is after it, so it still works after the accurate pass reshapes lines.
+- Text format: one line per transcript line, no speakers yet (step 7 adds
+  `[Mr. Yurt]: "text"`). Settings > General "Include times when copying
+  and exporting" (default off) puts `[10:42] ` in front.
+- Export: toolbar Export menu or Transcript menu (⇧⌘E = .txt). Save panel
+  opens in the last export folder (Documents first time) with a name that
+  isn't taken: `2026-11-10 English.md`, else `(2)`. Markdown has a blank
+  line between lines. Then "Saved X. Show in Finder" in the bottom bar.
+- Search: `.searchable` in the toolbar, ⌘F focuses it (Edit menu's
+  text-editing group replaced with Find / Find Next ⌘G / Find Previous ⇧⌘G).
+  Ignores case and accents. Hits yellow, current hit stronger
+  (`Theme.highlight`), scrolls to it. "2 of 7" line with arrows and Done
+  under the toolbar. Enter = next. While searching, live text stops
+  auto-following. Cleared when picking another recording.
+- Times: Settings > General, clock time (default) or time since start.
+  Imported files always use time since start.
+
+## Step 6 test list for Ryan
+1. Open a transcript, press ⌘F, type a name: yellow hits, "1 of N",
+   Enter and the arrows move between them, Done clears it.
+2. Copy all, paste into Claude. Then record or wait for more text, use the
+   arrow next to Copy all > Copy new since last copy: only the new part.
+   Press it again right away: "Nothing new since last copy".
+3. Copy last 10 minutes on a long transcript.
+4. Export > Markdown, save, open the file. Export again: the name gets (2).
+5. Settings > General: switch to Time since start; times in the left
+   column change. Turn on Include times, copy, paste: [10:42] in front.
+6. Does the ink Copy button with the arrow look right in light and dark?
 
 ## Step 2b test list for Ryan
 1. Update, open an old transcript: serif text, warm white, ink Copy all.
