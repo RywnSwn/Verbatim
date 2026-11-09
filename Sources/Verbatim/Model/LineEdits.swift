@@ -20,7 +20,7 @@ extension RecorderModel {
         line.locked = true
         guard let old = Self.replace(id, source, start: start, with: line) else { return }
         offerLineUndo("Line edited.") {
-            Self.replace(id, source, start: start, with: old)
+            Self.restore(id, source, start: start, old)
         }
     }
 
@@ -31,10 +31,8 @@ extension RecorderModel {
         }
         guard let old = removed else { return }
         offerLineUndo("Deleted a line.") {
-            switch source {
-            case .checked: Transcriber.shared.insertLine(id, old)
-            case .live: LiveTranscriber.shared.insertLine(id, old)
-            }
+            if source == .live { LiveTranscriber.shared.insertLine(id, old) }
+            if Self.resolved(id, source, old) == .checked { Transcriber.shared.insertLine(id, old) }
         }
     }
 
@@ -58,6 +56,23 @@ extension RecorderModel {
         case .live: LiveTranscriber.shared.lines(id)
         }
         return lines.first { $0.start == start }
+    }
+
+    /// A live line the accurate pass has reached since: it lives in the
+    /// checked text now (locked, if Ryan edited it).
+    private static func resolved(_ id: UUID, _ source: LineSource, _ line: Transcript.Line) -> LineSource {
+        guard source == .live else { return .checked }
+        let done = Transcriber.shared.transcripts[id]?.doneUpTo ?? 0
+        return line.middle < done ? .checked : .live
+    }
+
+    /// Undo of an edit: put the old line back, wherever the line lives now.
+    private static func restore(_ id: UUID, _ source: LineSource, start: Double, _ old: Transcript.Line) {
+        if source == .live { LiveTranscriber.shared.replaceLine(id, start: start, with: old) }
+        guard resolved(id, source, old) == .checked else { return }
+        if Transcriber.shared.replaceLine(id, start: start, with: old) == nil, source == .live {
+            Transcriber.shared.insertLine(id, old)
+        }
     }
 
     @discardableResult
