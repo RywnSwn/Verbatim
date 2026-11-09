@@ -57,13 +57,23 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Divider()
                     .padding(.bottom, 6)
-                Button {
-                    model.chooseFilesToImport()
-                } label: {
-                    Label("Transcribe a file…", systemImage: "doc.badge.plus")
+                HStack {
+                    Button {
+                        model.chooseFilesToImport()
+                    } label: {
+                        Label("Transcribe a file…", systemImage: "doc.badge.plus")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Pick a Voice Memo or other recording to turn into text (⌘O)")
+                    Spacer()
+                    SettingsLink {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Settings: microphone and updates (⌘,)")
+                    .accessibilityLabel("Settings")
                 }
-                .buttonStyle(.borderless)
-                .help("Pick a Voice Memo or other recording to turn into text (⌘O)")
                 Text("Or drop a Voice Memo anywhere.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
