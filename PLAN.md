@@ -1,11 +1,11 @@
 # Plan
 
-Status (end of chat 2026-11-09): steps 1, 2, 3 and 11 built. Ryan tested
-recording (works) and the in-app updater (works: signed v0.1.15 installed
-by hand, updated in-app to v0.1.18). Step 3 (transcription) built but not
-reported on yet: ask Ryan how the model download and accuracy went.
-Next: step 4 (live transcript). Step 2b (visual design) after that.
-All of it is merged into `main` (RywnSwn/Verbatim#3, #4, #5).
+Status (end of chat 2026-11-09, second chat): steps 1, 2, 3, 11 merged
+into `main`. Step 4 (live transcript) built on branch
+`claude/kind-maxwell-oq9tl5`, waiting for Ryan to test (he tests
+tomorrow, together with his step 3 results).
+Next: Ryan's step 3 + step 4 feedback, fix what he reports, merge step 4.
+Then step 2b (visual design) or step 5.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -24,9 +24,8 @@ class depends on it.
        transcript, system font for controls.
 3. [~] **Transcribe a file.** Drop a Voice Memo, WhisperKit transcribes it,
        model download with resume. Ryan tests accuracy on real classes.
-4. [ ] **Live transcript.** Live engine while recording, swappable.
-       Test Apple SpeechAnalyzer and NVIDIA Parakeet (the model OpenWhispr
-       uses) first.
+4. [~] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
+       (backup while Parakeet downloads). Built, not tested yet.
 5. [ ] **Background accurate pass.** Voice detector cuts ~5 min chunks at
        pauses, one job at a time, overlap merge, live text upgrades.
 6. [ ] **Transcript tools.** Timestamps, edit + lock, Copy / Copy new,
@@ -45,7 +44,9 @@ class depends on it.
 - [ ] Engine comparison screen for live engines.
 
 ## Open questions
-- Which live engine is good enough (test SpeechAnalyzer vs others).
+- Is Parakeet's live text good enough in a real class? Is 2 s delay OK?
+- Does Apple's engine need the Speech Recognition permission at all?
+  (We ask only when it's actually used.)
 - Is large-v3 turbo (626 MB) fast enough on Ryan's M2? Test in step 3.
 - How speaker labels work offline (diarization model choice, milestone 7).
 - Is Ryan's Mac a MacBook Air (no fan, slows down when hot) or Pro?
@@ -163,3 +164,71 @@ Ask Mr. Yurt before recording class.
   recording; while recording it reads "Recording now" and jumps to it.
 - Bottom: "Transcribe a file…" (same as Cmd+O / drag and drop).
 - Updater says "Updated to version X" once after an update.
+
+## How live text works (step 4)
+- Engine: NVIDIA Parakeet Unified 0.6B (English, punctuation, ~2 s behind
+  speech, int8 encoder on the Neural Engine) through FluidAudio 0.18.0
+  (`exact:`, `traits: []` so its TTS/diarizer/text-normaliser parts are left
+  out). Only `Live/ParakeetEngine.swift` imports FluidAudio.
+- Download: ~600 MB to `App Support/Verbatim/Models/Live/parakeet-unified-en-0.6b-coreml`,
+  starts on first launch next to the Whisper download, resumes, Pause, auto
+  retry every 20 s, then loaded once ("Getting live text ready") and freed.
+  Flag `liveModelPrepared` in UserDefaults.
+- Backup: Apple SpeechAnalyzer (`Live/AppleSpeechEngine.swift`) when
+  Parakeet isn't ready at the moment the mic starts. Its English model is
+  requested at launch while Parakeet is missing. Speech Recognition
+  permission is asked only then (Info.plist has the text).
+- Swappable: `LiveEngine` protocol (`begin` / `feed` / `end`).
+- Flow: `AudioPipeline.onSamples` gives every saved sample (Float, 16 kHz)
+  to `LiveFeed` (an AsyncStream), `LiveRunner` feeds the engine in order.
+  Pause/sleep/disk-full send `.flush` (last words finished, engine reset);
+  the engine is picked again when audio comes back, so Parakeet takes over
+  from Apple after the next Pause. Times are seconds into audio.wav (the
+  runner counts samples), so they line up with Whisper's.
+- Memory: Parakeet loaded at the first audio, unloaded after Stop (before
+  Whisper starts 10 s later). If no engine can listen, it looks again
+  every 15 s of audio.
+- Lines: `LineBuilder` joins words; new line after a sentence end (70+
+  chars), a pause over 1.6 s, or 260 chars.
+- Saved to `Recordings/<id>/live.json` (formatVersion 1) every 10 s and at
+  Pause/Stop. Undo Stop keeps adding to it.
+- Screen: live lines a little grey; status line on top only when Apple's
+  engine or nothing is listening. Auto-scroll only at the bottom, else
+  "Jump to live". Copy all works while recording. After Stop, live lines
+  the accurate pass hasn't reached show grey under "Checked up to 10:40".
+- Step 5 should replace the grey live part with Whisper text as each chunk
+  finishes, during recording. It must keep lines with `locked: true`
+  (Ryan edited them) and skip text inside `LiveText.removed` spans (lines
+  he deleted), or his changes come back.
+
+## Editing lines (pulled forward from step 6, Ryan's ask while testing step 4)
+- Double-click a line: inline field. Enter saves, Esc cancels, clicking away
+  saves, emptying it deletes. Right-click: Copy this line, Copy from here
+  down, Edit line, Delete line, Unlock.
+- Works on live and accurate lines, while recording and after.
+- Edited lines get `locked: true`, turn full ink, show a lock (click to
+  unlock). New live words never go into a line being edited or locked.
+- "Line edited. Undo" / "Deleted a line. Undo" in the bottom bar for 10 s.
+- Lines are found by their start time (`Model/LineEdits.swift`).
+- Transcriber re-reads the lines on screen before adding each piece, so
+  edits made while it transcribes are kept. "Transcribe again" still
+  throws edits away (explicit action).
+- Text in lines is no longer selectable outside edit mode (double-click
+  would select a word instead of editing). Copy this line / Copy from here
+  down / edit mode cover copying part of it.
+
+## Step 4 test list for Ryan
+1. Start screen: "Downloading live text model" line with %, Pause works.
+   Then "Getting live text ready", then "Live text ready".
+2. Record yourself reading something aloud: text appears ~2 s behind, in
+   grey, with punctuation. Names? (Nyankupon, Anansi, Kweku Tsin)
+3. Scroll up while it records: it stops following, "Jump to live" shows.
+4. Pause, Resume: last words before Pause show up, carries on fine.
+5. Copy all while recording, paste into Claude.
+6. Stop: live text stays (grey) until the accurate text replaces it.
+7. Activity Monitor > Memory: how much Verbatim uses while recording.
+8. If you record before Parakeet finishes: a line says it's using the
+   Mac's built-in engine. Does that text look OK?
+9. While recording, double-click a line, fix a word, press Enter: lock
+   shows, new words keep coming below. Undo in the bottom bar works.
+10. Right-click a line > Delete line, then Undo.

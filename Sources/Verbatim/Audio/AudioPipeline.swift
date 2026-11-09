@@ -29,6 +29,8 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     var onWriteError: (@Sendable (Error) -> Void)?
     /// Called on the main queue when the capture session stops by itself.
     var onRuntimeError: (@Sendable () -> Void)?
+    /// Called on the audio queue with every bit of audio that was saved, for live text.
+    var onSamples: (@Sendable ([Float]) -> Void)?
 
     func attach(_ writer: WavWriter) {
         sampleQueue.sync {
@@ -151,6 +153,7 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
             onWriteError?(error)
             return
         }
+        onSamples?(samples.map { Float($0) / 32_768 })
         for s in samples {
             let v = Double(s)
             sumSquares += v * v

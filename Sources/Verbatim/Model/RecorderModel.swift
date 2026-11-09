@@ -13,7 +13,7 @@ final class RecorderModel {
 
     /// What the status spot in the bottom bar says. `action` adds a text link.
     struct Status: Equatable {
-        enum Action { case stopRecording, resume, undoDelete }
+        enum Action { case stopRecording, resume, undoDelete, undoLine }
         var text: String
         var action: Action?
         var id = UUID()
@@ -59,6 +59,7 @@ final class RecorderModel {
     @ObservationIgnored private var asleepSince: Date?
     @ObservationIgnored private var restartedAfterError = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private var lineUndo: (() -> Void)?
 
     var current: RecordingInfo? { recordings.first { $0.id == currentID } }
     var isBusy: Bool { phase != .idle }
@@ -70,6 +71,7 @@ final class RecorderModel {
         wirePipeline()
         observeSystem()
         Transcriber.shared.start(with: recordings)
+        LiveTranscriber.shared.start(with: recordings)
     }
 
     // MARK: - Start / Pause / Stop
@@ -111,9 +113,11 @@ final class RecorderModel {
             try RecordingStore.create(info)
             let writer = try WavWriter(creating: RecordingStore.audioURL(info.id))
             pipeline.attach(writer)
+            LiveTranscriber.shared.recordingStarted(info.id, samples: 0)
             try pipeline.startCapture(device: dev)
         } catch {
             pipeline.detach()
+            LiveTranscriber.shared.recordingStopped()
             status = Status(text: "Couldn't start recording: \(error.localizedDescription)")
             return
         }
@@ -146,6 +150,7 @@ final class RecorderModel {
         guard phase == .recording else { return }
         pipeline.stopCapture()
         pipeline.flush()
+        LiveTranscriber.shared.micStopped()
         addEvent(.paused)
         updateCurrent { $0.state = .paused }
         phase = .paused
@@ -181,6 +186,7 @@ final class RecorderModel {
     func stop(note: String? = nil) {
         guard isBusy, let id = currentID else { return }
         let samples = pipeline.detach()
+        LiveTranscriber.shared.recordingStopped()
         let now = Date()
         updateCurrent {
             $0.samples = samples
@@ -225,9 +231,11 @@ final class RecorderModel {
         do {
             let writer = try WavWriter(appendingTo: RecordingStore.audioURL(info.id))
             pipeline.attach(writer)
+            LiveTranscriber.shared.recordingStarted(info.id, samples: writer.samplesWritten)
             try pipeline.startCapture(device: dev)
         } catch {
             pipeline.detach()
+            LiveTranscriber.shared.recordingStopped()
             status = Status(text: "Couldn't continue the recording: \(error.localizedDescription)")
             return
         }
@@ -254,6 +262,10 @@ final class RecorderModel {
         case .stopRecording: stop()
         case .resume: resume()
         case .undoDelete: undoDelete()
+        case .undoLine:
+            lineUndo?()
+            lineUndo = nil
+            if status?.action == .undoLine { status = nil }
         }
     }
 
@@ -275,6 +287,7 @@ final class RecorderModel {
         }
         recordings.remove(at: i)
         Transcriber.shared.forget(id)
+        LiveTranscriber.shared.forget(id)
         if selection == id { selection = nil }
         if stoppedNote?.recordingID == id { stoppedNote = nil }
         guard let url = trashed as URL? else { return }
@@ -304,6 +317,7 @@ final class RecorderModel {
         }
         reload()
         Transcriber.shared.reload(note.info.id)
+        LiveTranscriber.shared.reload(note.info.id)
         selection = note.info.id
     }
 
@@ -387,6 +401,29 @@ final class RecorderModel {
 
     func clearStatus() { status = nil }
 
+    /// A short note that goes away by itself, even while recording.
+    func flash(_ text: String) {
+        let s = Status(text: text)
+        status = s
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            if self?.status == s { self?.status = nil }
+        }
+    }
+
+    /// "Line edited. Undo" in the status spot for 10 seconds.
+    func offerLineUndo(_ text: String, undo: @escaping () -> Void) {
+        lineUndo = undo
+        let s = Status(text: text, action: .undoLine)
+        status = s
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, self.status == s else { return }
+            self.status = nil
+            self.lineUndo = nil
+        }
+    }
+
     // MARK: - Library
 
     func rename(_ id: UUID, to title: String) {
@@ -434,6 +471,8 @@ final class RecorderModel {
         pipeline.onWriteError = { [weak self] _ in
             Task { @MainActor in self?.writeFailed() }
         }
+        let live = LiveTranscriber.shared.feed
+        pipeline.onSamples = { live.yield(.samples($0)) }
         pipeline.onRuntimeError = { [weak self] in
             MainActor.assumeIsolated { self?.captureFailed() }
         }
@@ -469,6 +508,7 @@ final class RecorderModel {
     private func writeFailed() {
         guard phase == .recording else { return }
         pipeline.stopCapture()
+        LiveTranscriber.shared.micStopped()
         addEvent(.paused, note: "write failed")
         updateCurrent { $0.state = .paused }
         phase = .paused
@@ -528,6 +568,7 @@ final class RecorderModel {
         guard phase == .recording else { return }
         pipeline.stopCapture()
         pipeline.flush()
+        LiveTranscriber.shared.micStopped()
         asleepSince = Date()
         addEvent(.asleep)
         saveCurrent()

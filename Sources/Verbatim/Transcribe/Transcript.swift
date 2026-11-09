@@ -10,6 +10,10 @@ struct Transcript: Codable, Equatable {
         var start: Double
         var end: Double
         var text: String
+        /// Ryan edited this line: later passes never change it. nil = not locked.
+        var locked: Bool? = nil
+
+        var isLocked: Bool { locked == true }
     }
 
     var formatVersion = Transcript.currentFormat

@@ -117,3 +117,13 @@ annoying, so step 11 moved before step 4. Own small updater on GitHub
 Releases instead of Sparkle: no appcast or EdDSA key to manage, and the
 update is checked by code signature against a stable self-signed
 certificate (which also stops the mic prompt after every update).
+
+## Live engine: Parakeet first, Apple as backup (2026-11-09)
+The plan said to test Apple's SpeechAnalyzer first. Ryan wanted a good
+downloaded model instead. Chosen: NVIDIA Parakeet Unified 0.6B via
+FluidAudio, a true streaming model (~2 s behind speech, punctuation,
+~2.2% WER on LibriSpeech), not the sliding-window TDT mode (11+ s behind).
+It runs on the Neural Engine, which Whisper mostly doesn't use. Apple's
+engine fills in only while Parakeet is still downloading, so the first
+recording still gets live text and costs no extra memory. Options Ryan
+didn't pick: Parakeet only, or a Settings switch to compare both.
