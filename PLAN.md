@@ -2,8 +2,8 @@
 
 Status: steps 1, 2, 3 built 2026-11-09, step 11 (updates) pulled forward
 and built the same day because manual installs were annoying Ryan.
-Waiting for Ryan to add the SIGNING_CERT_P12 secret, then install one
-signed build by hand; after that updates are in-app. Step 3 not tested yet.
+SIGNING_CERT_P12 secret added by Ryan. He installs the first signed
+build by hand once; after that updates are in-app. Step 3 not tested yet.
 Next: step 4 (live).
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
