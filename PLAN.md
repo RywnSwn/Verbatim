@@ -154,6 +154,10 @@ Ask Mr. Yurt before recording class.
   (identifier only while builds are ad-hoc). Bottom bar: "Version X is
   ready. Restart to update". A bash script waits for quit, swaps the app
   (old kept until the swap works), clears quarantine, reopens.
+- Failures are never silent (Ryan saw "nothing" once): any failed check,
+  even automatic, says "Update didn't work: <reason>" in the bottom bar,
+  and Settings > Updates shows the reason (rate limit, GitHub error,
+  signature check failed). Cause of that first silent failure unknown.
 - Caveat: newest build number wins across branches, so a docs push to
   main after a step branch build can "update" to a build without that
   step. Keep branch work merged promptly.
