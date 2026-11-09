@@ -29,6 +29,8 @@ decided and why (read it before re-arguing a choice).
 - One task per chat. At the end of each session, update `PLAN.md` (and
   `DECISIONS.md` if something was decided) so the next chat can continue.
 - Keep this file short. Details go in `PLAN.md`, `DECISIONS.md`, `docs/`.
+- No pull requests for small things (docs, plan updates, small fixes).
+  Ryan is not a dev; only open a PR for a real milestone, or if he asks.
 - Pin library versions. Read a library's real source/docs instead of
   guessing APIs.
 
