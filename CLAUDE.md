@@ -11,15 +11,16 @@ plain words. Never use em dashes in anything written for Ryan.
 UX matters a lot to him. He hates apps that don't consider the user.
 
 ## Current state
-Planning done, no code yet. See `PLAN.md` for features and progress,
-`DECISIONS.md` for what was decided and why (read it before re-arguing a
-choice).
+Planning and layout done, no code yet. See `PLAN.md` for build order and progress,
+`docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
+to match it), `DECISIONS.md` for what was
+decided and why (read it before re-arguing a choice).
 
 ## Key facts
 - Mac: M2, 8 GB unified memory (shared by CPU, GPU and models). Keep RAM low:
   one quantized Whisper model loaded at a time.
-- Stack (leaning, confirm with Ryan before writing code): Swift + SwiftUI +
-  WhisperKit. Not Tauri, not Electron.
+- Stack (confirmed): Swift + SwiftUI + WhisperKit. Minimum macOS 26.
+  Ryan's Mac: Tahoe 26.7.
 - Ryan does not want Xcode. Build with GitHub Actions on a macOS runner (repo
   is public for free minutes) or Command Line Tools + `swift build`.
 - Claude's container is Linux and cannot run the mic or build Mac apps.
@@ -29,6 +30,11 @@ choice).
 - One task per chat. At the end of each session, update `PLAN.md` (and
   `DECISIONS.md` if something was decided) so the next chat can continue.
 - Keep this file short. Details go in `PLAN.md`, `DECISIONS.md`, `docs/`.
+- Tell Ryan clearly when a step is complete and when to switch to a new
+  chat. Let him review before moving on. Explain every UX idea in plain
+  words, and use the ux-planner skill for UI work.
+- No pull requests for small things (docs, plan updates, small fixes).
+  Ryan is not a dev; only open a PR for a real milestone, or if he asks.
 - Pin library versions. Read a library's real source/docs instead of
   guessing APIs.
 

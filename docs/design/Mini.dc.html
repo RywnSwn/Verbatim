@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Verbatim: menu bar dropdown</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;color:#1c1c1e}
+a{color:#0a5fd1}a:hover{color:#074aa3}
+button{font-family:inherit}
+.mi:hover{background:#0a64d8;color:#ffffff}
+.mi:hover .sc{color:#ffffff}
+</style>
+</helmet>
+<div style="width: 440px; height: 440px; box-sizing: border-box; background: #c9ccd3; position: relative">
+<div style="height: 26px; background: #e9eaee; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 14px; font-size: 13px; color: #1c1c1e">
+<div style="display: flex; align-items: center; gap: 6px; background: #c7c9cf; border-radius: 5px; padding: 2px 8px">
+<div style="display: flex; align-items: center; gap: 2px; height: 14px" aria-hidden="true">
+<div style="width: 2px; height: 4px; border-radius: 1px; background: #1c1c1e"></div><div style="width: 2px; height: 10px; border-radius: 1px; background: #1c1c1e"></div><div style="width: 2px; height: 7px; border-radius: 1px; background: #1c1c1e"></div><div style="width: 2px; height: 12px; border-radius: 1px; background: #1c1c1e"></div><div style="width: 2px; height: 5px; border-radius: 1px; background: #1c1c1e"></div>
+</div>
+<span style="font-variant-numeric: tabular-nums">37:12</span>
+</div>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1c1c1e" stroke-width="2" aria-hidden="true"><path d="M2 9a15 15 0 0 1 20 0"></path><path d="M5 12.5a10 10 0 0 1 14 0"></path><path d="M8.5 16a5 5 0 0 1 7 0"></path></svg>
+<svg width="22" height="14" viewBox="0 0 26 14" fill="none" stroke="#1c1c1e" stroke-width="1.6" aria-hidden="true"><rect x="1" y="1" width="21" height="12" rx="3"></rect><rect x="3.5" y="3.5" width="12" height="7" rx="1" fill="#1c1c1e" stroke="none"></rect><path d="M24 5v4"></path></svg>
+<span>Mon 10:42</span>
+</div>
+
+<div style="position: absolute; top: 30px; right: 90px; width: 330px; background: #f6f6f7; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.22); padding: 6px; display: flex; flex-direction: column" role="menu" aria-label="Verbatim">
+<div style="padding: 6px 10px 8px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.4">
+<div style="display: flex; justify-content: space-between; font-size: 12px; color: #55555a"><span>English, recording 37:12</span><span>Checking 10:40 to 10:45</span></div>
+<div><span style="font-weight: 650">Mr. Yurt:</span> "So what makes a trickster different from a villain?"</div>
+<div style="color: #5d5d62"><span style="font-weight: 650">Student:</span> "Maybe because the trickster is kind of the hero, even when he cheats?"</div>
+</div>
+<div style="height: 1px; background: #dcdce0; margin: 2px 6px"></div>
+<button class="mi" role="menuitem" style="border: none; background: transparent; text-align: left; font-size: 13px; padding: 6px 10px; border-radius: 5px; display: flex; justify-content: space-between; color: #1c1c1e">Copy new since last copy<span class="sc" style="color: #6c6c70">⌥⌘C</span></button>
+<button class="mi" role="menuitem" style="border: none; background: transparent; text-align: left; font-size: 13px; padding: 6px 10px; border-radius: 5px; color: #1c1c1e">Copy last 10 minutes</button>
+<button class="mi" role="menuitem" style="border: none; background: transparent; text-align: left; font-size: 13px; padding: 6px 10px; border-radius: 5px; display: flex; justify-content: space-between; color: #1c1c1e">Copy all<span class="sc" style="color: #6c6c70">⇧⌘C</span></button>
+<div style="height: 1px; background: #dcdce0; margin: 4px 6px"></div>
+<button class="mi" role="menuitem" style="border: none; background: transparent; text-align: left; font-size: 13px; padding: 6px 10px; border-radius: 5px; display: flex; justify-content: space-between; color: #1c1c1e">Add marker<span class="sc" style="color: #6c6c70">⌘D</span></button>
+<button class="mi" role="menuitem" style="border: none; background: transparent; text-align: left; font-size: 13px; padding: 6px 10px; border-radius: 5px; display: flex; justify-content: space-between; color: #1c1c1e">Pause<span class="sc" style="color: #6c6c70">⇧⌘P</span></button>
+<button class="mi" role="menuitem" style="border: none; background: transparent; text-align: left; font-size: 13px; padding: 6px 10px; border-radius: 5px; display: flex; justify-content: space-between; color: #1c1c1e">Stop recording<span class="sc" style="color: #6c6c70">⌘R</span></button>
+<div style="height: 1px; background: #dcdce0; margin: 4px 6px"></div>
+<button class="mi" role="menuitem" style="border: none; background: transparent; text-align: left; font-size: 13px; padding: 6px 10px; border-radius: 5px; color: #1c1c1e">Open Verbatim</button>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":440,"height":440}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

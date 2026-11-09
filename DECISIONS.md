@@ -55,3 +55,41 @@ recorded audio instead.
 
 ## Privacy
 Audio kept 7 days max. Everything runs locally on the Mac, no cloud.
+
+## Stack confirmed (2026-11-09)
+Ryan said yes to Swift + SwiftUI + WhisperKit.
+
+## Minimum macOS 26 (2026-11-09)
+Ryan is on Tahoe 26.7 and asked for it to keep working on a future Mac.
+Apps built for macOS 26 also run on later versions, so no rewrite for a
+new Mac. Data lives in Application Support (Migration Assistant moves it),
+and saved files carry a format version for safe upgrades. Targeting 26
+also unlocks Apple's newer SpeechAnalyzer API, which is a different and
+better engine than the old dictation Ryan heard was weak, so it is the
+first live engine to test. It runs outside our app's memory, which helps
+with 8 GB.
+
+## Build order: file transcription before live (2026-11-09)
+"Transcribe a file" comes before live transcription so Ryan can test
+accuracy on real Voice Memos at home early.
+
+## Keep the app small (2026-11-09)
+No themes, accounts, cloud, summaries or in-app AI chat. Undo instead of
+confirm popups (only exception: quitting while recording). Full list of
+small behaviours in `docs/spec.md`.
+
+## Layout approved (2026-11-09)
+Mockup in `docs/design/`. Design first so later chats build to a written
+layout instead of drifting. Ryan's calls: no red recording UI, mono waveform
+as the signature, no soft bordered boxes, messages in the status spot instead
+of popups or banners, menu bar dropdown instead of a mini window (Ryan rated
+the mini window poorly), MacBook mic default (AirPods mics not trusted),
+editorial serif only for big moments. Features added because Ryan would use
+them in class: copy options (new / last 10 min / marked), markers, right-click
+line menu ("copy from here down"), a few shortcuts. Cut as decoration: stats
+inspector, timeline waveform.
+
+## OpenWhispr (2026-11-09)
+Ryan asked about it. It's an Electron dictation app (wrong job, wrong stack),
+but its models (Whisper, NVIDIA Parakeet) are separate and free. Parakeet is
+a live engine candidate.
