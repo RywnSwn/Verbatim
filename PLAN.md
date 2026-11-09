@@ -1,40 +1,46 @@
 # Plan
 
-Status: planning finished 2026-11-09, nothing built yet.
+Status: planning finished 2026-11-09, nothing built yet. Stack confirmed.
+Detailed behaviour and edge cases: `docs/spec.md`.
 
-## Must have
-- [ ] Record the whole class, with Pause and Resume (class has work time).
-      One recording file even with pauses.
-- [ ] LIVE transcript while recording. A few seconds of delay is fine.
-- [ ] Accurate background pass during recording: every ~5 min, re-transcribe
-      only the new audio (plus a little overlap) with Whisper. Live text
-      upgrades to accurate text behind the user. One job at a time.
-- [ ] Final pass on Stop: only the last few minutes are left, so it is fast.
-- [ ] Copy button: copies everything transcribed so far (Ryan sends it to
-      Claude mid-class to ask questions).
-- [ ] Timestamps on every line.
-- [ ] Speaker labels (Mr. Yurt vs Student), at least on the accurate pass.
-- [ ] Export .txt and .md in script format, one line per turn:
-      `[Mr. Yurt]: "text"` (no intro, no headings).
-- [ ] Edit lines. Edited lines are LOCKED: later passes never overwrite them.
-- [ ] Corrections memory: each fix goes into a word list / replacement map
-      used on future transcripts (Whisper initial prompt + find/replace).
-- [ ] Audio auto-deletes after 7 days. Storage screen to see and delete
-      recordings early. Transcripts are kept after audio is deleted.
-- [ ] "Transcribe a recording" mode (feed in a Voice Memo) for testing at
-      home before trusting the app in class.
+## Build order (one milestone per chat)
 
-## Nice to have
+Order is chosen so Ryan can test real accuracy at home early, before any
+class depends on it.
+
+1. [ ] **Skeleton + build.** SwiftUI app, GitHub Actions builds a zipped
+       .app into GitHub Releases. Ryan downloads and opens it.
+2. [ ] **Record.** Record / Pause / Resume / Stop into one crash-safe audio
+       file. Sleep prevention, mic picker, level meter, crash recovery.
+3. [ ] **Transcribe a file.** Drop a Voice Memo, WhisperKit transcribes it,
+       model download with resume. Ryan tests accuracy on real classes.
+4. [ ] **Live transcript.** Live engine while recording (Apple
+       SpeechAnalyzer first, swappable).
+5. [ ] **Background accurate pass.** Voice detector cuts ~5 min chunks at
+       pauses, one job at a time, overlap merge, live text upgrades.
+6. [ ] **Transcript tools.** Timestamps, edit + lock, Copy / Copy new,
+       export .txt/.md, search.
+7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
+8. [ ] **Corrections memory.** Word list as Whisper hint, confirmed fix
+       rules, Words screen.
+9. [ ] **Storage.** History sidebar, 7-day audio delete, Storage screen,
+       Recently deleted, Export everything.
+10. [ ] **Polish.** Onboarding, menu bar icon, Settings, notifications,
+        all the edge cases in `docs/spec.md` that aren't done yet.
+11. [ ] **Updates.** In-app update button (Sparkle).
+
+## Nice to have (after the above)
 - [ ] Timeline: click a line to hear that bit of audio.
-- [ ] In-app "update available" button (e.g. Sparkle).
-- [ ] Swappable live engine so different models can be compared.
+- [ ] Engine comparison screen for live engines.
 
 ## Open questions
-- Confirm stack with Ryan (Swift + WhisperKit is the lean).
-- Which live engine is good enough (Ryan heard Apple's dictation is weak).
-- Whisper model size that fits 8 GB and is fast enough.
-- macOS version on Ryan's Mac.
-- How speaker labels work offline on Mac (diarization model choice).
+- Which live engine is good enough (test SpeechAnalyzer vs others).
+- Whisper model size that fits 8 GB and is fast enough (test in milestone 3).
+- How speaker labels work offline (diarization model choice, milestone 7).
+- Is Ryan's Mac a MacBook Air (no fan, slows down when hot) or Pro?
+- Clock time or time-since-start as the default timestamp?
+- Should a recording be able to "Keep audio" past 7 days?
+- GitHub's macOS 26 runner: check it exists and builds the app.
 
 ## Testing plan
 Record a few classes with Voice Memos, run them through the app at home,

@@ -11,15 +11,15 @@ plain words. Never use em dashes in anything written for Ryan.
 UX matters a lot to him. He hates apps that don't consider the user.
 
 ## Current state
-Planning done, no code yet. See `PLAN.md` for features and progress,
-`DECISIONS.md` for what was decided and why (read it before re-arguing a
-choice).
+Planning done, no code yet. See `PLAN.md` for build order and progress,
+`docs/spec.md` for behaviour and edge cases, `DECISIONS.md` for what was
+decided and why (read it before re-arguing a choice).
 
 ## Key facts
 - Mac: M2, 8 GB unified memory (shared by CPU, GPU and models). Keep RAM low:
   one quantized Whisper model loaded at a time.
-- Stack (leaning, confirm with Ryan before writing code): Swift + SwiftUI +
-  WhisperKit. Not Tauri, not Electron.
+- Stack (confirmed): Swift + SwiftUI + WhisperKit. Minimum macOS 26.
+  Ryan's Mac: Tahoe 26.7.
 - Ryan does not want Xcode. Build with GitHub Actions on a macOS runner (repo
   is public for free minutes) or Command Line Tools + `swift build`.
 - Claude's container is Linux and cannot run the mic or build Mac apps.
