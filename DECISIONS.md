@@ -99,3 +99,14 @@ Every push builds on GitHub's macos-26 runner and publishes a GitHub Release
 with Verbatim.zip, so Ryan just downloads from the Releases page. Branch
 builds are pre-releases so he can test before anything is merged. Apple
 Silicon only (arm64), ad-hoc signed, no paid Apple developer account.
+
+## Step 3 choices (2026-11-09)
+- Model: Whisper large-v3 turbo compressed (626 MB), Argmax's
+  recommendation for accuracy, fits 8 GB. Swap if too slow on Ryan's M2.
+- Our own ~2 min pieces cut at quiet points instead of one big WhisperKit
+  call: text appears as it goes, Cancel/resume work, and step 5 reuses it.
+- Transcribe automatically after Stop (Ryan rarely reviews, wants text
+  without extra clicks).
+- Delete moves to the macOS Trash with Undo (added early because Ryan
+  needed it; in-app Recently deleted still in step 9).
+- Visual design (2b) moved after step 3 so it polishes more real screens.

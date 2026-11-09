@@ -33,17 +33,18 @@ struct StartView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
 
-                if let status = model.status {
-                    Text(status.text)
-                        .font(.callout)
-                        .multilineTextAlignment(.center)
-                }
+                Text("Or drop a Voice Memo here to transcribe it.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 0) {
                 Divider()
                     .padding(.bottom, 18)
-                MicStatusLine(permission: model.micPermission, micName: model.micName)
+                VStack(alignment: .leading, spacing: 16) {
+                    MicStatusLine(permission: model.micPermission, micName: model.micName)
+                    ModelStatusLine()
+                }
             }
             .frame(width: 460, alignment: .leading)
         }
@@ -137,5 +138,77 @@ enum AppInfo {
     static var version: String {
         let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         return short ?? "dev"
+    }
+}
+
+/// The accurate model: downloading, paused, getting ready, or ready.
+struct ModelStatusLine: View {
+    @Environment(Transcriber.self) private var transcriber
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: transcriber.isModelReady ? "checkmark" : "arrow.down")
+                .fontWeight(.semibold)
+                .foregroundStyle(transcriber.isModelReady ? Color.green : Color.accentColor)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 6) {
+                content
+            }
+        }
+    }
+
+    @ViewBuilder private var content: some View {
+        switch transcriber.modelState {
+        case .ready:
+            title("Accurate model ready")
+            note("Recordings turn into text after you press Stop. Works offline.")
+        case .preparing:
+            title("Getting the model ready")
+            note("First time only, this can take a few minutes. Keep Verbatim open.")
+        case .downloading(let fraction, let left):
+            HStack {
+                title("Downloading accurate model")
+                Spacer()
+                Text(Self.progressText(fraction, left))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            ProgressView(value: fraction)
+                .progressViewStyle(.linear)
+                .controlSize(.small)
+            note("One time only. If the internet drops, it picks up where it left off. You can record now: the text comes once this finishes.")
+            Button("Pause download") { transcriber.pauseDownload() }
+                .buttonStyle(.link)
+                .font(.caption.weight(.medium))
+        case .paused(let fraction):
+            title("Download paused at \(Int(fraction * 100))%")
+            Button("Resume download") { transcriber.startDownload() }
+                .buttonStyle(.link)
+                .font(.caption.weight(.medium))
+        case .failed(let fraction):
+            title("Download stopped at \(Int(fraction * 100))%")
+            note("Probably the internet. Trying again by itself every 20 seconds.")
+            Button("Try now") { transcriber.startDownload() }
+                .buttonStyle(.link)
+                .font(.caption.weight(.medium))
+        }
+    }
+
+    private func title(_ s: String) -> some View {
+        Text(s).font(.body.weight(.medium))
+    }
+
+    private func note(_ s: String) -> some View {
+        Text(s)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    static func progressText(_ fraction: Double, _ left: Double?) -> String {
+        let percent = "\(Int(fraction * 100))% of \(WhisperEngine.sizeText)"
+        guard let left, left.isFinite else { return percent }
+        return "\(percent), \(Transcriber.leftText(left))"
     }
 }

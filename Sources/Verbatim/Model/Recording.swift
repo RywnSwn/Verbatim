@@ -26,9 +26,20 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     var sampleRate = 16_000
     var samples: Int64 = 0
     var events: [Event] = []
+    /// File name of the Voice Memo (or other file) this was imported from.
+    var importedFrom: String?
 
     var duration: TimeInterval { Double(samples) / Double(sampleRate) }
     var isActive: Bool { state != .stopped }
+
+    /// Clock time for a point in the audio, skipping over pauses and sleep.
+    func wallTime(atSecond seconds: Double) -> Date {
+        let sample = Int64(seconds * Double(sampleRate))
+        let starts: Set<Event.Kind> = [.started, .resumed, .woke, .undoStop, .micChanged]
+        let anchor = events.last { starts.contains($0.kind) && $0.sample <= sample }
+        guard let anchor else { return createdAt.addingTimeInterval(seconds) }
+        return anchor.at.addingTimeInterval(Double(sample - anchor.sample) / Double(sampleRate))
+    }
 }
 
 /// Files live in ~/Library/Application Support/Verbatim/Recordings/<id>/.

@@ -15,8 +15,12 @@ struct ContentView: View {
                         NoticeLine(text: notice) { model.recoveryNotice = nil }
                     }
                 }
+                .dropDestination(for: URL.self) { urls, _ in
+                    model.importAudio(urls)
+                    return true
+                }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if model.isBusy || model.stoppedNote != nil || model.deletedNote != nil {
+                    if model.isBusy || model.stoppedNote != nil || model.deletedNote != nil || model.status != nil {
                         BottomBar()
                     }
                 }

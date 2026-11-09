@@ -68,6 +68,7 @@ final class RecorderModel {
         refreshMicName()
         wirePipeline()
         observeSystem()
+        Transcriber.shared.start(with: recordings)
     }
 
     // MARK: - Start / Pause / Stop
@@ -203,7 +204,10 @@ final class RecorderModel {
         stoppedNote = stopped
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(10))
-            if self?.stoppedNote == stopped { self?.stoppedNote = nil }
+            guard let self, self.stoppedNote == stopped else { return }
+            self.stoppedNote = nil
+            // Undo Stop is no longer possible, so the recording is final: transcribe it.
+            Transcriber.shared.enqueue(id)
         }
     }
 
@@ -269,6 +273,7 @@ final class RecorderModel {
             return
         }
         recordings.remove(at: i)
+        Transcriber.shared.forget(id)
         if selection == id { selection = nil }
         if stoppedNote?.recordingID == id { stoppedNote = nil }
         guard let url = trashed as URL? else { return }
@@ -297,8 +302,79 @@ final class RecorderModel {
             return
         }
         reload()
+        Transcriber.shared.reload(note.info.id)
         selection = note.info.id
     }
+
+    // MARK: - Import (Voice Memos and other files)
+
+    /// Copies each file in as a new recording, then transcribes it.
+    func importAudio(_ urls: [URL]) {
+        let bad = urls.filter { !AudioImport.canImport($0) }
+        if let first = bad.first {
+            show("Verbatim can't open .\(first.pathExtension) files. Use \(AudioImport.allowedText).")
+        }
+        for url in urls where AudioImport.canImport(url) {
+            importOne(url)
+        }
+    }
+
+    private func importOne(_ url: URL) {
+        let attrs = try? url.resourceValues(forKeys: [.creationDateKey])
+        var info = RecordingInfo(
+            id: UUID(),
+            title: url.deletingPathExtension().lastPathComponent,
+            createdAt: attrs?.creationDate ?? Date(),
+            state: .stopped
+        )
+        info.importedFrom = url.lastPathComponent
+        do {
+            try RecordingStore.create(info)
+        } catch {
+            show("Couldn't import \(url.lastPathComponent): \(error.localizedDescription)")
+            return
+        }
+        recordings.append(info)
+        recordings.sort { $0.createdAt > $1.createdAt }
+        selection = info.id
+        Transcriber.shared.setImporting(info.id, true)
+
+        let id = info.id
+        let destination = RecordingStore.audioURL(id)
+        let access = url.startAccessingSecurityScopedResource()
+        Task { [weak self] in
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let samples = try await AudioImport.convert(url, to: destination)
+                guard let self, let i = self.recordings.firstIndex(where: { $0.id == id }) else { return }
+                self.recordings[i].samples = samples
+                self.recordings[i].endedAt = self.recordings[i].createdAt.addingTimeInterval(Double(samples) / 16_000)
+                try? RecordingStore.save(self.recordings[i])
+                Transcriber.shared.setImporting(id, false)
+                Transcriber.shared.enqueue(id)
+            } catch {
+                Transcriber.shared.setImporting(id, false)
+                try? FileManager.default.removeItem(at: RecordingStore.folder(id))
+                guard let self else { return }
+                self.recordings.removeAll { $0.id == id }
+                if self.selection == id { self.selection = nil }
+                self.show("Couldn't import \(url.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// A message in the status spot. When not recording, it clears itself.
+    func show(_ text: String) {
+        let s = Status(text: text)
+        status = s
+        guard !isBusy else { return }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(12))
+            if self?.status == s, self?.isBusy == false { self?.status = nil }
+        }
+    }
+
+    func clearStatus() { status = nil }
 
     // MARK: - Library
 
