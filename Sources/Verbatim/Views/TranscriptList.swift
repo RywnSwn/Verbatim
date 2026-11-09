@@ -21,6 +21,7 @@ struct TranscriptList: View {
     var volatile: String = ""
     var isLive = false
 
+    @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
     @State private var editing: EditKey?
@@ -39,7 +40,7 @@ struct TranscriptList: View {
 
         var id: String {
             switch self {
-            case .line(let l, let s): "\(s == .live ? "l" : "c")\(l.start)"
+            case .line(let l, let s): TranscriptRow.id(s, l.start)
             case .checkedUpTo: "checked"
             case .volatile: "volatile"
             }
@@ -66,7 +67,7 @@ struct TranscriptList: View {
                         lineRow(line, source)
                     case .checkedUpTo(let seconds):
                         HStack(spacing: 10) {
-                            Text("Checked up to \(info.timeLabel(seconds))")
+                            Text("Checked up to \(info.timeLabel(seconds, style: timeStyle))")
                                 .font(.system(size: 13, design: .serif).italic())
                                 .foregroundStyle(.secondary)
                             Rectangle().fill(Theme.line).frame(height: 1)
@@ -85,6 +86,7 @@ struct TranscriptList: View {
                     }
                 }
             }
+            .scrollTargetLayout()
             .frame(maxWidth: 760, alignment: .leading)
             .padding(.horizontal, 32)
             .padding(.vertical, 24)
@@ -108,6 +110,8 @@ struct TranscriptList: View {
             if !fieldFocused, editing != nil { save() }
         }
         .onDisappear { if editing != nil { save() } }
+        .onChange(of: model.matchJump) { jumpToMatch() }
+        .onAppear { if !model.searchText.isEmpty { jumpToMatch() } }
         .overlay(alignment: .bottom) {
             if isLive, !atBottom {
                 Button {
@@ -123,15 +127,51 @@ struct TranscriptList: View {
         }
     }
 
-    /// Don't scroll away from a line you're editing.
-    private var followsLive: Bool { isLive && atBottom && editing == nil }
+    /// Don't scroll away from a line you're editing or a search hit.
+    private var followsLive: Bool { isLive && atBottom && editing == nil && model.searchText.isEmpty }
+
+    // MARK: - Search
+
+    private var query: String { model.searchText.trimmingCharacters(in: .whitespaces) }
+
+    private var matches: [SearchMatch] { model.searchMatches(info.id) }
+
+    private var currentMatch: SearchMatch? {
+        let all = matches
+        guard !all.isEmpty else { return nil }
+        return all[min(model.matchIndex, all.count - 1)]
+    }
+
+    private func jumpToMatch() {
+        guard let match = currentMatch else { return }
+        withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: match.rowID, anchor: .center) }
+    }
+
+    /// The line's text with search hits in yellow; the current hit stronger.
+    private func highlighted(_ text: String, _ source: LineSource, _ start: Double) -> AttributedString {
+        let ranges = RecorderModel.ranges(of: query, in: text)
+        guard !ranges.isEmpty else { return AttributedString(text) }
+        let current = currentMatch.flatMap { $0.source == source && $0.start == start ? $0.occurrence : nil }
+        var result = AttributedString()
+        var cursor = text.startIndex
+        for (k, r) in ranges.enumerated() {
+            result += AttributedString(String(text[cursor..<r.lowerBound]))
+            var hit = AttributedString(String(text[r]))
+            hit.backgroundColor = k == current ? Theme.highlightCurrent : Theme.highlight
+            hit.foregroundColor = Theme.ink
+            result += hit
+            cursor = r.upperBound
+        }
+        result += AttributedString(String(text[cursor...]))
+        return result
+    }
 
     private func lineRow(_ line: Transcript.Line, _ source: LineSource) -> some View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
         let grey = source == .live && !line.isLocked
         return HStack(alignment: .firstTextBaseline, spacing: 18) {
-            Text(info.timeLabel(line.start))
+            Text(info.timeLabel(line.start, style: timeStyle))
                 .font(.callout)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
@@ -150,7 +190,7 @@ struct TranscriptList: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text(line.text)
+                Text(query.isEmpty ? AttributedString(line.text) : highlighted(line.text, source, line.start))
                     .font(Theme.transcript)
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .foregroundStyle(grey ? Theme.ink.opacity(0.62) : Theme.ink)
@@ -175,8 +215,8 @@ struct TranscriptList: View {
         .contentShape(Rectangle())
         .onTapGesture { if !isEditing { begin(line, source) } }
         .contextMenu {
-            Button("Copy this line") { model.copyLines([line]) }
-            Button("Copy from here down") { model.copyLines(linesFrom(line, source)) }
+            Button("Copy this line") { model.copyLines(info, [line]) }
+            Button("Copy from here down") { model.copyLines(info, linesFrom(line, source)) }
             Divider()
             Button("Edit line") { begin(line, source) }
             Button("Delete line") { model.deleteLine(info.id, source, start: line.start) }
@@ -224,9 +264,13 @@ struct TranscriptList: View {
 }
 
 extension RecordingInfo {
-    /// Clock time (10:42) for recordings, time since start (37:12) for imported files.
-    func timeLabel(_ seconds: Double) -> String {
-        if importedFrom != nil {
+    /// Times in the style picked in Settings.
+    func timeLabel(_ seconds: Double) -> String { timeLabel(seconds, style: TimeStyle.current) }
+
+    /// Clock time (10:42) or time since start (37:12). Imported files always
+    /// use time since start: there is no clock time for them.
+    func timeLabel(_ seconds: Double, style: TimeStyle) -> String {
+        if importedFrom != nil || style == .sinceStart {
             let s = Int(seconds)
             return s >= 3600
                 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
@@ -236,28 +280,67 @@ extension RecordingInfo {
     }
 }
 
-/// The Copy all button: copies, then says "Copied 58 lines" for a moment.
-struct CopyAllButton: View {
-    let lines: [Transcript.Line]
-    @State private var copiedLabel: String?
+/// The ink Copy all button with an arrow for the other copies, like the
+/// layout in docs/design/Main.dc.html. After copying it says "Copied 58 lines"
+/// for a moment. Shortcuts live in the Transcript menu.
+struct CopyButton: View {
+    @Environment(RecorderModel.self) private var model
+    let id: UUID
+    let hasLines: Bool
 
     var body: some View {
-        Button(copiedLabel ?? "Copy all") { copy() }
-            .buttonStyle(.ink)
-            .keyboardShortcut("c", modifiers: [.command, .shift])
-            .disabled(lines.isEmpty)
-            .help(lines.isEmpty ? "Nothing to copy yet" : "Copy the whole transcript (⇧⌘C)")
-    }
-
-    private func copy() {
-        guard !lines.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(lines.map(\.text).joined(separator: "\n"), forType: .string)
-        let label = "Copied \(lines.count) lines"
-        copiedLabel = label
-        Task {
-            try? await Task.sleep(for: .seconds(1.8))
-            if copiedLabel == label { copiedLabel = nil }
+        HStack(spacing: 0) {
+            Button(model.copyFeedback?.text ?? "Copy all") { model.copy(.all) }
+                .buttonStyle(.plain)
+                .padding(.leading, 12)
+                .padding(.trailing, 8)
+                .padding(.vertical, 5)
+                .contentShape(Rectangle())
+                .help(hasLines ? "Copy the whole transcript (⇧⌘C)" : "Nothing to copy yet")
+            Rectangle()
+                .fill(Theme.paper.opacity(0.35))
+                .frame(width: 1, height: 14)
+            Menu {
+                Button("Copy all") { model.copy(.all) }
+                Button("Copy new since last copy") { model.copy(.new) }
+                Button("Copy last 10 minutes") { model.copy(.lastTenMinutes) }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.paper)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .padding(.trailing, 4)
+            .help("More ways to copy")
+            .accessibilityLabel("More ways to copy")
         }
+        .font(.callout.weight(.medium))
+        .foregroundStyle(Theme.paper)
+        .background(Theme.ink, in: Capsule())
+        .opacity(hasLines ? 1 : 0.35)
+        .disabled(!hasLines)
+        .fixedSize()
+    }
+}
+
+/// Export as plain text or Markdown. Never overwrites a file without asking.
+struct ExportMenu: View {
+    @Environment(RecorderModel.self) private var model
+    let hasLines: Bool
+
+    var body: some View {
+        Menu {
+            Button("Plain text (.txt)…") { model.export(.text) }
+            Button("Markdown (.md)…") { model.export(.markdown) }
+        } label: {
+            Label("Export", systemImage: "square.and.arrow.up")
+        }
+        .disabled(!hasLines)
+        .help(hasLines ? "Save the transcript as a file" : "Nothing to export yet")
     }
 }

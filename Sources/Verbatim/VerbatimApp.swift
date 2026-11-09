@@ -34,6 +34,31 @@ struct VerbatimApp: App {
                 Button("Transcribe a Recording…") { model.chooseFilesToImport() }
                     .keyboardShortcut("o", modifiers: .command)
             }
+            CommandGroup(replacing: .textEditing) {
+                Button("Find…") { model.requestFind() }
+                    .keyboardShortcut("f", modifiers: .command)
+                    .disabled(model.shownID == nil)
+                Button("Find Next") { model.nextMatch(1) }
+                    .keyboardShortcut("g", modifiers: .command)
+                    .disabled(model.searchText.isEmpty)
+                Button("Find Previous") { model.nextMatch(-1) }
+                    .keyboardShortcut("g", modifiers: [.command, .shift])
+                    .disabled(model.searchText.isEmpty)
+            }
+            CommandMenu("Transcript") {
+                Group {
+                    Button("Copy All") { model.copy(.all) }
+                        .keyboardShortcut("c", modifiers: [.command, .shift])
+                    Button("Copy New Since Last Copy") { model.copy(.new) }
+                        .keyboardShortcut("c", modifiers: [.command, .option])
+                    Button("Copy Last 10 Minutes") { model.copy(.lastTenMinutes) }
+                    Divider()
+                    Button("Export as Plain Text…") { model.export(.text) }
+                        .keyboardShortcut("e", modifiers: [.command, .shift])
+                    Button("Export as Markdown…") { model.export(.markdown) }
+                }
+                .disabled(!model.hasShownLines)
+            }
             CommandMenu("Recording") {
                 Button(model.isBusy ? "Stop Recording" : "Start Recording") {
                     model.toggleRecording()

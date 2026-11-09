@@ -48,6 +48,7 @@ struct DetailView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: model.selection) { model.searchText = "" }
         .foregroundStyle(Theme.ink)
         .background(Theme.paper)
     }
