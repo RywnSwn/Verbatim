@@ -74,7 +74,7 @@ Ask Mr. Yurt before recording class.
   Privacy & Security > "Open Anyway" (right-click > Open no longer skips
   the warning on recent macOS).
 - No auto update yet: Ryan downloads each new build by hand until step 11.
-- No app icon yet (generic icon). Add in the visual design step.
+- No app icon yet (generic icon). Ryan wants to pick one later.
 
 ## How recording works (step 2)
 - Audio: `AVCaptureSession` on the chosen mic, converted to 16 kHz mono
