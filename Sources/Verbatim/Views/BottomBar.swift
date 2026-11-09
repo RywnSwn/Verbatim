@@ -15,6 +15,8 @@ struct BottomBar: View {
                     undoBar(note.text, undo: "Undo Stop") { model.undoStop() }
                 } else if let note = model.deletedNote {
                     undoBar("Moved \(note.info.title) to the Trash.", undo: "Undo") { model.undoDelete() }
+                } else if let status = model.status {
+                    undoBar(status.text, undo: "OK") { model.clearStatus() }
                 }
             }
             .frame(height: 56)
