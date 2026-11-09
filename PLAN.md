@@ -5,9 +5,7 @@ recording (works) and the in-app updater (works: signed v0.1.15 installed
 by hand, updated in-app to v0.1.18). Step 3 (transcription) built but not
 reported on yet: ask Ryan how the model download and accuracy went.
 Next: step 4 (live transcript). Step 2b (visual design) after that.
-Work is in stacked PRs RywnSwn/Verbatim#3 (steps 1-2), #4 (step 3),
-#5 (step 11 + sidebar buttons); merge in that order. If they aren't merged
-yet, branch the next step from `claude/step-11-updates`, not `main`.
+All of it is merged into `main` (RywnSwn/Verbatim#3, #4, #5).
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
