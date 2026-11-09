@@ -1,9 +1,11 @@
+import AppKit
 import SwiftUI
 
 /// Timer, waveform, Pause/Stop in the middle, status spot on the right.
 /// After Stop it shows "Saved ... Undo Stop" for 10 seconds.
 struct BottomBar: View {
     @Environment(RecorderModel.self) private var model
+    @Environment(Updater.self) private var updater
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,6 +19,14 @@ struct BottomBar: View {
                     undoBar("Moved \(note.info.title) to the Trash.", undo: "Undo") { model.undoDelete() }
                 } else if let status = model.status {
                     undoBar(status.text, undo: "OK") { model.clearStatus() }
+                } else if case .ready(let version) = updater.state {
+                    if let problem = updater.installProblem {
+                        undoBar("Version \(version) is ready. \(problem)", undo: "Show app") {
+                            NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+                        }
+                    } else {
+                        undoBar("Version \(version) is ready.", undo: "Restart to update") { updater.installAndRestart() }
+                    }
                 }
             }
             .frame(height: 56)

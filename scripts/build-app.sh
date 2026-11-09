@@ -19,9 +19,12 @@ cp "$BIN" "$APP/Contents/MacOS/Verbatim"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD/" Support/Info.plist > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist"
 
-# Ad-hoc signature: required to run on Apple Silicon, not a paid Apple ID.
-codesign --force --sign - --timestamp=none "$APP"
+# Sign with Verbatim's own certificate when CI provides one (SIGN_IDENTITY), so
+# macOS remembers the mic permission across updates. Otherwise ad-hoc ("-"),
+# which still runs on Apple Silicon. Neither needs a paid Apple ID.
+codesign --force --sign "${SIGN_IDENTITY:--}" --timestamp=none "$APP"
 codesign --verify --verbose "$APP"
+codesign -d -r- "$APP"
 
 ditto -c -k --keepParent "$APP" "$OUT/Verbatim.zip"
 echo "Built $APP (version $VERSION, build $BUILD)"

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(RecorderModel.self) private var model
+    @Environment(Updater.self) private var updater
 
     var body: some View {
         @Bindable var model = model
@@ -20,7 +21,7 @@ struct ContentView: View {
                     return true
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if model.isBusy || model.stoppedNote != nil || model.deletedNote != nil || model.status != nil {
+                    if model.isBusy || model.stoppedNote != nil || model.deletedNote != nil || model.status != nil || updater.isReady {
                         BottomBar()
                     }
                 }

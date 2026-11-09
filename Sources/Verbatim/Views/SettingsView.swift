@@ -8,6 +8,9 @@ struct SettingsView: View {
             Tab("General", systemImage: "gearshape") {
                 GeneralSettings()
             }
+            Tab("Updates", systemImage: "arrow.down.circle") {
+                UpdateSettings()
+            }
         }
         .frame(width: 520)
     }
@@ -53,4 +56,48 @@ struct GeneralSettings: View {
     private var chosenMic: Mic? { mics.first { $0.id == chosenID } }
 
     private func refresh() { mics = Microphones.list() }
+}
+
+struct UpdateSettings: View {
+    @Environment(Updater.self) private var updater
+    @AppStorage(Updater.autoKey) private var auto = true
+    @AppStorage(Updater.testBuildsKey) private var testBuilds = true
+
+    var body: some View {
+        Form {
+            LabeledContent("Version:") {
+                Text(AppInfo.version).textSelection(.enabled)
+            }
+            Toggle("Check for updates automatically", isOn: $auto)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Include test builds", isOn: $testBuilds)
+                Text("Test builds have changes Claude is still working on, so you can try them before they're final.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            LabeledContent("") {
+                HStack(spacing: 10) {
+                    Button("Check Now") { Task { await updater.check(userInitiated: true) } }
+                        .disabled(updater.state == .checking)
+                    Text(statusText)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.columns)
+        .padding(24)
+    }
+
+    private var statusText: String {
+        switch updater.state {
+        case .checking: return "Checking…"
+        case .downloading(let v): return "Downloading \(v)…"
+        case .ready(let v): return "\(v) is ready. Restart from the bar at the bottom of the window."
+        case .idle:
+            guard let last = updater.lastChecked else { return "" }
+            return "Last checked \(last.formatted(date: .omitted, time: .shortened))"
+        }
+    }
 }

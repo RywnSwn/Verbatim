@@ -6,16 +6,25 @@ struct VerbatimApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = RecorderModel.shared
     @State private var transcriber = Transcriber.shared
+    @State private var updater = Updater.shared
 
     var body: some Scene {
         WindowGroup("Verbatim", id: "main") {
             ContentView()
                 .environment(model)
                 .environment(transcriber)
+                .environment(updater)
                 .frame(minWidth: 820, minHeight: 540)
+                .task { updater.startAutomaticChecks() }
         }
         .defaultSize(width: 1200, height: 780)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    Task { await updater.check(userInitiated: true) }
+                }
+                Button("Remove Verbatim and Its Data…") { Uninstaller.run() }
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Transcribe a Recording…") { openFiles() }
                     .keyboardShortcut("o", modifiers: .command)
@@ -42,6 +51,7 @@ struct VerbatimApp: App {
         Settings {
             SettingsView()
                 .environment(model)
+                .environment(updater)
         }
     }
 
