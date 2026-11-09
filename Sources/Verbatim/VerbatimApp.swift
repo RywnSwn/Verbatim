@@ -26,7 +26,7 @@ struct VerbatimApp: App {
                 Button("Remove Verbatim and Its Data…") { Uninstaller.run() }
             }
             CommandGroup(replacing: .newItem) {
-                Button("Transcribe a Recording…") { openFiles() }
+                Button("Transcribe a Recording…") { model.chooseFilesToImport() }
                     .keyboardShortcut("o", modifiers: .command)
             }
             CommandMenu("Recording") {
@@ -53,15 +53,6 @@ struct VerbatimApp: App {
                 .environment(model)
                 .environment(updater)
         }
-    }
-
-    private func openFiles() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.audio, .movie]
-        panel.allowsMultipleSelection = true
-        panel.message = "Pick a Voice Memo or other recording. Your original file isn't changed."
-        panel.prompt = "Transcribe"
-        if panel.runModal() == .OK { model.importAudio(panel.urls) }
     }
 }
 

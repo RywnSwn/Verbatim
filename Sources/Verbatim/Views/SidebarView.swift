@@ -47,6 +47,24 @@ struct SidebarView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Divider()
+                    .padding(.bottom, 6)
+                Button {
+                    model.chooseFilesToImport()
+                } label: {
+                    Label("Transcribe a file…", systemImage: "doc.badge.plus")
+                }
+                .buttonStyle(.borderless)
+                .help("Pick a Voice Memo or other recording to turn into text (⌘O)")
+                Text("Or drop a Voice Memo anywhere.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+        }
         .alert("Rename recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newTitle)
             Button("Rename") {

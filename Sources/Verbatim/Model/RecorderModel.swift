@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import Observation
+import UniformTypeIdentifiers
 
 /// The app's recording state. One recording at a time.
 @MainActor
@@ -307,6 +308,16 @@ final class RecorderModel {
     }
 
     // MARK: - Import (Voice Memos and other files)
+
+    /// The file picker behind the sidebar button and File > Transcribe a Recording (⌘O).
+    func chooseFilesToImport() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio, .movie]
+        panel.allowsMultipleSelection = true
+        panel.message = "Pick a Voice Memo or other recording. Your original file isn't changed."
+        panel.prompt = "Transcribe"
+        if panel.runModal() == .OK { importAudio(panel.urls) }
+    }
 
     /// Copies each file in as a new recording, then transcribes it.
     func importAudio(_ urls: [URL]) {
