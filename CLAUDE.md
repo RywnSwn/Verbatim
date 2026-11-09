@@ -11,7 +11,7 @@ plain words. Never use em dashes in anything written for Ryan.
 UX matters a lot to him. He hates apps that don't consider the user.
 
 ## Current state
-Steps 1, 2, 3, 4 and 11 merged; next is step 5. See `PLAN.md` for build order and progress,
+Steps 1, 2, 3, 4 and 11 merged; step 5 built on a branch, waiting for Ryan's test. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).

@@ -127,3 +127,12 @@ It runs on the Neural Engine, which Whisper mostly doesn't use. Apple's
 engine fills in only while Parakeet is still downloading, so the first
 recording still gets live text and costs no extra memory. Options Ryan
 didn't pick: Parakeet only, or a Settings switch to compare both.
+
+## Step 5 choices (2026-11-09)
+- Cut chunks between live lines (they already break at pauses), so a live
+  line is never half checked. Energy based quiet point as fallback.
+- Merge seams word by word (Whisper word timestamps) with 1 s overlap,
+  instead of segment level, so words aren't doubled or dropped.
+- Whisper is loaded only while a chunk is being checked, then freed (8 GB
+  Mac). Costs a few seconds per chunk, saves ~1 GB most of the class.
+- The recording in progress goes before imported files in the queue.
