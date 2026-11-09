@@ -11,7 +11,7 @@ plain words. Never use em dashes in anything written for Ryan.
 UX matters a lot to him. He hates apps that don't consider the user.
 
 ## Current state
-Planning and layout done, no code yet. See `PLAN.md` for build order and progress,
+Steps 1 (build) and 2 (recording) built. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).
@@ -33,8 +33,12 @@ decided and why (read it before re-arguing a choice).
 - Tell Ryan clearly when a step is complete and when to switch to a new
   chat. Let him review before moving on. Explain every UX idea in plain
   words, and use the ux-planner skill for UI work.
-- No pull requests for small things (docs, plan updates, small fixes).
-  Ryan is not a dev; only open a PR for a real milestone, or if he asks.
+- No pull requests for small things (docs, plan updates, small fixes):
+  commit those straight to `main`. Only open a PR for a real milestone
+  (a finished step from `PLAN.md`), or if Ryan asks. Ryan is not a dev.
+- Never keep the random branch name a chat starts with (like
+  `claude/inspiring-newton-...`). Name the branch after the work, e.g.
+  `claude/step-3-transcribe-file`, and rename it if the work changes.
 - Pin library versions. Read a library's real source/docs instead of
   guessing APIs.
 
