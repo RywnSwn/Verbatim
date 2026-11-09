@@ -10,8 +10,6 @@
 	<string>com.rywnswn.verbatim</string>
 	<key>CFBundleExecutable</key>
 	<string>Verbatim</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
