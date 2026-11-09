@@ -198,7 +198,7 @@ struct TranscriptStatusLine: View {
 
     private var message: (String, String?, (() -> Void)?)? {
         let id = info.id
-        let original = info.importedFrom.map { " Your original file isn't touched." } ?? ""
+        let original = info.importedFrom == nil ? "" : " Your original file isn't touched."
         if transcriber.importing.contains(id) {
             return ("Importing \(info.importedFrom ?? info.title).\(original)", nil, nil)
         }
