@@ -79,7 +79,7 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         s.addOutput(output)
 
         runtimeObserver = NotificationCenter.default.addObserver(
-            forName: .AVCaptureSessionRuntimeError, object: s, queue: .main
+            forName: AVCaptureSession.runtimeErrorNotification, object: s, queue: .main
         ) { [weak self] _ in
             self?.onRuntimeError?()
         }

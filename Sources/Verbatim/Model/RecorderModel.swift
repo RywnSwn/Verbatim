@@ -367,7 +367,7 @@ final class RecorderModel {
             MainActor.assumeIsolated { self?.didWake() }
         })
         let nc = NotificationCenter.default
-        observers.append(nc.addObserver(forName: .AVCaptureDeviceWasDisconnected, object: nil, queue: .main) { [weak self] note in
+        observers.append(nc.addObserver(forName: AVCaptureDevice.wasDisconnectedNotification, object: nil, queue: .main) { [weak self] note in
             let id = (note.object as? AVCaptureDevice)?.uniqueID
             MainActor.assumeIsolated { self?.deviceDisconnected(id) }
         })

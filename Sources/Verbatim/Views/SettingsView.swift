@@ -45,8 +45,8 @@ struct GeneralSettings: View {
         .formStyle(.columns)
         .padding(24)
         .onAppear(perform: refresh)
-        .onReceive(NotificationCenter.default.publisher(for: .AVCaptureDeviceWasConnected)) { _ in refresh() }
-        .onReceive(NotificationCenter.default.publisher(for: .AVCaptureDeviceWasDisconnected)) { _ in refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in refresh() }
         .onChange(of: chosenID) { model.micSettingChanged() }
     }
 
