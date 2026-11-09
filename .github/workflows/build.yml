@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5.0.0
+
+      - name: Tool versions
+        run: |
+          sw_vers
+          xcode-select -p
+          swift --version
+
+      - name: Build Verbatim.app
+        run: scripts/build-app.sh "0.1.${{ github.run_number }}" "${{ github.run_number }}"
+
+      - name: Publish to Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v0.1.${{ github.run_number }}"
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            FLAGS="--latest"
+            NOTE="Download Verbatim.zip below, unzip it, and move Verbatim to Applications."
+          else
+            FLAGS="--prerelease"
+            NOTE="Test build from branch ${{ github.ref_name }}. Download Verbatim.zip below, unzip it, and move Verbatim to Applications."
+          fi
+          gh release create "$TAG" build/Verbatim.zip \
+            --target "${{ github.sha }}" \
+            --title "Verbatim 0.1.${{ github.run_number }}" \
+            --notes "$NOTE" \
+            $FLAGS
