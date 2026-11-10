@@ -54,6 +54,14 @@ class depends on it.
       Foundation Models (offline, free). Needs Apple Intelligence on.
       Ryan can still rename.
 
+## Ryan's feedback: the app feels empty (2026-11-10)
+Ryan: "Claude is a simple app but it feels well fleshed out, small things
+add up." Settings feels tiny, no "delete all" button. Wants that polish.
+Plan: a dedicated chat that does steps 9 (Storage: Recently deleted,
+delete all, storage screen) and 10 (Polish: fuller Settings, first-launch
+screen, menu bar, small touches) with the ux-planner skill. Start by
+listing small touches and showing Ryan a mockup before building.
+
 ## Open questions
 - Is Parakeet's live text good enough in a real class? Is 2 s delay OK?
 - Does Apple's engine need the Speech Recognition permission at all?
