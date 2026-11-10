@@ -7,7 +7,7 @@ list is below). Step 5 is still not tested
 by Ryan: ask him to run the "Step 5 test list" below. Also still
 unanswered: line editing on a real Mac, step 3 accuracy on a real class
 Voice Memo.
-Next: step 7. App icon later.
+Next: step 5c (drop Whisper, see below), then step 7. App icon later.
 Fix on 2026-11-10: accurate pass was dropping sentences (prompt too long,
 see step 5 notes). Ask Ryan to record the same kind of lecture again and
 compare live vs checked text. Second test (Transcribe again): no more
@@ -38,6 +38,8 @@ class depends on it.
        pauses, one job at a time, overlap merge, live text upgrades.
 6. [x] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
        export .txt/.md, search. Merged, not tested by Ryan yet.
+5c. [ ] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
+       "Plan for step 5c" below.
 7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
 8. [ ] **Corrections memory.** Word list as Whisper hint, confirmed fix
        rules, Words screen.
@@ -54,6 +56,41 @@ class depends on it.
       "English: Anansi and the sky god", with Apple's on-device
       Foundation Models (offline, free). Needs Apple Intelligence on.
       Ryan can still rename.
+
+## Plan for step 5c: drop Whisper (do this next, in its own chat)
+Why: in Ryan's two lecture tests Whisper skipped sentences, doubled lines
+and made text up ("I'm not a vampire" x15), even after fixes. Parakeet's
+live text was better. FluidAudio's own benchmark (LibriSpeech test-clean):
+Parakeet Unified streaming 2.21% avg WER, batch 2.16%, so the live text is
+already about as accurate as it gets, and RNNT can't invent sentences.
+What to build:
+- Recordings: the live text IS the transcript. No checking pass, no
+  "Checked up to" divider, no "Checking 10:40 to 10:45", live lines full
+  ink once final (half-said words can stay lighter). Edits/locks/deletes
+  keep working as they do on live lines.
+- Imports and "Transcribe again": run Parakeet over the WAV (feed the
+  existing streaming engine at full speed, ~66x real time per FluidAudio,
+  so a 1 h class in about a minute). Same model, no new download. Decide
+  whether an import waits while recording (one model in memory, 8 GB Mac)
+  or uses a second instance; waiting is simpler.
+- Recordings made with Apple's backup engine (Parakeet wasn't ready):
+  offer/auto "Transcribe again" with Parakeet after Stop.
+- Remove WhisperKit (Package.swift), `WhisperEngine.swift`, the Whisper
+  download/prepare lines on the start screen, `ChunkMerge` / `TextCheck`
+  and the 5 min chunk logic in `Transcriber`. Keep the queue idea for files.
+- On launch, delete the old Whisper model folder (626 MB) in
+  App Support/Verbatim/Models once, so Ryan gets the space back.
+- Old recordings with a Whisper transcript.json still open and show it.
+- Step 8 changes: no Whisper prompt any more. Word list becomes fix rules
+  (find/replace) and maybe FluidAudio vocabulary boosting
+  (`configureVocabularyBoosting`, needs an extra CTC model; check size).
+- Spec and design docs: remove "accurate pass" parts.
+- Optional later: FluidAudio's `UnifiedAsrManager` (batch, full-attention
+  15 s encoder, same checkpoint) is a bit more accurate for files but needs
+  an extra encoder download. Not worth it unless Ryan finds files worse.
+Test list for Ryan: record a lecture video, text is final right away and
+stays the same after Stop; import a Voice Memo, done in about a minute;
+Settings/start screen no longer mention a second model; disk space back.
 
 ## Ryan's feedback: the app feels empty (2026-11-10)
 Ryan: "Claude is a simple app but it feels well fleshed out, small things

@@ -151,3 +151,12 @@ sentences and read worse than live. Cause: WhisperKit's decoder context is
 224 tokens per 30 s window and our 120 token prompt left too little room,
 so windows got cut off and skipped. Prompt is now 32 tokens. Live lines
 Whisper clearly skipped are kept, so the accurate pass can't lose text.
+
+## Drop Whisper, Parakeet only (2026-11-10)
+Ryan, after two lecture tests: "lets just ditch whisper, Parakeet is really
+good". Whisper's accurate pass skipped, doubled and invented text; fixes
+(smaller prompt, clean-up against live text) helped but it still read
+worse than live. Parakeet Unified's streaming WER is within 0.05 points of
+its own batch mode, and it doesn't hallucinate. One model also means one
+download and less memory on the 8 GB Mac. Replaces "Two passes: live +
+accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
