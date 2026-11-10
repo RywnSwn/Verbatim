@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// Which list a transcript line lives in: the accurate text, or the live text.
+/// Which list a transcript line lives in: an old Whisper transcript, or the live text (the transcript since step 5c).
 enum LineSource: Hashable {
     case checked
     case live
@@ -18,6 +18,7 @@ extension RecorderModel {
         guard var line = Self.line(id, source, start: start), line.text != trimmed else { return }
         line.text = trimmed
         line.locked = true
+        line.words = nil // word times no longer match; the player estimates
         guard let old = Self.replace(id, source, start: start, with: line) else { return }
         offerLineUndo("Line edited.") {
             Self.restore(id, source, start: start, old)
@@ -58,7 +59,7 @@ extension RecorderModel {
         return lines.first { $0.start == start }
     }
 
-    /// A live line the accurate pass has reached since: it lives in the
+    /// (Before step 5c) a live line the Whisper pass had reached: it lives in the
     /// checked text now (locked, if Ryan edited it).
     private static func resolved(_ id: UUID, _ source: LineSource, _ line: Transcript.Line) -> LineSource {
         guard source == .live else { return .checked }

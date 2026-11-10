@@ -1,7 +1,7 @@
 import Foundation
 
-/// The accurate transcript of one recording, saved as transcript.json next to audio.wav.
-/// Saved after every piece, so a crash or Cancel keeps what was done.
+/// The old Whisper transcript (transcript.json), from before step 5c. New
+/// text lives in live.json only; old files still open and can be edited.
 struct Transcript: Codable, Equatable {
     static let currentFormat = 1
 
@@ -12,8 +12,15 @@ struct Transcript: Codable, Equatable {
         var text: String
         /// Ryan edited this line: later passes never change it. nil = not locked.
         var locked: Bool? = nil
+        /// When each word starts (seconds into the audio), for the player's word
+        /// highlight. Same count as the words in `text`; nil after an edit or in
+        /// older files (the highlight then estimates).
+        var words: [Double]? = nil
 
         var isLocked: Bool { locked == true }
+
+        /// Middle of the line.
+        var middle: Double { (start + end) / 2 }
     }
 
     var formatVersion = Transcript.currentFormat
@@ -45,7 +52,7 @@ enum TranscriptStore {
     }
 }
 
-/// Reads pieces of our 16 kHz mono WAV files as Float samples for Whisper.
+/// Reads pieces of our 16 kHz mono WAV files as Float samples.
 enum WavReader {
     static let rate: Int64 = 16_000
 

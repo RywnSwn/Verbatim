@@ -102,8 +102,8 @@ final class RecorderModel {
         refreshMicName()
         wirePipeline()
         observeSystem()
+        LiveTranscriber.shared.start(with: recordings) // loads the texts Transcriber looks at
         Transcriber.shared.start(with: recordings)
-        LiveTranscriber.shared.start(with: recordings)
     }
 
     // MARK: - Start / Pause / Stop
@@ -253,8 +253,8 @@ final class RecorderModel {
             try? await Task.sleep(for: .seconds(10))
             guard let self, self.stoppedNote == stopped else { return }
             self.stoppedNote = nil
-            // Undo Stop is no longer possible, so the recording is final: check the
-            // rest of it (the 5 minute chunks during class did the start).
+            // Undo Stop is no longer possible, so the recording is final. Files
+            // waiting for the recording to end can start now.
             Transcriber.shared.recordingFinal(id)
         }
     }
@@ -409,8 +409,9 @@ final class RecorderModel {
         guard audioDeleteBlocker(id) == nil, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         let info = recordings[i]
         // The spec says never delete audio before its text is done. Ask, since it can't be finished after.
-        let finished = Transcriber.shared.transcripts[id]?.finished == true
-        if !finished {
+        let t = Transcriber.shared
+        let noText = (LiveTranscriber.shared.texts[id]?.lines.isEmpty ?? true) && t.transcripts[id]?.finished != true
+        if t.isUnfinished(id) || noText {
             let alert = NSAlert()
             alert.messageText = "Delete the audio before the text is finished?"
             alert.informativeText = "Without the audio, Verbatim can't finish or redo the text for \(info.title). The text that's there now stays."
@@ -655,7 +656,6 @@ final class RecorderModel {
         if Date().timeIntervalSince(lastSave) > 10 {
             updateCurrent { $0.samples = samples }
             saveCurrent()
-            if let id = currentID { Transcriber.shared.audioGrew(id) }
         }
         if elapsed >= Self.maxLength {
             stop(note: "Stopped at 3 hours, the longest a recording can be. Saved.")

@@ -172,6 +172,29 @@ final class LiveTranscriber {
 
     func reload(_ id: UUID) { texts[id] = LiveStore.load(id) }
 
+    // MARK: - Going over a file (Transcriber)
+
+    /// Replaces the whole text (Transcribe again, starting a file pass).
+    func setText(_ t: LiveText, for id: UUID) {
+        commit(t, id)
+    }
+
+    /// Words from going over the file, added to whatever is on screen now (so
+    /// edits made meanwhile are kept), plus progress. Saved every time.
+    func addPass(_ words: [LivePiece], offset: Double, to id: UUID, doneUpTo: Double?, finished: Bool) {
+        var t = texts[id] ?? LiveText(pass: LiveText.FilePass())
+        for p in words {
+            let extend = !(editing?.id == id && editing?.start == t.lines.last?.start)
+            LineBuilder.add(LivePiece(text: p.text, start: p.start + offset, end: p.end + offset), to: &t.lines, extendLast: extend)
+        }
+        if !words.isEmpty, t.engines.last != ParakeetEngine.name { t.engines.append(ParakeetEngine.name) }
+        var pass = t.pass ?? LiveText.FilePass()
+        if let doneUpTo { pass.doneUpTo = max(pass.doneUpTo, doneUpTo) }
+        pass.finished = finished
+        t.pass = pass
+        commit(t, id)
+    }
+
     // MARK: - From the runner
 
     fileprivate func setStatus(_ s: Status?, run: Int) {
@@ -221,6 +244,7 @@ final class LiveTranscriber {
                 UserDefaults.standard.set(true, forKey: Self.preparedKey)
                 downloadTask = nil
                 modelState = .ready
+                Transcriber.shared.modelReady()
             } catch {
                 downloadTask = nil
                 if case .paused = modelState { return }
@@ -318,7 +342,7 @@ actor LiveRunner {
         if let engine {
             await deliver(await engine.end(), offset: offset, engine: name, id: id, run: run)
         }
-        await parakeet.unload() // free the memory for the accurate pass
+        await parakeet.unload() // free the memory for files waiting to be transcribed
         await MainActor.run { LiveTranscriber.shared.finished(id, run: run) }
     }
 

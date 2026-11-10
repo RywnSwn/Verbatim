@@ -1,14 +1,15 @@
 import AppKit
 import SwiftUI
 
-/// Transcript lines with the time in a left gutter. Checked (accurate) text is
-/// in full ink; live text is a little grey, under a thin "Checked up to" line.
+/// Transcript lines with the time in a left gutter, in full ink. Words still
+/// being worked out (Apple's engine) are lighter. Old recordings can have a
+/// Whisper part first, then a thin "Old transcript ends at" line.
 /// Follows new text only if you're already at the bottom; otherwise a
 /// "Jump to live" button shows.
 ///
 /// Editing: click a line (Enter saves, Esc cancels, clicking away
 /// saves), or right-click for Copy / Edit / Delete. Edited lines turn full ink
-/// and get a lock; later passes never change them. Every change has Undo in
+/// and get a lock; new words never go into them. Every change has Undo in
 /// the bottom bar.
 struct TranscriptList: View {
     @Environment(RecorderModel.self) private var model
@@ -86,7 +87,7 @@ struct TranscriptList: View {
                         lineRow(line, source)
                     case .checkedUpTo(let seconds):
                         HStack(spacing: 10) {
-                            Text("Checked up to \(info.timeLabel(seconds, style: timeStyle))")
+                            Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
                                 .font(.system(size: 13, design: .serif).italic())
                                 .foregroundStyle(.secondary)
                             Rectangle().fill(Theme.line).frame(height: 1)
@@ -175,10 +176,10 @@ struct TranscriptList: View {
         withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: match.rowID, anchor: .center) }
     }
 
-    /// The playing line with the word being heard marked. Lines only save a
-    /// start and end, so the word is estimated: the line's time is shared out
-    /// by word length, with a little extra after commas and full stops.
-    /// Step 5c saves real word times; use those when a line has them.
+    /// The playing line with the word being heard marked. Uses the word times
+    /// Parakeet gave (step 5c). Older or edited lines have none, so the word is
+    /// estimated: the line's time shared out by word length, with a little
+    /// extra after commas and full stops.
     private func wordHighlighted(_ line: Transcript.Line) -> AttributedString {
         let text = line.text
         var words: [Range<String.Index>] = []
@@ -189,7 +190,14 @@ struct TranscriptList: View {
             while i < text.endIndex, !text[i].isWhitespace { i = text.index(after: i) }
             if start < i { words.append(start..<i) }
         }
-        guard !words.isEmpty, line.end > line.start else { return AttributedString(text) }
+        guard !words.isEmpty else { return AttributedString(text) }
+        var current = words.count - 1
+        if let starts = line.words, starts.count == words.count {
+            let t = playback.time + 0.05
+            current = max(0, (starts.lastIndex { $0 <= t }) ?? 0)
+            return marked(text, words[current])
+        }
+        guard line.end > line.start else { return AttributedString(text) }
         let weights: [Double] = words.map { r in
             let w = text[r]
             var weight = Double(w.count) + 2
@@ -201,14 +209,17 @@ struct TranscriptList: View {
         let total = weights.reduce(0, +)
         let fraction = (playback.time - line.start) / (line.end - line.start)
         let target = min(max(fraction, 0), 1) * total
-        var current = words.count - 1
         var sum = 0.0
         for (k, w) in weights.enumerated() {
             sum += w
             if target < sum { current = k; break }
         }
+        return marked(text, words[current])
+    }
+
+    private func marked(_ text: String, _ word: Range<String.Index>) -> AttributedString {
         var result = AttributedString(text)
-        if let r = Range(words[current], in: result) {
+        if let r = Range(word, in: result) {
             result[r].backgroundColor = Theme.accent.opacity(0.22)
         }
         return result
@@ -236,7 +247,6 @@ struct TranscriptList: View {
     private func lineRow(_ line: Transcript.Line, _ source: LineSource) -> some View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
-        let grey = source == .live && !line.isLocked
         let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
         return HStack(alignment: .firstTextBaseline, spacing: 18) {
             timeGutter(line, isPlaying: isPlaying)
@@ -258,7 +268,7 @@ struct TranscriptList: View {
                     : isPlaying ? wordHighlighted(line) : AttributedString(line.text))
                     .font(Theme.transcript)
                     .lineSpacing(Theme.transcriptLineSpacing)
-                    .foregroundStyle(grey ? Theme.ink.opacity(0.62) : Theme.ink)
+                    .foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .pointerStyle(.horizontalText) // text cursor: says "you can type here"
             }
@@ -273,7 +283,7 @@ struct TranscriptList: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .help("You edited this line, so later passes won't change it. Click to unlock.")
+                .help("You edited this line. Click to unlock.")
                 .accessibilityLabel("Unlock line")
             }
         }

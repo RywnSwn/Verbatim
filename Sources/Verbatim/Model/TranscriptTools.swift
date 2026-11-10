@@ -39,7 +39,7 @@ enum TranscriptRow {
 extension RecorderModel {
     // MARK: - Lines on screen
 
-    /// Checked text, then the live text the accurate pass hasn't reached yet.
+    /// An old Whisper transcript (if any), then the live text after it.
     /// Same as what the transcript view shows (without half-said words).
     func shownLines(_ id: UUID) -> [(line: Transcript.Line, source: LineSource)] {
         let transcript = Transcriber.shared.transcripts[id]
