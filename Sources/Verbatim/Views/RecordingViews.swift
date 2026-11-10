@@ -128,6 +128,8 @@ struct PastRecordingView: View {
     @Environment(LiveTranscriber.self) private var live
     let info: RecordingInfo
 
+    private var playback: Playback { .shared }
+    private var playing: Bool { playback.isShowing(info.id) && playback.isPlaying }
     private var transcript: Transcript? { transcriber.transcripts[info.id] }
     private var checked: [Transcript.Line] { transcript?.lines ?? [] }
 
@@ -146,7 +148,12 @@ struct PastRecordingView: View {
             } else {
                 TranscriptList(info: info, checked: checked, live: liveLines, checkedUpTo: transcript?.doneUpTo)
             }
+            if playback.isShowing(info.id) {
+                PlayerBar(info: info)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.easeOut(duration: 0.2), value: playback.isShowing(info.id))
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(subtitle)
         .toolbar {
@@ -159,22 +166,31 @@ struct PastRecordingView: View {
                     }
                     .help("New recording (⌘N)")
                 }
+                Button {
+                    if playback.isShowing(info.id) { playback.toggle() } else { model.playAudio(info.id) }
+                } label: {
+                    Label(playing ? "Pause audio" : "Play audio", systemImage: playing ? "pause.fill" : "play.fill")
+                }
+                .disabled(!info.hasAudio)
+                .help(info.hasAudio ? (playing ? "Pause the audio (⌥⌘P)" : "Play the audio here (⌥⌘P)")
+                    : "The audio was deleted. The text is still here.")
                 ExportMenu(hasLines: !(checked + liveLines).isEmpty)
                 Menu {
-                    Button("Play audio") { NSWorkspace.shared.open(RecordingStore.audioURL(info.id)) }
-                    Button("Show in Finder") {
-                        NSWorkspace.shared.activateFileViewerSelecting([RecordingStore.audioURL(info.id)])
-                    }
+                    Button("Show in Finder") { model.showInFinder(info) }
                     Divider()
                     Button("Transcribe again") { transcriber.redo(info.id) }
-                        .disabled(transcriber.active?.id == info.id || transcriber.importing.contains(info.id)
-                            || transcriber.isGrowing(info.id))
+                        .disabled(!info.hasAudio || transcriber.active?.id == info.id
+                            || transcriber.importing.contains(info.id) || transcriber.isGrowing(info.id))
                     Divider()
+                    Button(SidebarView.deleteAudioTitle(info, blocker: model.audioDeleteBlocker(info.id))) {
+                        model.deleteAudio(info.id)
+                    }
+                    .disabled(model.audioDeleteBlocker(info.id) != nil)
                     Button("Move to Trash") { model.delete(info.id) }
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
                 }
-                .help("Play audio, Show in Finder, Transcribe again, Move to Trash")
+                .help("Show in Finder, Transcribe again, Delete audio only, Move to Trash")
             }
             ToolbarItem(placement: .primaryAction) {
                 CopyButton(id: info.id, hasLines: !(checked + liveLines).isEmpty)
@@ -195,6 +211,9 @@ struct PastRecordingView: View {
                 .font(.system(size: 30, weight: .medium, design: .serif))
             if transcript?.finished == true {
                 Text("No speech found in this recording.")
+                    .foregroundStyle(.secondary)
+            } else if !info.hasAudio {
+                Text("The audio was deleted before it was transcribed.")
                     .foregroundStyle(.secondary)
             } else if transcript == nil, !transcriber.isQueued(info.id), transcriber.active?.id != info.id,
                       !transcriber.importing.contains(info.id), transcriber.errors[info.id] == nil {
@@ -253,6 +272,7 @@ struct TranscriptStatusLine: View {
             return ("Importing \(info.importedFrom ?? info.title).\(original)", nil, nil)
         }
         if let error = transcriber.errors[id] {
+            if !info.hasAudio { return (error, nil, nil) }
             return (error, "Try again", { transcriber.enqueue(id) })
         }
         if let job = transcriber.active, job.id == id {
@@ -273,6 +293,9 @@ struct TranscriptStatusLine: View {
         }
         if let t = transcriber.transcripts[id], !t.finished {
             let minutes = Int(t.doneUpTo / 60)
+            if !info.hasAudio {
+                return ("Transcribed the first \(minutes) min. The audio was deleted, so the rest can't be done.", nil, nil)
+            }
             return ("Transcribed the first \(minutes) min.", "Continue", { transcriber.enqueue(id) })
         }
         return nil

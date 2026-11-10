@@ -27,6 +27,25 @@ struct TranscriptList: View {
     @State private var editing: EditKey?
     @State private var draft = ""
     @FocusState private var fieldFocused: Bool
+    /// Last time you scrolled by hand, so playing audio doesn't yank the view away.
+    @State private var lastUserScroll = Date.distantPast
+
+    private var playback: Playback { .shared }
+    /// Times in the gutter play from that line (finished recordings with audio).
+    private var canPlay: Bool { !isLive && info.hasAudio }
+
+    /// The line being heard right now, while the player is open.
+    private var playingRowID: String? {
+        guard !isLive, playback.isShowing(info.id) else { return nil }
+        let t = playback.time + 0.05
+        var found: String?
+        for row in rows {
+            if case .line(let line, let source) = row {
+                if line.start <= t { found = TranscriptRow.id(source, line.start) } else { break }
+            }
+        }
+        return found
+    }
 
     private struct EditKey: Hashable {
         var source: LineSource
@@ -110,6 +129,15 @@ struct TranscriptList: View {
             if !fieldFocused, editing != nil { save() }
         }
         .onDisappear { if editing != nil { save() } }
+        .onScrollPhaseChange { _, phase in
+            if phase == .interacting || phase == .tracking || phase == .decelerating { lastUserScroll = Date() }
+        }
+        .onChange(of: playingRowID) { _, id in
+            // Follow the audio, unless you scrolled in the last 8 seconds or are editing/searching.
+            guard let id, playback.isPlaying, editing == nil, model.searchText.isEmpty,
+                  Date().timeIntervalSince(lastUserScroll) > 8 else { return }
+            withAnimation(.easeOut(duration: 0.3)) { position.scrollTo(id: id, anchor: .center) }
+        }
         .onChange(of: model.matchJump) { jumpToMatch() }
         .onAppear { if !model.searchText.isEmpty { jumpToMatch() } }
         .overlay(alignment: .bottom) {
@@ -170,12 +198,9 @@ struct TranscriptList: View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
         let grey = source == .live && !line.isLocked
+        let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
         return HStack(alignment: .firstTextBaseline, spacing: 18) {
-            Text(info.timeLabel(line.start, style: timeStyle))
-                .font(.callout)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .frame(width: 52, alignment: .trailing)
+            timeGutter(line, isPlaying: isPlaying)
             if isEditing {
                 TextField("Line", text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -212,9 +237,21 @@ struct TranscriptList: View {
                 .accessibilityLabel("Unlock line")
             }
         }
+        .background {
+            if isPlaying {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Theme.line.opacity(0.7))
+                    .padding(.horizontal, -8)
+                    .padding(.vertical, -5)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture { if !isEditing { begin(line, source) } }
         .contextMenu {
+            if canPlay {
+                Button("Play from here") { model.playAudio(info.id, from: line.start) }
+                Divider()
+            }
             Button("Copy this line") { model.copyLines(info, [line]) }
             Button("Copy from here down") { model.copyLines(info, linesFrom(line, source)) }
             Divider()
@@ -227,6 +264,29 @@ struct TranscriptList: View {
         }
         .accessibilityAction(named: "Edit line") { begin(line, source) }
         .accessibilityAction(named: "Delete line") { model.deleteLine(info.id, source, start: line.start) }
+    }
+
+    /// The time on the left. On finished recordings it's a button: click to
+    /// hear the audio from that line (the text itself still edits).
+    @ViewBuilder private func timeGutter(_ line: Transcript.Line, isPlaying: Bool) -> some View {
+        let label = Text(info.timeLabel(line.start, style: timeStyle))
+            .font(isPlaying ? .callout.weight(.semibold) : .callout)
+            .monospacedDigit()
+            .foregroundStyle(isPlaying ? Theme.accent : .secondary)
+            .frame(width: 52, alignment: .trailing)
+        if canPlay {
+            Button {
+                model.playAudio(info.id, from: line.start)
+            } label: {
+                label.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .pointerStyle(.link)
+            .help("Play from here")
+            .accessibilityLabel("Play from \(info.timeLabel(line.start, style: timeStyle))")
+        } else {
+            label
+        }
     }
 
     private func linesFrom(_ line: Transcript.Line, _ source: LineSource) -> [Transcript.Line] {

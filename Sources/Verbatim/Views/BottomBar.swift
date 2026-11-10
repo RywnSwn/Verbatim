@@ -111,7 +111,7 @@ struct BottomBar: View {
         switch action {
         case .stopRecording: "Stop recording"
         case .resume: "Resume"
-        case .undoDelete, .undoLine: "Undo"
+        case .undoDelete, .undoLine, .undoAudioDelete: "Undo"
         case .showFile: "Show in Finder"
         }
     }

@@ -30,9 +30,13 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     var importedFrom: String?
     /// Where the last copy ended (seconds into the audio), for "Copy new since last copy".
     var copiedUpTo: Double?
+    /// Set when Ryan deleted only the audio (right-click > Delete Audio Only).
+    /// The transcript stays.
+    var audioDeletedAt: Date?
 
     var duration: TimeInterval { Double(samples) / Double(sampleRate) }
     var isActive: Bool { state != .stopped }
+    var hasAudio: Bool { audioDeletedAt == nil }
 
     /// Clock time for a point in the audio, skipping over pauses and sleep.
     func wallTime(atSecond seconds: Double) -> Date {
@@ -59,6 +63,12 @@ enum RecordingStore {
 
     static func audioURL(_ id: UUID) -> URL { folder(id).appending(path: "audio.wav") }
     static func infoURL(_ id: UUID) -> URL { folder(id).appending(path: "recording.json") }
+
+    /// Size of the audio file in bytes, nil if it's gone.
+    static func audioSize(_ id: UUID) -> Int64? {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: audioURL(id).path)
+        return (attrs?[.size] as? NSNumber)?.int64Value
+    }
 
     static func create(_ info: RecordingInfo) throws {
         try FileManager.default.createDirectory(at: folder(info.id), withIntermediateDirectories: true)

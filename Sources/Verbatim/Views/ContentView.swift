@@ -48,7 +48,11 @@ struct DetailView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onChange(of: model.selection) { model.searchText = "" }
+        .onChange(of: model.selection) {
+            model.searchText = ""
+            // Audio belongs to the transcript on screen; don't keep playing behind another one.
+            if Playback.shared.id != model.selection { Playback.shared.close() }
+        }
         .foregroundStyle(Theme.ink)
         .background(Theme.paper)
     }

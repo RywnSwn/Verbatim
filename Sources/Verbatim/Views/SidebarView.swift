@@ -30,10 +30,16 @@ struct SidebarView: View {
                                             newTitle = info.title
                                             renaming = info
                                         }
-                                        Button("Show in Finder") {
-                                            NSWorkspace.shared.activateFileViewerSelecting([RecordingStore.audioURL(info.id)])
-                                        }
+                                        Button("Show in Finder") { model.showInFinder(info) }
                                         Divider()
+                                        if info.id != model.currentID {
+                                            Button(info.hasAudio ? "Play Audio" : "Audio Deleted") { model.playAudio(info.id) }
+                                                .disabled(!info.hasAudio)
+                                        }
+                                        Button(SidebarView.deleteAudioTitle(info, blocker: model.audioDeleteBlocker(info.id))) {
+                                            model.deleteAudio(info.id)
+                                        }
+                                        .disabled(model.audioDeleteBlocker(info.id) != nil)
                                         Button("Move to Trash") { model.delete(info.id) }
                                             .keyboardShortcut(.delete, modifiers: .command)
                                             .disabled(!model.canDelete(info.id))
@@ -91,6 +97,15 @@ struct SidebarView: View {
         }
     }
 
+    /// "Delete Audio Only (115 MB)", so it's clear what you get back,
+    /// or why it can't be used right now.
+    static func deleteAudioTitle(_ info: RecordingInfo, blocker: String?) -> String {
+        if !info.hasAudio { return "Delete Audio Only (already deleted)" }
+        if let blocker { return "Delete Audio Only (\(blocker.lowercased()))" }
+        guard let bytes = RecordingStore.audioSize(info.id) else { return "Delete Audio Only" }
+        return "Delete Audio Only (\(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)))"
+    }
+
     private var groups: [SidebarGroup] {
         let cal = Calendar.current
         let now = Date()
@@ -138,7 +153,8 @@ struct SidebarRow: View {
             return phase == .paused ? "Paused, \(len)" : "Recording now, \(len)"
         }
         let day = info.createdAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
-        return "\(day), \(RecorderModel.minutesText(info.duration))"
+        let base = "\(day), \(RecorderModel.minutesText(info.duration))"
+        return info.hasAudio ? base : base + ", no audio"
     }
 }
 

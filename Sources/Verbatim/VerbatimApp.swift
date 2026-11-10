@@ -73,6 +73,17 @@ struct VerbatimApp: App {
 
                 Divider()
 
+                Button("Play or Pause Audio") {
+                    if let id = model.shownID {
+                        if Playback.shared.isShowing(id) { Playback.shared.toggle() } else { model.playAudio(id) }
+                    }
+                }
+                .keyboardShortcut("p", modifiers: [.command, .option])
+                .disabled(model.shownID == nil || model.shownID == model.currentID
+                    || model.recordings.first { $0.id == model.shownID }?.hasAudio != true)
+
+                Divider()
+
                 Button("Undo Stop") { model.undoStop() }
                     .disabled(model.stoppedNote == nil)
             }

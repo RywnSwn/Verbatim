@@ -13,7 +13,7 @@ final class RecorderModel {
 
     /// What the status spot in the bottom bar says. `action` adds a text link.
     struct Status: Equatable {
-        enum Action { case stopRecording, resume, undoDelete, undoLine, showFile }
+        enum Action { case stopRecording, resume, undoDelete, undoLine, showFile, undoAudioDelete }
         var text: String
         var action: Action?
         var id = UUID()
@@ -90,6 +90,8 @@ final class RecorderModel {
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var lineUndo: (() -> Void)?
     @ObservationIgnored private var fileToShow: URL?
+    /// Delete Audio Only, for Undo: which recording and where its audio went in the Trash.
+    @ObservationIgnored private var audioUndo: (id: UUID, trashURL: URL)?
 
     var current: RecordingInfo? { recordings.first { $0.id == currentID } }
     var isBusy: Bool { phase != .idle }
@@ -134,6 +136,8 @@ final class RecorderModel {
             selection = nil
             return
         }
+        // The mic would pick up the speakers.
+        Playback.shared.close()
 
         let (dev, fellBack) = Microphones.resolve()
         guard let dev else {
@@ -307,6 +311,7 @@ final class RecorderModel {
         case .showFile:
             if let url = fileToShow { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             status = nil
+        case .undoAudioDelete: undoAudioDelete()
         }
     }
 
@@ -327,6 +332,7 @@ final class RecorderModel {
             return
         }
         recordings.remove(at: i)
+        Playback.shared.forget(id)
         Transcriber.shared.forget(id)
         LiveTranscriber.shared.forget(id)
         if selection == id { selection = nil }
@@ -360,6 +366,97 @@ final class RecorderModel {
         Transcriber.shared.reload(note.info.id)
         LiveTranscriber.shared.reload(note.info.id)
         selection = note.info.id
+    }
+
+    // MARK: - Audio (play in the app, delete audio only)
+
+    /// Selects the audio in Finder, or the folder if the audio was deleted.
+    func showInFinder(_ info: RecordingInfo) {
+        let audio = RecordingStore.audioURL(info.id)
+        let target = FileManager.default.fileExists(atPath: audio.path) ? audio : RecordingStore.folder(info.id)
+        NSWorkspace.shared.activateFileViewerSelecting([target])
+    }
+
+    /// Opens the player bar under the transcript and plays.
+    func playAudio(_ id: UUID, from start: Double? = nil) {
+        guard id != currentID else { return }
+        if let info = recordings.first(where: { $0.id == id }), !info.hasAudio {
+            flash("The audio for \(info.title) was deleted. The text is still here.")
+            return
+        }
+        if let problem = Playback.shared.play(id, from: start) {
+            flash(problem)
+            return
+        }
+        selection = id // the player bar lives under that transcript
+    }
+
+    /// Why Delete Audio Only can't be used right now, nil if it can.
+    func audioDeleteBlocker(_ id: UUID) -> String? {
+        guard let info = recordings.first(where: { $0.id == id }) else { return "Not found" }
+        if !info.hasAudio { return "Audio already deleted" }
+        if id == currentID { return "Still recording" }
+        let t = Transcriber.shared
+        if t.active?.id == id || t.isQueued(id) || t.importing.contains(id) || t.isGrowing(id) {
+            return "Wait for the text to finish"
+        }
+        return nil
+    }
+
+    /// Moves only audio.wav to the Mac's Trash. The transcript stays.
+    /// Undo for 10 s; after that it's still in the Trash.
+    func deleteAudio(_ id: UUID) {
+        guard audioDeleteBlocker(id) == nil, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
+        let info = recordings[i]
+        // The spec says never delete audio before its text is done. Ask, since it can't be finished after.
+        let finished = Transcriber.shared.transcripts[id]?.finished == true
+        if !finished {
+            let alert = NSAlert()
+            alert.messageText = "Delete the audio before the text is finished?"
+            alert.informativeText = "Without the audio, Verbatim can't finish or redo the text for \(info.title). The text that's there now stays."
+            alert.addButton(withTitle: "Delete Audio")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        Playback.shared.forget(id)
+        let audio = RecordingStore.audioURL(id)
+        var trashed: NSURL?
+        if FileManager.default.fileExists(atPath: audio.path) {
+            do {
+                try FileManager.default.trashItem(at: audio, resultingItemURL: &trashed)
+            } catch {
+                status = Status(text: "Couldn't delete the audio: \(error.localizedDescription)")
+                return
+            }
+        }
+        recordings[i].audioDeletedAt = Date()
+        try? RecordingStore.save(recordings[i])
+
+        guard let url = trashed as URL? else { return }
+        audioUndo = (id, url)
+        let s = Status(text: "Deleted the audio for \(info.title). The text stays.", action: .undoAudioDelete)
+        status = s
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, self.status == s else { return }
+            self.status = nil
+            self.audioUndo = nil
+        }
+    }
+
+    func undoAudioDelete() {
+        guard let undo = audioUndo else { return }
+        audioUndo = nil
+        if status?.action == .undoAudioDelete { status = nil }
+        do {
+            try FileManager.default.moveItem(at: undo.trashURL, to: RecordingStore.audioURL(undo.id))
+        } catch {
+            status = Status(text: "Couldn't bring the audio back. It's still in the Trash.")
+            return
+        }
+        guard let i = recordings.firstIndex(where: { $0.id == undo.id }) else { return }
+        recordings[i].audioDeletedAt = nil
+        try? RecordingStore.save(recordings[i])
     }
 
     // MARK: - Import (Voice Memos and other files)
