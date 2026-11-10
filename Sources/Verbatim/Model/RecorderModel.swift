@@ -606,6 +606,13 @@ final class RecorderModel {
         try? RecordingStore.save(recordings[i])
     }
 
+    /// Markers (step 7b), seconds into the audio. See Markers.swift.
+    func setMarkers(_ id: UUID, _ markers: [Double]) {
+        guard let i = recordings.firstIndex(where: { $0.id == id }) else { return }
+        recordings[i].markers = markers.isEmpty ? nil : markers.sorted()
+        try? RecordingStore.save(recordings[i])
+    }
+
     func rename(_ id: UUID, to title: String) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let i = recordings.firstIndex(where: { $0.id == id }) else { return }

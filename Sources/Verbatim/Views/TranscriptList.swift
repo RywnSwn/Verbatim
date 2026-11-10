@@ -94,13 +94,15 @@ struct TranscriptList: View {
     var body: some View {
         let labels = Speakers.labeler(info.id)
         let options = labels.options(live)
+        let marked = Markers.markedStarts(checked + live, info.markers)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.lineGap) {
                 ForEach(rows) { row in
                     switch row {
                     case .line(let line, let source):
                         lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil,
-                                name: source == .live ? labels.name(line) : nil, options: options)
+                                name: source == .live ? labels.name(line) : nil, options: options,
+                                marked: marked.contains(line.start))
                     case .checkedUpTo(let seconds):
                         HStack(spacing: 10) {
                             Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
@@ -313,12 +315,23 @@ struct TranscriptList: View {
     }
 
     private func lineRow(_ line: Transcript.Line, _ source: LineSource, speaker: String?, name: String?,
-                         options: [Speakers.SpeakerOption]) -> some View {
+                         options: [Speakers.SpeakerOption], marked: Bool) -> some View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
         let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
         return HStack(alignment: .firstTextBaseline, spacing: 18) {
             timeGutter(line, isPlaying: isPlaying)
+                .overlay(alignment: .leading) {
+                    // The flag sits just left of the time, so long times still fit.
+                    if marked {
+                        Image(systemName: "flag.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Theme.ink)
+                            .offset(x: -15)
+                            .help("Marked. Right-click the line to remove it.")
+                            .accessibilityLabel("Marked")
+                    }
+                }
             if isEditing {
                 TextField("Line", text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -388,6 +401,11 @@ struct TranscriptList: View {
             Button("Copy from here down") { model.copyLines(info, linesFrom(line, source)) }
             Divider()
             Button("Edit line") { begin(line, source) }
+            if marked {
+                Button("Remove marker") { model.removeMarker(info.id, line: line) }
+            } else {
+                Button("Add marker here") { model.addMarker(info.id, line: line) }
+            }
             if source == .live {
                 Menu("Speaker") { speakerItems(line, current: speaker, name: name, options: options) }
             }
@@ -534,6 +552,7 @@ struct CopyButton: View {
                 Button("Copy all") { model.copy(.all) }
                 Button("Copy new since last copy") { model.copy(.new) }
                 Button("Copy last 10 minutes") { model.copy(.lastTenMinutes) }
+                Button("Copy marked parts only") { model.copy(.marked) }
             } label: {
                 Image(systemName: "chevron.down")
                     .font(.caption.weight(.semibold))

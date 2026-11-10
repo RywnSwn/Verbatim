@@ -11,8 +11,9 @@ Step 5c (drop Whisper) merged 2026-11-10 (RywnSwn/Verbatim#12) at Ryan's
 ask, with the audio shrink after Stop. Not fully tested yet: ask Ryan for
 the "Step 5c test list" and the audio shrink test. App icon later.
 Step 7 (speaker labels) merged 2026-11-10 (RywnSwn/Verbatim#13) before
-testing, at Ryan's ask: ask him for the "Step 7 test list". Next: step 7b
-(markers) in a new chat.
+testing, at Ryan's ask: ask him for the "Step 7 test list". Step 7b
+(markers) built the same day in the same chat (Ryan's ask): see "How markers
+work". Next: 7c (voice memory).
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -23,8 +24,7 @@ Fix on 2026-11-10: accurate pass was dropping sentences (prompt too long,
 see step 5 notes). Ask Ryan to record the same kind of lecture again and
 compare live vs checked text. Second test (Transcribe again): no more
 missing sentences, but doubled lines and made-up text; fixed the same day.
-Markers are step 7b and voice memory is step 7c (Ryan, 2026-11-10), both
-after he tests step 7.
+Markers are step 7b (built) and voice memory is step 7c (Ryan, 2026-11-10).
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -53,7 +53,7 @@ class depends on it.
        "Plan for step 5c" below.
 7. [x] **Speaker labels.** Speaker 1, 2..., rename once, click to fix.
        Merged, not tested by Ryan yet (see "How speaker labels work").
-7b. [ ] **Markers** (Ryan said yes, 2026-11-10). ⌘D while recording or
+7b. [x] **Markers** (Ryan said yes, 2026-11-10). Built, not tested. ⌘D while recording or
        right-click a line > Add marker here (also after class). Flag next to
        the time. Copy and export put "⚑ " in front of marked lines. "Copy
        marked parts only". Undo in the bottom bar.
@@ -600,3 +600,25 @@ Ask Mr. Yurt before recording class.
    list. Pick it, then "Change them too".
 6. Copy all, paste: `[Name]: "..."` lines.
 7. In class (with Mr. Yurt's OK): are students picked up, or missed?
+
+## How markers work (step 7b)
+- `Model/Markers.swift`. Saved as times (seconds into the audio) in
+  recording.json (`RecordingInfo.markers`), not on lines, so they survive
+  Transcribe again and Find speakers. A line is marked if a marker falls
+  between its start and the next line's start.
+- ⌘D (Recording > Add Marker) and the toolbar "Marker" button while
+  recording mark 1.5 s ago (you press just after hearing it). ⌘D also works
+  while the player plays a finished recording. Right-click a line: Add
+  marker here / Remove marker. "Marker added at 10:41. Undo" in the bottom bar.
+- Flag just left of the time in the gutter.
+- Copy and export put "⚑ " in front of marked lines. Copy arrow menu and
+  Transcript menu: "Copy marked parts only" ("Nothing marked yet" if none).
+- Not done yet: menu bar dropdown "Add marker" (comes with the menu bar in step 10).
+
+## Step 7b test list for Ryan
+1. Record, press ⌘D while someone talks: a flag shows by that line, "Marker
+   added at ..." with Undo at the bottom. Try the toolbar Marker button too.
+2. Right-click a line in an old recording > Add marker here, then Remove marker.
+3. Play a recording, press ⌘D: the line being heard gets the flag.
+4. Copy arrow > Copy marked parts only: just those lines, with ⚑ in front.
+5. Export as Markdown: marked lines start with ⚑.
