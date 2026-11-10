@@ -53,6 +53,15 @@ struct RecordingNowView: View {
         .navigationSubtitle(info.startedText)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
+                Button {
+                    model.addMarker()
+                } label: {
+                    Label("Marker", systemImage: "flag")
+                }
+                .labelStyle(.titleAndIcon)
+                .help("Mark this moment, like \"write this down\" (⌘D)")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 ExportMenu(hasLines: !(checked + lines).isEmpty)
             }
             ToolbarItem(placement: .primaryAction) {

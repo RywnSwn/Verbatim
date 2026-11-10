@@ -52,6 +52,7 @@ struct VerbatimApp: App {
                     Button("Copy New Since Last Copy") { model.copy(.new) }
                         .keyboardShortcut("c", modifiers: [.command, .option])
                     Button("Copy Last 10 Minutes") { model.copy(.lastTenMinutes) }
+                    Button("Copy Marked Parts Only") { model.copy(.marked) }
                     Divider()
                     Button("Export as Plain Text…") { model.export(.text) }
                         .keyboardShortcut("e", modifiers: [.command, .shift])
@@ -70,6 +71,10 @@ struct VerbatimApp: App {
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .disabled(!model.isBusy)
+
+                Button("Add Marker") { model.addMarker() }
+                    .keyboardShortcut("d", modifiers: .command)
+                    .disabled(model.markerTarget == nil)
 
                 Divider()
 

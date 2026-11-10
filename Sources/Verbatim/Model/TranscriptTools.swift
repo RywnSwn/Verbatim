@@ -60,7 +60,7 @@ extension RecorderModel {
 
     // MARK: - Copy
 
-    enum CopyKind { case all, new, lastTenMinutes }
+    enum CopyKind { case all, new, lastTenMinutes, marked }
 
     /// Lines that "Copy new since last copy" would copy.
     func newLines(_ id: UUID) -> [Transcript.Line] {
@@ -89,6 +89,13 @@ extension RecorderModel {
         case .lastTenMinutes:
             let end = all.map(\.end).max() ?? 0
             lines = all.filter { $0.end > end - 600 }
+        case .marked:
+            let marked = Markers.markedStarts(all, info.markers)
+            lines = all.filter { marked.contains($0.start) }
+            if lines.isEmpty {
+                copyFeedback = CopyFeedback(text: "Nothing marked yet")
+                return
+            }
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(Self.text(lines, info: info, markdown: false), forType: .string)
@@ -107,12 +114,14 @@ extension RecorderModel {
     static func text(_ lines: [Transcript.Line], info: RecordingInfo, markdown: Bool) -> String {
         let withTimes = TimeStyle.includeInCopies
         let labels = Speakers.labeler(info.id)
+        let marked = Markers.markedStarts(RecorderModel.shared.shownLines(info.id).map(\.line), info.markers)
         let rows = lines.map { line in
             var row = line.text
             if let name = labels.name(line) {
                 row = markdown ? "**\(name):** \(line.text)" : "[\(name)]: \"\(line.text)\""
             }
-            return withTimes ? "[\(info.timeLabel(line.start))] \(row)" : row
+            if withTimes { row = "[\(info.timeLabel(line.start))] \(row)" }
+            return marked.contains(line.start) ? "⚑ \(row)" : row
         }
         return rows.joined(separator: markdown ? "\n\n" : "\n")
     }
@@ -214,5 +223,5 @@ extension RecorderModel {
 
     // MARK: - Helpers
 
-    private func info(_ id: UUID) -> RecordingInfo? { recordings.first { $0.id == id } }
+    func info(_ id: UUID) -> RecordingInfo? { recordings.first { $0.id == id } }
 }

@@ -85,8 +85,9 @@ One screen, no tour (see `docs/design/`). It shows:
   when there's nothing yet.
 - Copy menu also has: **Copy new since last copy**, **Copy last 10
   minutes**, **Copy marked parts only**.
-- **Markers** (⌘D): flag a moment; shows as a flag next to the time and is
-  included in copies.
+- **Markers** (⌘D, toolbar Marker, or right-click a line): flag a moment;
+  shows as a flag next to the time. Copies and exports put ⚑ in front of
+  marked lines. Undo in the bottom bar.
 - **Messages** (mic changes, battery, falling behind, long silence) appear
   in the bottom bar status spot, never as popups.
 - **Export** .txt or .md, same script format, no intro, no headings.

@@ -33,6 +33,8 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     /// Set when Ryan deleted only the audio (right-click > Delete Audio Only).
     /// The transcript stays.
     var audioDeletedAt: Date?
+    /// Moments Ryan marked with ⌘D (seconds into the audio), step 7b.
+    var markers: [Double]?
 
     var duration: TimeInterval { Double(samples) / Double(sampleRate) }
     var isActive: Bool { state != .stopped }
