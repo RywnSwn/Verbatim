@@ -63,6 +63,7 @@ actor WhisperEngine {
         )
         let results = try await pipe.transcribe(audioArray: samples, decodeOptions: options)
         let echo = prompt.map(Self.key) ?? ""
+        var previous = ""
         return results
             .flatMap(\.segments)
             .compactMap { segment -> WhisperSegment? in
@@ -71,6 +72,10 @@ actor WhisperEngine {
                 // With a prompt, Whisper sometimes just repeats it on unclear audio.
                 let k = Self.key(text)
                 if k.count > 20, echo.contains(k) { return nil }
+                // Or it says the end of the last segment again ("...to protect
+                // them." then "And the whole point of government is to protect them.").
+                if Self.repeats(k, previous) { return nil }
+                previous = k
                 let words = (segment.words ?? []).compactMap { w -> WhisperWord? in
                     let word = Self.cleanWord(w.word)
                     guard !word.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
@@ -80,9 +85,12 @@ actor WhisperEngine {
             }
     }
 
-    /// Whisper allows up to 223 prompt tokens; a short one is safer (long
-    /// prompts make it more likely to copy the prompt instead of listening).
-    private static let promptTokenLimit = 120
+    /// WhisperKit's decoder holds only 224 tokens per 30 s window, and the
+    /// prompt counts against that. With a 120 token prompt only ~100 were left
+    /// for the text, so fast speech got cut off mid-window and the rest of the
+    /// window was skipped (Ryan's history lecture test: whole sentences gone).
+    /// 30 s of fast speech needs ~150 tokens, so keep the prompt small.
+    static let promptTokenLimit = 32
 
     /// Removes special tokens but keeps the leading space that separates words.
     private static func cleanWord(_ text: String) -> String {
@@ -104,6 +112,15 @@ actor WhisperEngine {
     private static func isJunk(_ text: String) -> Bool {
         let k = key(text)
         return k.isEmpty || junk.contains(k)
+    }
+
+    /// `k` is just the end of `previous` again, maybe with "and" or "so" in front.
+    private static func repeats(_ k: String, _ previous: String) -> Bool {
+        var k = k
+        for lead in ["and ", "so ", "but ", "then "] where k.hasPrefix(lead) {
+            k = String(k.dropFirst(lead.count))
+        }
+        return k.count > 15 && previous.hasSuffix(k)
     }
 
     /// Lowercase letters and spaces only, for comparing text.

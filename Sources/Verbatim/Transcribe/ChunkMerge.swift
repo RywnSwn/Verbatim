@@ -5,7 +5,8 @@ import Foundation
 /// - the overlap at the start of the piece isn't doubled (words before the cut
 ///   were already done by the previous piece),
 /// - lines Ryan deleted from the live text don't come back,
-/// - lines Ryan edited in the live text are kept as he wrote them (locked).
+/// - lines Ryan edited in the live text are kept as he wrote them (locked),
+/// - live lines Whisper skipped are kept instead of vanishing.
 enum ChunkMerge {
     /// A stretch of time (seconds into audio.wav) whose Whisper words are dropped.
     typealias Span = LiveText.Span
@@ -20,13 +21,19 @@ enum ChunkMerge {
     ///   - keepFrom: the cut where the previous piece ended. Earlier words are dropped.
     ///   - skip: deleted lines and locked lines; Whisper's words there are dropped.
     ///   - locked: Ryan's edited live lines that belong to this piece. Added as they are.
+    ///   - live: the other live lines of this piece. Any that Whisper mostly
+    ///     skipped are kept as they are, so no words go missing.
     static func lines(
         _ segments: [WhisperSegment],
         offset: Double,
         keepFrom: Double,
         skip: [Span],
-        locked: [Transcript.Line]
+        locked: [Transcript.Line],
+        live: [Transcript.Line] = []
     ) -> [Transcript.Line] {
+        let missed = skipped(live, by: segments, offset: offset, keepFrom: keepFrom)
+        let skip = skip + missed.map { Span(start: $0.start, end: $0.end) }
+        let locked = locked + missed
         var out: [Transcript.Line] = []
         for segment in segments {
             let words: [WhisperWord] = segment.words.isEmpty
@@ -54,6 +61,28 @@ enum ChunkMerge {
         }
         out += locked
         return out.sorted { $0.start < $1.start }
+    }
+
+    /// Whisper sometimes skips a stretch of speech (it stops early in a 30 s
+    /// window, or decides it was silence). Live lines where Whisper has less
+    /// than half as many words as the live text are such a stretch.
+    static let missedRatio = 0.5
+
+    static func skipped(_ live: [Transcript.Line], by segments: [WhisperSegment], offset: Double, keepFrom: Double) -> [Transcript.Line] {
+        let mids: [Double] = segments.flatMap { s -> [Double] in
+            s.words.isEmpty ? [(s.start + s.end) / 2 + offset] : s.words.map { ($0.start + $0.end) / 2 + offset }
+        }
+        // Segments without word times count as one word each, so give their
+        // live lines the benefit of the doubt.
+        let hasWordTimes = segments.allSatisfy { !$0.words.isEmpty }
+        return live.filter { line in
+            guard !line.isLocked, line.middle >= keepFrom else { return false }
+            let liveWords = line.text.split(whereSeparator: \.isWhitespace).count
+            guard liveWords >= 4 else { return false }
+            let whisperWords = mids.filter { $0 >= line.start - 0.5 && $0 <= line.end + 0.5 }.count
+            if !hasWordTimes { return whisperWords == 0 }
+            return Double(whisperWords) < Double(liveWords) * missedRatio
+        }
     }
 
     private static func keeps(_ word: WhisperWord, keepFrom: Double, skip: [Span]) -> Bool {

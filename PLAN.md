@@ -8,6 +8,9 @@ by Ryan: ask him to run the "Step 5 test list" below. Also still
 unanswered: line editing on a real Mac, step 3 accuracy on a real class
 Voice Memo.
 Next: step 7. App icon later.
+Fix on 2026-11-10: accurate pass was dropping sentences (prompt too long,
+see step 5 notes). Ask Ryan to record the same kind of lecture again and
+compare live vs checked text.
 Question for Ryan: markers (⌘D, "Copy marked parts only") are in the spec
 and layout but in no step. Add them to step 7 or 10, or drop them?
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
@@ -265,8 +268,16 @@ Ask Mr. Yurt before recording class.
   a locked live line, then adds the locked live lines as they are. A line
   belongs to the side of the cut its middle is on (`Line.middle`,
   `LiveText.unchecked(after:)`).
-- Prompt: the last 3 checked lines (max 300 chars, 120 tokens) go to
-  Whisper as context. Segments that just repeat the prompt are dropped.
+- Prompt: the last 3 checked lines (max 150 chars, 32 tokens) go to
+  Whisper as context. Was 120 tokens: WhisperKit's decoder holds only 224
+  tokens per 30 s window including the prompt, so fast speech got cut off
+  and the rest of the window skipped (Ryan's first real test, a history
+  lecture: whole sentences missing, accurate text worse than live). Step 8's
+  word list must fit in this small budget too.
+- Safety net: a live line where Whisper has under half the live line's
+  words (`ChunkMerge.skipped`) is kept as it is, so Whisper skipping a
+  stretch never loses text. Also drops a segment that just repeats the end
+  of the one before. Segments that just repeat the prompt are dropped.
   Step 8 adds the word list in `Transcriber.promptText`.
 - While Ryan edits a live line inside the chunk, the merge waits until he
   is done. Undo of a live edit/delete after the line got upgraded applies

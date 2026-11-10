@@ -445,7 +445,7 @@ final class Transcriber {
     private func promptText(_ id: UUID, _ t: Transcript, before seconds: Double) -> String? {
         let previous = (transcripts[id] ?? t).lines.filter { $0.end <= seconds + 0.5 }.suffix(3)
         let text = previous.map(\.text).joined(separator: " ")
-        return text.isEmpty ? nil : String(text.suffix(300))
+        return text.isEmpty ? nil : String(text.suffix(150))
     }
 
     /// If Ryan is editing a live line in this piece, wait until he's done, so
@@ -457,7 +457,8 @@ final class Transcriber {
     }
 
     /// Whisper's words for [from, to), minus lines Ryan deleted, plus lines he
-    /// edited in the live text (kept as he wrote them).
+    /// edited in the live text (kept as he wrote them), plus live lines Whisper
+    /// skipped.
     private func merged(_ id: UUID, _ segments: [WhisperSegment], offset: Double, from: Double, to: Double) -> [Transcript.Line] {
         let live = LiveTranscriber.shared.texts[id]
         let lockedLines = (live?.lines ?? []).filter(\.isLocked)
@@ -465,7 +466,8 @@ final class Transcriber {
         let skip = (live?.removed ?? []).filter { overlaps($0.start, $0.end) }
             + lockedLines.filter { overlaps($0.start, $0.end) }.map { ChunkMerge.Span(start: $0.start, end: $0.end) }
         let keep = lockedLines.filter { $0.middle >= from && $0.middle < to }
-        return ChunkMerge.lines(segments, offset: offset, keepFrom: from, skip: skip, locked: keep)
+        let others = (live?.lines ?? []).filter { !$0.isLocked && $0.middle >= from && $0.middle < to }
+        return ChunkMerge.lines(segments, offset: offset, keepFrom: from, skip: skip, locked: keep, live: others)
     }
 }
 

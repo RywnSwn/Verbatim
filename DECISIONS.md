@@ -144,3 +144,10 @@ controls. He questioned the blue Copy all, so the main button is ink
 (matching the mono waveform); bright Mac blue is gone, links use a dark
 ink blue. Sidebar and Settings stay standard Mac so the app still feels
 native. Auto-naming recordings with on-device AI added to nice-to-haves.
+
+## Whisper prompt kept tiny (2026-11-10)
+Ryan's first real lecture test: the accurate text was missing whole
+sentences and read worse than live. Cause: WhisperKit's decoder context is
+224 tokens per 30 s window and our 120 token prompt left too little room,
+so windows got cut off and skipped. Prompt is now 32 tokens. Live lines
+Whisper clearly skipped are kept, so the accurate pass can't lose text.
