@@ -24,7 +24,11 @@ see step 5 notes). Ask Ryan to record the same kind of lecture again and
 compare live vs checked text. Second test (Transcribe again): no more
 missing sentences, but doubled lines and made-up text; fixed the same day.
 Question for Ryan: markers (⌘D, "Copy marked parts only") are in the spec
-and layout but in no step. Add them to step 7 or 10, or drop them?
+and layout but in no step. Asked again 2026-11-10 (he'd forgotten what
+they are): add them to step 10, or drop them?
+Idea for later (Ryan asked for "smarter" names): remember voices across
+recordings (Sortformer can enroll a saved voice), so Mr. Yurt is named by
+itself. Or guess names from what's said ("Thanks, Mr. Yurt").
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -51,7 +55,7 @@ class depends on it.
        export .txt/.md, search. Merged, not tested by Ryan yet.
 5c. [x] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
        "Plan for step 5c" below.
-7. [~] **Speaker labels.** Teacher vs Student, click to fix. Built, waiting
+7. [~] **Speaker labels.** Speaker 1, 2..., rename once, click to fix. Built, waiting
        for Ryan's test (see "How speaker labels work").
 8. [ ] **Corrections memory.** Word list via Parakeet vocabulary boosting
        (~100 MB extra download, Ryan said yes), fix rules, Words screen.
@@ -126,7 +130,7 @@ listing small touches and showing Ryan a mockup before building.
 - Does Apple's engine need the Speech Recognition permission at all?
   (We ask only when it's actually used.)
 - Is large-v3 turbo (626 MB) fast enough on Ryan's M2? Test in step 3.
-- Speaker labels in a real class: is Mr. Yurt always "Mr. Yurt"? Do quiet
+- Speaker labels in a real class: is the teacher always Speaker 1? Do quiet
   students far from the Mac get missed (Sortformer's known weak spot)?
 - Is Ryan's Mac a MacBook Air (no fan, slows down when hot) or Pro?
 - Should a recording be able to "Keep audio" past 7 days?
@@ -566,15 +570,15 @@ Ask Mr. Yurt before recording class.
 - Saved: `Line.voice` (number, = listening session * 4 + Sortformer slot),
   `Line.speaker` (Ryan's pick for one line), `LiveText.voiceNames` (Ryan's
   pick for a whole voice), `voiceSessions`, `speakersFound`.
-- Names (`Model/Speakers.swift`): the voice with the most words in each
-  listening session is the teacher (Settings > General "Teacher", default
-  Mr. Yurt); every other voice shows as "Students show as" (default
-  Student). Stored as "#teacher"/"#student", so renaming in Settings
-  changes every recording.
-- Fixing: click the bold name (or right-click > Speaker): Mr. Yurt, Student,
-  names typed in this recording, Someone else... (types a name). If other
-  lines share that voice, the bottom bar says "N more lines sound like the
-  same voice. Change them too", then Undo.
+- Names (`Model/Speakers.swift`), changed the same day at Ryan's ask (he
+  uses it for videos too, not only Mr. Yurt's class): voices show as
+  "Speaker 1" (talks the most), "Speaker 2"... Click a name: "Rename
+  Speaker 1 everywhere..." (all its lines), or pick who said this one line
+  (this recording's speakers + names typed before, kept in UserDefaults
+  `recentSpeakerNames`, newest first, 8 max), or "Someone else...". After
+  a one-line change the bottom bar offers "Change them too", then Undo.
+  Stored as a name or "#v5" (same as voice 5).
+- "Find speakers again" drops voice renames (the voice numbers are new).
 - Copy: `[Mr. Yurt]: "text"`; Markdown export: `**Mr. Yurt:** text`. Lines
   with no speaker stay plain.
 - Old Whisper lines (transcript.json) never get speakers.
@@ -582,12 +586,13 @@ Ask Mr. Yurt before recording class.
 ## Step 7 test list for Ryan
 1. Update (test build from the step 7 branch). Start screen: "Downloading
    speaker labels" under "Speech model ready", then it goes away.
-2. Old recordings: "Finding who said what" at the top, then names appear.
-   Is the teacher right?
-3. Record a lecture video with two people talking (or talk over a video):
-   names show up live, a new line when the speaker changes.
-4. Click a name, pick Student: then "Change them too" in the bottom bar.
-   Undo works. Try Someone else... with a classmate's name.
-5. Settings > General: change Teacher to "Mr. Y": every transcript changes.
-6. Copy all, paste: `[Mr. Yurt]: "..."` lines.
+2. Old recordings: "Finding who said what" at the top, then "Speaker 1:"
+   etc. appear. Is the person who talks most Speaker 1?
+3. Record a video with two people talking: names show up live, a new line
+   when the speaker changes.
+4. Click "Speaker 1" > Rename everywhere, type a name: all their lines
+   change. Undo works.
+5. Open another recording, click a name: the name you typed is in the
+   list. Pick it, then "Change them too".
+6. Copy all, paste: `[Name]: "..."` lines.
 7. In class (with Mr. Yurt's OK): are students picked up, or missed?

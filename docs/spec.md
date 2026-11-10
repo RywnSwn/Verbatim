@@ -70,11 +70,11 @@ One screen, no tour (see `docs/design/`). It shows:
   them, and keeps deleted lines deleted. Click the lock to unlock.
 - **Recorded with Apple's backup engine** (Parakeet still downloading):
   after Stop, Parakeet redoes the whole recording by itself.
-- **Speaker labels:** teacher name comes from settings (default
-  "Mr. Yurt"). The voice that talks the most is the teacher, other voices
-  show as Student. Click a label to fix it; the bottom bar then offers to
-  change every line in that voice. "Someone else..." types a name. Old
-  recordings get labels by themselves once the speaker model is downloaded.
+- **Speaker labels:** voices show as "Speaker 1" (talks the most),
+  "Speaker 2"... Click a label to rename that voice everywhere, or to pick
+  who said that one line (then the bottom bar offers to change every line in
+  that voice). Typed names are offered in every recording. Old recordings
+  get labels by themselves once the speaker model is downloaded.
 - **Timestamps:** on every line, clock time by default (10:42), with an
   option for time since start (00:37).
 
@@ -131,7 +131,6 @@ One screen, no tour (see `docs/design/`). It shows:
 ## 9. Settings (kept small on purpose)
 
 **General**
-- Teacher name (default Mr. Yurt), student label (default Student)
 - Microphone (default: MacBook mic, never auto-switches to AirPods)
 - Timestamps: clock time / time since start
 
