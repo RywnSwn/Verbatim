@@ -56,10 +56,23 @@ actor SpeakerEngine {
     }
 
     /// A new stretch of listening: voices are numbered afresh (0 to 3).
-    func begin() async throws {
+    /// Known voices (step 7c) are played to it first; returns which number
+    /// each one got, so their lines get the name straight away.
+    @discardableResult
+    func begin(known: [KnownVoice] = []) async throws -> [Int: String] {
         try await load()
         diarizer?.reset()
         frames = VoiceFrames()
+        var names: [Int: String] = [:]
+        for voice in known {
+            guard let diarizer else { break }
+            if let speaker = try? diarizer.enrollSpeaker(withAudio: voice.samples, named: voice.name,
+                                                        overwritingAssignedSpeakerName: false),
+               names[speaker.index] == nil {
+                names[speaker.index] = voice.name
+            }
+        }
+        return names
     }
 
     /// 16 kHz mono samples, in order. Pauses don't need anything: it just

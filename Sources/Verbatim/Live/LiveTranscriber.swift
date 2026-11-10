@@ -177,10 +177,16 @@ final class LiveTranscriber {
 
     /// The speaker model starts listening on this recording again. Returns the
     /// number to add to its voices (0 to 3), so they don't mix with earlier ones.
-    func newVoiceSession(_ id: UUID) -> Int {
+    /// `names`: voices the speaker model already knows (step 7c), by its number.
+    func newVoiceSession(_ id: UUID, names: [Int: String] = [:]) -> Int {
         var t = texts[id] ?? LiveText()
         let n = t.voiceSessions ?? 0
         t.voiceSessions = n + 1
+        if !names.isEmpty {
+            var all = t.voiceNames ?? [:]
+            for (slot, name) in names { all["\(n * 4 + slot)"] = name }
+            t.voiceNames = all
+        }
         commit(t, id)
         return n * 4
     }
@@ -197,10 +203,12 @@ final class LiveTranscriber {
     /// Voices from the speaker model going over the whole file. Lines where
     /// the voice changes partway are split there. Names Ryan gave voices before
     /// are dropped (the numbers are new); names he gave single lines stay.
-    func applyVoices(_ id: UUID, frames: VoiceFrames, base: Int) {
+    func applyVoices(_ id: UUID, frames: VoiceFrames, base: Int, names: [Int: String] = [:]) {
         guard var t = texts[id] else { return }
         t.lines = Speakers.relabel(t.lines, frames: frames, base: base)
-        t.voiceNames = nil
+        var known: [String: String] = [:]
+        for (slot, name) in names { known["\(base + slot)"] = name }
+        t.voiceNames = known.isEmpty ? nil : known
         t.speakersFound = true
         commit(t, id)
     }
@@ -432,8 +440,9 @@ actor LiveRunner {
         speakerStart = nil
         guard await MainActor.run(body: { SpeakerModel.shared.isReady }) else { return }
         do {
-            try await speakers.begin()
-            voiceBase = await MainActor.run { LiveTranscriber.shared.newVoiceSession(id) }
+            let known = await MainActor.run { VoiceLibrary.shared.knownVoices() }
+            let names = try await speakers.begin(known: known)
+            voiceBase = await MainActor.run { LiveTranscriber.shared.newVoiceSession(id, names: names) }
             speakerStart = Double(position) / 16_000
         } catch {
             await speakers.unload()

@@ -213,8 +213,23 @@ extension RecorderModel {
         live.setVoiceName(id, voice: voice, to: choice)
         let count = live.lines(id).filter { $0.voice == voice && $0.speaker == nil }.count
         let lines = count == 1 ? "1 line" : "\(count) lines"
-        offerLineUndo("\(oldName) is now \(before.display(choice)) (\(lines)).") {
+        let text = "\(oldName) is now \(before.display(choice)) (\(lines))."
+        let undoName = {
             LiveTranscriber.shared.setVoiceName(id, voice: voice, to: old)
+        }
+        // A real name: remember the voice for next time (step 7c).
+        guard Speakers.voice(of: choice) == nil, let info = info(id) else {
+            offerLineUndo(text, undo: undoName)
+            return
+        }
+        let started = Date()
+        VoiceLibrary.shared.remember(name: choice, voice: voice, in: info) { [weak self] saved in
+            guard let self else { return }
+            guard saved else { return self.offerLineUndo(text, undo: undoName) }
+            self.offerLineUndo("\(text) Verbatim will know this voice next time.") {
+                undoName()
+                VoiceLibrary.shared.forget(named: choice, savedAfter: started)
+            }
         }
     }
 }
