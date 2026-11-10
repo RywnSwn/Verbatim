@@ -7,6 +7,9 @@ import SwiftUI
 /// Follows new text only if you're already at the bottom; otherwise a
 /// "Jump to live" button shows.
 ///
+/// Speakers (step 7): "Speaker 1:" (or a name Ryan gave) in bold in front of
+/// each line. Click it to rename or pick who said it (or right-click > Speaker).
+///
 /// Editing: click a line (Enter saves, Esc cancels, clicking away
 /// saves), or right-click for Copy / Edit / Delete. Edited lines turn full ink
 /// and get a lock; new words never go into them. Every change has Undo in
@@ -30,6 +33,16 @@ struct TranscriptList: View {
     @FocusState private var fieldFocused: Bool
     /// Last time you scrolled by hand, so playing audio doesn't yank the view away.
     @State private var lastUserScroll = Date.distantPast
+    /// Typing a name: for a whole voice (Rename) or one line (Someone else).
+    @State private var naming: Naming?
+    @State private var nameDraft = ""
+
+    private struct Naming {
+        var start: Double
+        /// Rename this voice everywhere. nil = just this line.
+        var voice: Int?
+        var oldName: String
+    }
 
     private var playback: Playback { .shared }
     /// Times in the gutter play from that line (finished recordings with audio).
@@ -79,12 +92,15 @@ struct TranscriptList: View {
     }
 
     var body: some View {
+        let labels = Speakers.labeler(info.id)
+        let options = labels.options(live)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.lineGap) {
                 ForEach(rows) { row in
                     switch row {
                     case .line(let line, let source):
-                        lineRow(line, source)
+                        lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil,
+                                name: source == .live ? labels.name(line) : nil, options: options)
                     case .checkedUpTo(let seconds):
                         HStack(spacing: 10) {
                             Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
@@ -140,6 +156,26 @@ struct TranscriptList: View {
             withAnimation(.easeOut(duration: 0.3)) { position.scrollTo(id: id, anchor: .center) }
         }
         .onChange(of: model.matchJump) { jumpToMatch() }
+        .alert(naming?.voice != nil ? "Rename \(naming?.oldName ?? "")" : "Who said this line?",
+               isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil } })) {
+            TextField("Name", text: $nameDraft)
+            Button("OK") {
+                let name = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let n = naming, !name.isEmpty {
+                    if let voice = n.voice {
+                        model.renameVoice(info.id, voice: voice, to: name)
+                    } else {
+                        model.setSpeaker(info.id, start: n.start, to: name)
+                    }
+                }
+                naming = nil
+            }
+            Button("Cancel", role: .cancel) { naming = nil }
+        } message: {
+            Text(naming?.voice != nil
+                 ? "Every line in this voice changes. Names you type are offered in your other recordings too."
+                 : "Only this line changes. Names you type are offered in your other recordings too.")
+        }
         .onAppear { if !model.searchText.isEmpty { jumpToMatch() } }
         .overlay(alignment: .bottom) {
             if isLive, !atBottom {
@@ -245,7 +281,39 @@ struct TranscriptList: View {
         return result
     }
 
-    private func lineRow(_ line: Transcript.Line, _ source: LineSource) -> some View {
+    /// "Mr. Yurt:" in bold, then the line.
+    private func labelled(_ text: Text, _ name: String?) -> Text {
+        guard let name else { return text }
+        return Text("\(Text(name + ":").fontWeight(.semibold)) \(text)")
+    }
+
+    /// Rename this voice everywhere, or pick who said this line: this
+    /// recording's speakers, names used before, or a new name.
+    @ViewBuilder private func speakerItems(_ line: Transcript.Line, current: String?, name: String?,
+                                           options: [Speakers.SpeakerOption]) -> some View {
+        if let voice = line.voice, let name {
+            Button("Rename \(name) everywhere…") {
+                nameDraft = name.hasPrefix("Speaker ") ? "" : name
+                naming = Naming(start: line.start, voice: voice, oldName: name)
+            }
+            Divider()
+        }
+        let pick = Binding<String>(
+            get: { current ?? "" },
+            set: { model.setSpeaker(info.id, start: line.start, to: $0) }
+        )
+        Picker("This line is:", selection: pick) {
+            ForEach(options, id: \.choice) { Text($0.name).tag($0.choice) }
+        }
+        .pickerStyle(.inline)
+        Button("Someone else…") {
+            nameDraft = ""
+            naming = Naming(start: line.start, voice: nil, oldName: name ?? "")
+        }
+    }
+
+    private func lineRow(_ line: Transcript.Line, _ source: LineSource, speaker: String?, name: String?,
+                         options: [Speakers.SpeakerOption]) -> some View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
         let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
@@ -267,14 +335,19 @@ struct TranscriptList: View {
             } else {
                 Group {
                     if !query.isEmpty {
-                        Text(highlighted(line.text, source, line.start))
+                        labelled(Text(highlighted(line.text, source, line.start)), name)
                     } else if isPlaying {
-                        wordHighlighted(line)
+                        labelled(wordHighlighted(line), name)
                             .textRenderer(WordMarkRenderer(color: Theme.accent.opacity(0.22)))
                     } else {
-                        Text(line.text)
+                        labelled(Text(line.text), name)
                     }
                 }
+                    .overlay(alignment: .topLeading) {
+                        if let name {
+                            SpeakerLabelButton(name: name) { speakerItems(line, current: speaker, name: name, options: options) }
+                        }
+                    }
                     .font(Theme.transcript)
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .foregroundStyle(Theme.ink)
@@ -315,6 +388,9 @@ struct TranscriptList: View {
             Button("Copy from here down") { model.copyLines(info, linesFrom(line, source)) }
             Divider()
             Button("Edit line") { begin(line, source) }
+            if source == .live {
+                Menu("Speaker") { speakerItems(line, current: speaker, name: name, options: options) }
+            }
             Button("Delete line") { model.deleteLine(info.id, source, start: line.start) }
             if line.isLocked {
                 Divider()
@@ -396,6 +472,41 @@ extension RecordingInfo {
                 : String(format: "%d:%02d", s / 60, s % 60)
         }
         return wallTime(atSecond: seconds).formatted(.dateTime.hour().minute())
+    }
+}
+
+/// Sits exactly on top of the bold "Mr. Yurt:" (same text, see-through), so
+/// clicking the name opens the menu right there. Shaded on hover.
+struct SpeakerLabelButton<Items: View>: View {
+    let name: String
+    @ViewBuilder let items: () -> Items
+    @State private var hovering = false
+
+    var body: some View {
+        Menu {
+            items()
+        } label: {
+            Text(name + ":")
+                .font(Theme.transcript)
+                .fontWeight(.semibold)
+                // See-through, so the name under it shows. On hover it draws
+                // itself over the shade (the shade would hide the one under it).
+                .foregroundStyle(hovering ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Color.clear))
+                .background {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Theme.line.opacity(hovering ? 0.9 : 0))
+                        .padding(.horizontal, -3)
+                }
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hovering = $0 }
+        .pointerStyle(.link)
+        .help("Who said this? Click to change")
+        .accessibilityLabel("Speaker: \(name). Change")
     }
 }
 

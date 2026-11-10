@@ -16,6 +16,12 @@ struct Transcript: Codable, Equatable {
         /// highlight. Same count as the words in `text`; nil after an edit or in
         /// older files (the highlight then estimates).
         var words: [Double]? = nil
+        /// Which voice said it (step 7), from the speaker model. Numbers are only
+        /// meaningful inside one recording. nil = no speaker known.
+        var voice: Int? = nil
+        /// Who Ryan said it is, for this line only: a name, or "#v5" (same as
+        /// voice 5). Wins over the voice. See `Speakers`.
+        var speaker: String? = nil
 
         var isLocked: Bool { locked == true }
 

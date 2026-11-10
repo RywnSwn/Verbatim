@@ -182,3 +182,16 @@ accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
   (RywnSwn/Verbatim#11); its docs and "keep edits" idea were copied over.
 - The old Whisper model (626 MB) is deleted on launch so Ryan gets the
   space back. Old Whisper transcripts still open.
+
+## Speaker labels: Sortformer, "Speaker 1, 2..." (2026-11-10, step 7)
+- Sortformer (FluidAudio) over LS-EEND and pyannote: best in noise, very
+  stable voices, works live. 6-bit "balanced" model: ~100 MB, low memory on
+  the 8 GB Mac. Its weak spot is quiet, far-away speech (students at the
+  back may be missed); Ryan tests that in class.
+- First built as "most words = Mr. Yurt, everyone else = Student" with
+  names in Settings. Ryan said no the same day: he uses Verbatim for
+  videos and anything, not only that class. So voices are "Speaker 1"
+  (talks most), "Speaker 2"..., renamed in the transcript, and typed names
+  are offered in every recording. No speaker settings.
+- Recordings without speakers (old ones) get them by themselves once the
+  model is downloaded, without changing the text.

@@ -101,12 +101,18 @@ extension RecorderModel {
     }
 
     /// Lines as text for Claude or a file. One line each; times in front only
-    /// if Settings says so. Markdown puts a blank line between lines so each
-    /// one stays its own paragraph.
+    /// if Settings says so. Lines with a speaker are in script format,
+    /// `[Mr. Yurt]: "text"` (Markdown: `**Mr. Yurt:** text`). Markdown puts a
+    /// blank line between lines so each one stays its own paragraph.
     static func text(_ lines: [Transcript.Line], info: RecordingInfo, markdown: Bool) -> String {
         let withTimes = TimeStyle.includeInCopies
+        let labels = Speakers.labeler(info.id)
         let rows = lines.map { line in
-            withTimes ? "[\(info.timeLabel(line.start))] \(line.text)" : line.text
+            var row = line.text
+            if let name = labels.name(line) {
+                row = markdown ? "**\(name):** \(line.text)" : "[\(name)]: \"\(line.text)\""
+            }
+            return withTimes ? "[\(info.timeLabel(line.start))] \(row)" : row
         }
         return rows.joined(separator: markdown ? "\n\n" : "\n")
     }

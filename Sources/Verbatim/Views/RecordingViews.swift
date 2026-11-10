@@ -128,6 +128,7 @@ struct PastRecordingView: View {
     @Environment(LiveTranscriber.self) private var live
     let info: RecordingInfo
 
+    private var speakerModel: SpeakerModel { .shared }
     private var playback: Playback { .shared }
     private var playing: Bool { playback.isShowing(info.id) && playback.isPlaying }
     private var transcript: Transcript? { transcriber.transcripts[info.id] }
@@ -181,6 +182,10 @@ struct PastRecordingView: View {
                     Button("Transcribe again") { transcriber.redo(info.id) }
                         .disabled(!info.hasAudio || transcriber.active?.id == info.id
                             || transcriber.importing.contains(info.id) || transcriber.isGrowing(info.id))
+                    Button("Find speakers again") { transcriber.findSpeakers(info.id) }
+                        .disabled(!info.hasAudio || !speakerModel.isReady || liveLines.isEmpty
+                            || transcriber.active?.id == info.id || transcriber.isFindingSpeakers(info.id)
+                            || transcriber.isGrowing(info.id) || transcriber.isUnfinished(info.id))
                     Divider()
                     Button(SidebarView.deleteAudioTitle(info, blocker: model.audioDeleteBlocker(info.id))) {
                         model.deleteAudio(info.id)
@@ -190,7 +195,7 @@ struct PastRecordingView: View {
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
                 }
-                .help("Show in Finder, Transcribe again, Delete audio only, Move to Trash")
+                .help("Show in Finder, Transcribe again, Find speakers again, Delete audio only, Move to Trash")
             }
             ToolbarItem(placement: .primaryAction) {
                 CopyButton(id: info.id, hasLines: !(checked + liveLines).isEmpty)
@@ -276,6 +281,14 @@ struct TranscriptStatusLine: View {
         if let error = transcriber.errors[id] {
             if !info.hasAudio { return (error, nil, nil) }
             return (error, "Try again", { transcriber.enqueue(id) })
+        }
+        if let job = transcriber.active, job.id == id, job.speakersOnly {
+            var text = "Finding who said what. The text stays as it is."
+            if let left = job.secondsLeft { text += " \(Transcriber.leftText(left).capitalizedFirst)." }
+            return (text, "Cancel", { transcriber.cancel(id) })
+        }
+        if transcriber.speakerQueue.contains(id) {
+            return ("Finding who said what next, after the files before it.", "Cancel", { transcriber.cancel(id) })
         }
         if let job = transcriber.active, job.id == id {
             let done = Int(job.doneSeconds / 60), total = max(1, Int((job.totalSeconds / 60).rounded(.up)))
@@ -400,4 +413,9 @@ struct FindLine: View {
             }
         }
     }
+}
+
+extension String {
+    /// "about 4 min left" -> "About 4 min left".
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }

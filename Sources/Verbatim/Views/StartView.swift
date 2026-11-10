@@ -205,6 +205,7 @@ struct LiveModelStatusLine: View {
         case .ready:
             title("Speech model ready")
             note("Words show up a couple of seconds after they're said. A Voice Memo takes about a minute per hour. Works offline.")
+            SpeakerModelNote()
         case .preparing:
             title("Getting the speech model ready")
             note("First time only, this can take a few minutes. Keep Verbatim open.")
@@ -253,5 +254,49 @@ struct LiveModelStatusLine: View {
         let percent = "\(Int(fraction * 100))% of \(ParakeetEngine.sizeText)"
         guard let left, left.isFinite else { return percent }
         return "\(percent), \(Transcriber.leftText(left))"
+    }
+}
+
+/// Under "Speech model ready": the speaker model (step 7), which comes after.
+/// Nothing shows once it's ready, since there's nothing to do.
+struct SpeakerModelNote: View {
+    private var speakers: SpeakerModel { .shared }
+
+    var body: some View {
+        switch speakers.state {
+        case .ready, .waiting:
+            EmptyView()
+        case .downloading(let f):
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Downloading speaker labels")
+                    Spacer()
+                    Text("\(Int(f * 100))% of \(SpeakerEngine.sizeText)").monospacedDigit()
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                ProgressView(value: f)
+                    .progressViewStyle(.linear)
+                    .controlSize(.mini)
+                Text("You can record now. Lines get speakers once this is done, on old recordings too.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 2)
+        case .preparing:
+            Text("Getting speaker labels ready. First time only.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .failed(let f):
+            HStack(spacing: 8) {
+                Text("Speaker labels download stopped at \(Int(f * 100))%. Trying again by itself.")
+                Button("Try now") { speakers.startIfNeeded() }
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
     }
 }

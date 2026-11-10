@@ -25,6 +25,7 @@ struct GeneralSettings: View {
 
     var body: some View {
         Form {
+
             Picker("Microphone:", selection: $chosenID) {
                 Text("MacBook mic (recommended)").tag("")
                 ForEach(mics.filter { !$0.isBuiltIn }) { mic in
