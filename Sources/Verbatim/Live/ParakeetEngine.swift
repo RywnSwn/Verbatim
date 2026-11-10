@@ -4,12 +4,13 @@ import Foundation
 
 /// The only file that talks to FluidAudio. Runs NVIDIA's Parakeet Unified
 /// 0.6B (English, punctuation, about 2 seconds behind speech) on the Neural
-/// Engine. Loaded only while recording, unloaded after Stop (8 GB Mac).
+/// Engine. Live text while recording, and files (Transcriber) at full speed.
+/// Loaded only while in use (8 GB Mac).
 actor ParakeetEngine: LiveEngine {
     static let name = "Parakeet"
     static let sizeText = "about 600 MB"
 
-    /// ~/Library/Application Support/Verbatim/Models/Live, next to the Whisper model.
+    /// ~/Library/Application Support/Verbatim/Models/Live.
     static var base: URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let url = support.appending(path: "Verbatim/Models/Live", directoryHint: .isDirectory)

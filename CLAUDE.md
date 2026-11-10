@@ -11,15 +11,18 @@ plain words. Never use em dashes in anything written for Ryan.
 UX matters a lot to him. He hates apps that don't consider the user.
 
 ## Current state
-Steps 1, 2, 2b, 3, 4, 5, 6 and 11 merged (2b, 5 and 6 not tested by Ryan yet); next is step 5c (drop Whisper, Parakeet only), then step 7. See `PLAN.md` for build order and progress,
+Steps 1, 2, 2b, 3, 4, 5, 6 and 11 merged (2b and 6 not tested by Ryan yet),
+plus the in-app player. Step 5c (Whisper dropped, Parakeet only) built, PR
+open, not tested yet. Next is step 7. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).
 
 ## Key facts
 - Mac: M2, 8 GB unified memory (shared by CPU, GPU and models). Keep RAM low:
-  one quantized Whisper model loaded at a time.
-- Stack (confirmed): Swift + SwiftUI + FluidAudio (Parakeet). WhisperKit is being removed (step 5c). Minimum macOS 26.
+  one Parakeet model loaded at a time.
+- Stack (confirmed): Swift + SwiftUI + FluidAudio (Parakeet, for live text
+  and files). No Whisper since step 5c. Minimum macOS 26.
   Ryan's Mac: Tahoe 26.7.
 - Ryan does not want Xcode. Build with GitHub Actions on a macOS runner (repo
   is public for free minutes) or Command Line Tools + `swift build`.

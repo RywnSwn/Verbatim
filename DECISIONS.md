@@ -160,3 +160,25 @@ worse than live. Parakeet Unified's streaming WER is within 0.05 points of
 its own batch mode, and it doesn't hallucinate. One model also means one
 download and less memory on the 8 GB Mac. Replaces "Two passes: live +
 accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
+
+## Step 5c choices (2026-11-10)
+- A file job (import, "Transcribe again") waits while a recording is going,
+  instead of loading a second Parakeet. Simpler, and the 8 GB Mac only ever
+  holds one copy of the model. A running job stops at the end of its current
+  30 s piece of audio (well under a second) and carries on after Stop.
+- Files use the same streaming Parakeet as live text, fed at full speed. No
+  new download. The batch mode is a bit more accurate but needs an extra
+  encoder; only worth it if Ryan finds files worse than live.
+- Recordings made with Apple's backup engine get a Parakeet pass by
+  themselves after Stop (no button to press). Ryan's edits and deletions
+  in the live text are kept in that pass and in "Transcribe again".
+  If Parakeet wasn't downloaded yet at Stop, the transcript offers
+  "Redo with Parakeet" later.
+- Each line saves when every word starts (`Transcript.Line.words`), so the
+  in-app player marks the exact word being heard. Edited lines lose them
+  and the player estimates.
+- Two chats built step 5c at the same time. Ryan kept the one built on top
+  of the in-app player (`claude/step-5c-mine`) and closed the other
+  (RywnSwn/Verbatim#11); its docs and "keep edits" idea were copied over.
+- The old Whisper model (626 MB) is deleted on launch so Ryan gets the
+  space back. Old Whisper transcripts still open.

@@ -26,21 +26,43 @@ protocol LiveEngine: Actor {
     func end() async -> LiveOutput
 }
 
-/// The live text of one recording, saved as live.json next to audio.wav.
+/// The transcript of one recording, saved as live.json next to audio.wav.
+/// Since step 5c this is THE transcript: written live while recording, or by
+/// Parakeet going over the file (imports, Transcribe again).
 struct LiveText: Codable, Equatable {
     static let currentFormat = 1
     var formatVersion = LiveText.currentFormat
     var lines: [Transcript.Line] = []
     /// Which engines wrote it, for comparing them later.
     var engines: [String] = []
-    /// Lines Ryan deleted (seconds into audio.wav), so the accurate pass in
-    /// step 5 doesn't bring them back. nil in files from before editing.
+    /// Lines Ryan deleted (seconds into audio.wav). nil in files from before editing.
     var removed: [Span]?
+    /// Set when Parakeet goes over the audio file instead of listening live.
+    /// nil = written live while recording.
+    var pass: FilePass?
 
     struct Span: Codable, Equatable {
         var start: Double
         var end: Double
     }
+
+    struct FilePass: Codable, Equatable {
+        /// Everything before this (seconds into audio.wav) is done.
+        var doneUpTo: Double = 0
+        var finished = false
+        /// Ryan pressed Cancel: don't restart it by itself on next launch.
+        var stoppedByUser = false
+        /// Lines Ryan edited before "Transcribe again", still to be put back
+        /// in place (as he wrote them) as the pass gets to them.
+        var keep: [Transcript.Line]?
+    }
+
+    /// Lines after an old Whisper transcript's end (`doneUpTo`), by their middle.
+    func unchecked(after doneUpTo: Double) -> [Transcript.Line] {
+        doneUpTo <= 0 ? lines : lines.filter { $0.middle >= doneUpTo }
+    }
+
+    var madeWithBackupEngine: Bool { engines.contains(AppleSpeechEngine.name) }
 }
 
 enum LiveStore {
@@ -72,12 +94,24 @@ enum LineBuilder {
     static func add(_ piece: LivePiece, to lines: inout [Transcript.Line], extendLast: Bool = true) {
         let text = piece.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        let starts = wordStarts(text, piece)
         if extendLast, let last = lines.last, !last.isLocked, !shouldBreak(after: last, before: piece, adding: text) {
-            lines[lines.count - 1].text = last.text + " " + text
-            lines[lines.count - 1].end = max(last.end, piece.end)
+            let i = lines.count - 1
+            lines[i].text = last.text + " " + text
+            lines[i].end = max(last.end, piece.end)
+            lines[i].words = last.words.map { $0 + starts }
         } else {
-            lines.append(Transcript.Line(start: piece.start, end: piece.end, text: text))
+            lines.append(Transcript.Line(start: piece.start, end: piece.end, text: text, words: starts))
         }
+    }
+
+    /// Start time of each word in the piece. Parakeet gives one word per piece;
+    /// Apple's engine gives phrases, spread evenly. Rounded to 0.01 s (smaller file).
+    private static func wordStarts(_ text: String, _ piece: LivePiece) -> [Double] {
+        let count = text.split(whereSeparator: \.isWhitespace).count
+        guard count > 0 else { return [] }
+        let step = count > 1 ? max(0, piece.end - piece.start) / Double(count) : 0
+        return (0..<count).map { k in ((piece.start + Double(k) * step) * 100).rounded() / 100 }
     }
 
     private static func shouldBreak(after line: Transcript.Line, before piece: LivePiece, adding text: String) -> Bool {

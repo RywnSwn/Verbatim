@@ -13,10 +13,9 @@ extension RecordingInfo {
     }
 }
 
-/// Main area while recording: checked (accurate) text in full ink, then the
-/// live text after it, a little grey. Every 5 minutes the background pass
-/// replaces the oldest grey part. A plain status line on top only when live
-/// text isn't coming from Parakeet.
+/// Main area while recording: the live text, which is the transcript (step
+/// 5c). Words still being worked out are lighter. A plain status line on top
+/// only when live text isn't coming from Parakeet.
 struct RecordingNowView: View {
     @Environment(RecorderModel.self) private var model
     @Environment(LiveTranscriber.self) private var live
@@ -101,7 +100,7 @@ struct LiveStatusLine: View {
             return "Getting live text ready. Your audio is already being saved."
         case .listening(let engine) where engine == AppleSpeechEngine.name:
             if live.isModelReady {
-                return "Live text is using your Mac's built-in engine. Parakeet takes over after you pause or stop."
+                return "Live text is using your Mac's built-in engine. Parakeet takes over after you pause, and redoes it all after you stop."
             }
             return "Live text is using your Mac's built-in engine until Parakeet finishes downloading\(percentText)."
         case .off(let reason):
@@ -120,8 +119,9 @@ struct LiveStatusLine: View {
 }
 
 /// A finished recording: its transcript, with a plain status line on top while
-/// it is being transcribed. Layout follows docs/design/Transcript.dc.html.
-/// Until the accurate pass gets to a part, the live text for it shows in grey.
+/// a file is being transcribed. Layout follows docs/design/Transcript.dc.html.
+/// Old recordings may still have a Whisper transcript; live text after its
+/// end shows under it.
 struct PastRecordingView: View {
     @Environment(RecorderModel.self) private var model
     @Environment(Transcriber.self) private var transcriber
@@ -133,7 +133,7 @@ struct PastRecordingView: View {
     private var transcript: Transcript? { transcriber.transcripts[info.id] }
     private var checked: [Transcript.Line] { transcript?.lines ?? [] }
 
-    /// Live lines the accurate pass hasn't reached yet.
+    /// The live text (minus the part an old Whisper transcript covers).
     private var liveLines: [Transcript.Line] {
         if transcript?.finished == true { return [] }
         return live.texts[info.id]?.unchecked(after: transcript?.doneUpTo ?? 0) ?? []
@@ -215,8 +215,9 @@ struct PastRecordingView: View {
             } else if !info.hasAudio {
                 Text("The audio was deleted before it was transcribed.")
                     .foregroundStyle(.secondary)
-            } else if transcript == nil, !transcriber.isQueued(info.id), transcriber.active?.id != info.id,
-                      !transcriber.importing.contains(info.id), transcriber.errors[info.id] == nil {
+            } else if !transcriber.isQueued(info.id), transcriber.active?.id != info.id,
+                      !transcriber.importing.contains(info.id), transcriber.errors[info.id] == nil,
+                      !transcriber.isUnfinished(info.id) {
                 Button("Transcribe") { transcriber.enqueue(info.id) }
                     .buttonStyle(.inkLarge)
             } else {
@@ -233,6 +234,7 @@ struct PastRecordingView: View {
 /// text link only when there is something to do. No box.
 struct TranscriptStatusLine: View {
     @Environment(Transcriber.self) private var transcriber
+    @Environment(LiveTranscriber.self) private var live
     let info: RecordingInfo
 
     var body: some View {
@@ -266,7 +268,7 @@ struct TranscriptStatusLine: View {
     private var message: (String, String?, (() -> Void)?)? {
         let id = info.id
         let original = info.importedFrom == nil ? "" : " Your original file isn't touched."
-        // Just stopped (Undo Stop still possible): the rest is checked in a moment.
+        // Just stopped (Undo Stop still possible).
         if transcriber.isGrowing(id), transcriber.errors[id] == nil { return nil }
         if transcriber.importing.contains(id) {
             return ("Importing \(info.importedFrom ?? info.title).\(original)", nil, nil)
@@ -282,21 +284,38 @@ struct TranscriptStatusLine: View {
             return (text, "Cancel", { transcriber.cancel(id) })
         }
         if transcriber.isQueued(id) {
-            switch transcriber.modelState {
+            switch live.modelState {
             case .downloading(let f, _), .paused(let f), .failed(let f):
-                return ("Waiting for the model download to finish (\(Int(f * 100))%).", nil, nil)
+                return ("Waiting for the speech model download to finish (\(Int(f * 100))%).", nil, nil)
             case .preparing:
-                return ("Getting the model ready. The first time takes a few minutes.", nil, nil)
+                return ("Getting the speech model ready. The first time takes a few minutes.", nil, nil)
             case .ready:
-                return ("Waiting for another recording to finish.", "Cancel", { transcriber.cancel(id) })
+                if transcriber.isWaitingForRecording {
+                    return ("Waits until you stop recording, then takes about a minute per hour.", "Cancel", { transcriber.cancel(id) })
+                }
+                return ("Waiting for another file to finish.", "Cancel", { transcriber.cancel(id) })
             }
         }
-        if let t = transcriber.transcripts[id], !t.finished {
+        let text = live.texts[id]
+        if let pass = text?.pass, !pass.finished {
+            let minutes = Int(pass.doneUpTo / 60)
+            if !info.hasAudio {
+                return ("Transcribed the first \(minutes) min. The audio was deleted, so the rest can't be done.", nil, nil)
+            }
+            return ("Transcribed the first \(minutes) min.", "Continue", { transcriber.enqueue(id) })
+        }
+        // An old Whisper transcript that stopped halfway, with no text after it.
+        if let t = transcriber.transcripts[id], !t.finished, text?.lines.isEmpty ?? true {
             let minutes = Int(t.doneUpTo / 60)
             if !info.hasAudio {
                 return ("Transcribed the first \(minutes) min. The audio was deleted, so the rest can't be done.", nil, nil)
             }
             return ("Transcribed the first \(minutes) min.", "Continue", { transcriber.enqueue(id) })
+        }
+        // Made with the Mac's backup engine before Parakeet was here.
+        if text?.pass == nil, text?.madeWithBackupEngine == true, info.hasAudio, live.isModelReady {
+            return ("Made with your Mac's built-in engine. Parakeet is more accurate, and your edits are kept.",
+                    "Redo with Parakeet", { transcriber.redo(id) })
         }
         return nil
     }

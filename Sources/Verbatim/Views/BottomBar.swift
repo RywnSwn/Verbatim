@@ -6,7 +6,6 @@ import SwiftUI
 struct BottomBar: View {
     @Environment(RecorderModel.self) private var model
     @Environment(Updater.self) private var updater
-    @Environment(Transcriber.self) private var transcriber
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,14 +44,25 @@ struct BottomBar: View {
     private var recordingBar: some View {
         HStack(spacing: 16) {
             HStack(spacing: 14) {
+                // The timer never shrinks or wraps (Ryan saw "00:0..." in a narrow
+                // window); the waveform gives up room instead, keeping the newest bars.
                 Text(RecorderModel.clock(model.elapsed))
                     .font(.system(size: 17, weight: .medium).monospacedDigit())
                     .foregroundStyle(paused ? .secondary : .primary)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .layoutPriority(2)
                 Waveform(levels: model.levels, paused: paused)
+                    .fixedSize()
+                    .frame(minWidth: 0, maxWidth: 240, alignment: .trailing)
+                    .clipped()
                 if paused {
                     Text("Paused")
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -64,6 +74,8 @@ struct BottomBar: View {
                     .help("Stop and save (⌘R)")
             }
             .controlSize(.large)
+            .fixedSize()
+            .layoutPriority(3)
 
             statusSpot
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -96,14 +108,6 @@ struct BottomBar: View {
     /// The normal message when nothing needs attention.
     private var quietText: String {
         if paused { return "Paused. Nothing is being recorded." }
-        if let info = model.current {
-            if let job = transcriber.active, job.id == info.id, job.pieceEnd > job.pieceStart {
-                return "Checking \(info.timeLabel(job.pieceStart)) to \(info.timeLabel(job.pieceEnd))"
-            }
-            if transcriber.lowPower {
-                return "Low Power Mode: checking waits until you stop"
-            }
-        }
         return "Saved as you go, works offline"
     }
 
