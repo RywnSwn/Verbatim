@@ -71,8 +71,10 @@ One screen, no tour (see `docs/design/`). It shows:
 - **Recorded with Apple's backup engine** (Parakeet still downloading):
   after Stop, Parakeet redoes the whole recording by itself.
 - **Speaker labels:** teacher name comes from settings (default
-  "Mr. Yurt"). Click a label to fix it. Renaming a speaker renames all
-  their lines in that recording.
+  "Mr. Yurt"). The voice that talks the most is the teacher, other voices
+  show as Student. Click a label to fix it; the bottom bar then offers to
+  change every line in that voice. "Someone else..." types a name. Old
+  recordings get labels by themselves once the speaker model is downloaded.
 - **Timestamps:** on every line, clock time by default (10:42), with an
   option for time since start (00:37).
 
