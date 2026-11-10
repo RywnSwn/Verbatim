@@ -1,194 +1,89 @@
 import Foundation
 import Observation
 
-/// Model download plus a queue of recordings to transcribe, one at a time.
+/// Transcribes whole files with Parakeet, one at a time: imported files,
+/// "Transcribe again", and recordings whose live text didn't come from
+/// Parakeet (Apple's backup engine, or no live text at all).
+///
+/// Recordings made with Parakeet never come here: their live text is the
+/// transcript. Same model as live text, so no second download. A file job
+/// waits while a recording is going, so only one copy of the model is in
+/// memory (8 GB Mac).
 @MainActor
 @Observable
 final class Transcriber {
     static let shared = Transcriber()
-
-    enum ModelState: Equatable {
-        case downloading(fraction: Double, secondsLeft: Double?)
-        case paused(fraction: Double)
-        case failed(fraction: Double)
-        case preparing
-        case ready
-    }
 
     struct Job: Equatable {
         var id: UUID
         var doneSeconds: Double
         var totalSeconds: Double
         var secondsLeft: Double?
-        /// The bit of audio being checked right now (seconds into audio.wav).
-        var pieceStart: Double = 0
-        var pieceEnd: Double = 0
     }
 
-    /// Piece size for a finished recording or an imported file.
-    static let pieceSeconds: Int64 = 120
-    /// While recording: check every 5 minutes of new audio.
-    static let chunkSeconds: Int64 = 300
-    /// While recording: leave the newest audio alone until live text for it is
-    /// final, so the cut can be placed between live lines.
-    static let settleSeconds: Int64 = 15
-    /// Each piece starts this much before the cut, so Whisper hears the first
-    /// word whole. Words before the cut are dropped when merging.
-    static let overlapSeconds = 1.0
+    /// Audio handed to Parakeet at a time. It runs much faster than real time,
+    /// so this only decides how often progress, Cancel and edits are looked at.
+    static let blockSeconds: Int64 = 4
+    /// Name saved in transcript.json.
+    static let modelName = "parakeet-unified-en-0.6b"
 
-    private(set) var modelState: ModelState = .downloading(fraction: 0, secondsLeft: nil)
     private(set) var queue: [UUID] = []
     private(set) var active: Job?
     private(set) var importing: Set<UUID> = []
     private(set) var transcripts: [UUID: Transcript] = [:]
     private(set) var errors: [UUID: String] = [:]
-    /// Recordings still getting audio (recording, paused, or in the 10 s Undo Stop
-    /// window). Checked in 5 minute chunks; the newest bit waits for Stop.
+    /// Recordings still getting audio (recording, paused, or in the 10 s Undo
+    /// Stop window). File jobs wait until this is empty.
     private(set) var growing: Set<UUID> = []
-    /// Low Power Mode: chunks wait during recording and catch up at Stop.
-    private(set) var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
 
-    @ObservationIgnored private let engine = WhisperEngine()
-    @ObservationIgnored private var downloadTask: Task<Void, Never>?
+    @ObservationIgnored private let engine = ParakeetEngine()
     @ObservationIgnored private var workTask: Task<Void, Never>?
     @ObservationIgnored private var cancelRequested: Set<UUID> = []
-    @ObservationIgnored private var progressSamples: [(Date, Double)] = []
-    @ObservationIgnored private var retryTask: Task<Void, Never>?
-    @ObservationIgnored private var powerObserver: NSObjectProtocol?
 
-    private static let folderKey = "modelFolder"
-    private static let preparedKey = "modelPrepared"
+    private init() {}
 
-    static var modelBase: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let url = base.appending(path: "Verbatim/Models", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return url
-    }
-
-    private var modelFolder: URL? {
-        guard let path = UserDefaults.standard.string(forKey: Self.folderKey),
-              FileManager.default.fileExists(atPath: path) else { return nil }
-        return URL(fileURLWithPath: path)
-    }
-
-    var isModelReady: Bool { modelState == .ready }
-
-    private init() {
-        powerObserver = NotificationCenter.default.addObserver(
-            forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
-        ) { _ in
-            MainActor.assumeIsolated { Transcriber.shared.powerChanged() }
-        }
-    }
-
-    private func powerChanged() {
-        lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-        if !lowPower {
-            for id in growing where chunkReady(id) { enqueue(id) }
-        }
-    }
-
-    /// Called once at launch with the saved recordings.
+    /// Called once at launch with the saved recordings, after `LiveTranscriber.start`
+    /// (it needs the live text to know which recordings still need text).
     func start(with recordings: [RecordingInfo]) {
+        Self.removeOldWhisperModel()
         for r in recordings {
             if let t = TranscriptStore.load(r.id) { transcripts[r.id] = t }
         }
-        // Pick up anything left unfinished (app quit, crash, or recorded before step 3).
+        // Pick up anything left unfinished (app quit, crash, or no Parakeet text yet).
         for r in recordings.reversed() where !r.isActive {
-            let t = transcripts[r.id]
-            if t == nil || (t?.finished == false && t?.stoppedByUser == false) { queue.append(r.id) }
-        }
-        if modelFolder != nil, UserDefaults.standard.bool(forKey: Self.preparedKey) {
-            modelState = .ready
-            runQueue()
-        } else if modelFolder != nil {
-            prepare()
-        } else {
-            startDownload()
-        }
-    }
-
-    // MARK: - Model download
-
-    func startDownload() {
-        guard downloadTask == nil, modelState != .ready, modelState != .preparing else { return }
-        retryTask?.cancel()
-        retryTask = nil
-        progressSamples = []
-        let startFraction = currentFraction
-        modelState = .downloading(fraction: startFraction, secondsLeft: nil)
-        downloadTask = Task {
-            do {
-                let folder = try await WhisperEngine.download(base: Self.modelBase) { fraction in
-                    Task { @MainActor in Transcriber.shared.downloadProgress(fraction) }
-                }
-                UserDefaults.standard.set(folder.path, forKey: Self.folderKey)
-                downloadTask = nil
-                prepare()
-            } catch {
-                downloadTask = nil
-                if case .paused = modelState { return }
-                modelState = .failed(fraction: currentFraction)
-                scheduleRetry()
+            if let t = transcripts[r.id] {
+                if !t.finished, !t.stoppedByUser { queue.append(r.id) }
+            } else if needsFilePass(r.id) {
+                queue.append(r.id)
             }
         }
+        runQueue()
     }
 
-    func pauseDownload() {
-        guard case .downloading(let fraction, _) = modelState else { return }
-        modelState = .paused(fraction: fraction)
-        downloadTask?.cancel()
-        downloadTask = nil
+    /// Parakeet finished downloading: start anything that was waiting for it.
+    func modelReady() { runQueue() }
+
+    /// The live text isn't Parakeet's (Apple's backup engine wrote some of it),
+    /// or there is none: run Parakeet over the audio.
+    private func needsFilePass(_ id: UUID) -> Bool {
+        guard FileManager.default.fileExists(atPath: RecordingStore.audioURL(id).path) else { return false }
+        guard let live = LiveTranscriber.shared.texts[id], !live.lines.isEmpty else { return true }
+        return live.engines.contains(AppleSpeechEngine.name)
     }
 
-    private var currentFraction: Double {
-        switch modelState {
-        case .downloading(let f, _), .paused(let f), .failed(let f): f
-        case .preparing, .ready: 1
-        }
-    }
-
-    private func downloadProgress(_ fraction: Double) {
-        guard case .downloading = modelState else { return }
-        let now = Date()
-        progressSamples.append((now, fraction))
-        progressSamples.removeAll { now.timeIntervalSince($0.0) > 30 }
-        var left: Double?
-        if let first = progressSamples.first, now.timeIntervalSince(first.0) > 3, fraction > first.1 {
-            let rate = (fraction - first.1) / now.timeIntervalSince(first.0)
-            left = (1 - fraction) / rate
-        }
-        modelState = .downloading(fraction: fraction, secondsLeft: left)
-    }
-
-    /// Internet dropped: try again by itself. The download picks up where it stopped.
-    private func scheduleRetry() {
-        retryTask?.cancel()
-        retryTask = Task {
-            try? await Task.sleep(for: .seconds(20))
-            guard !Task.isCancelled, case .failed = modelState else { return }
-            startDownload()
-        }
-    }
-
-    /// First load after download: fetches the small tokenizer while online and lets
-    /// macOS optimise the model for this Mac. Slow once, fast after.
-    private func prepare() {
-        guard let folder = modelFolder else { startDownload(); return }
-        modelState = .preparing
-        Task {
-            do {
-                try await engine.load(folder: folder, base: Self.modelBase)
-                UserDefaults.standard.set(true, forKey: Self.preparedKey)
-                modelState = .ready
-                runQueue()
-            } catch {
-                await engine.unload()
-                // A broken download: start it again (finished files are kept).
-                UserDefaults.standard.removeObject(forKey: Self.folderKey)
-                modelState = .failed(fraction: 0.99)
-                scheduleRetry()
+    /// Whisper (626 MB) was dropped in step 5c. Give the space back once: delete
+    /// everything in Models except Parakeet's folder.
+    private static func removeOldWhisperModel() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "modelFolder")
+        defaults.removeObject(forKey: "modelPrepared")
+        Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            let models = support.appending(path: "Verbatim/Models", directoryHint: .isDirectory)
+            guard let items = try? fm.contentsOfDirectory(at: models, includingPropertiesForKeys: nil) else { return }
+            for item in items where item.lastPathComponent != "Live" {
+                try? fm.removeItem(at: item)
             }
         }
     }
@@ -217,11 +112,13 @@ final class Transcriber {
     func cancel(_ id: UUID) {
         if active?.id == id { cancelRequested.insert(id) }
         queue.removeAll { $0 == id }
-        if var t = transcripts[id], !t.finished {
-            t.stoppedByUser = true
-            transcripts[id] = t
-            try? TranscriptStore.save(t, for: id)
-        }
+        // Saved even with nothing done yet, so it doesn't start again by itself
+        // on the next launch. The live text (if any) still shows.
+        var t = transcripts[id] ?? Transcript(model: Self.modelName)
+        guard !t.finished else { return }
+        t.stoppedByUser = true
+        transcripts[id] = t
+        try? TranscriptStore.save(t, for: id)
     }
 
     /// The recording was moved to the Trash.
@@ -245,54 +142,26 @@ final class Transcriber {
 
     func isGrowing(_ id: UUID) -> Bool { growing.contains(id) }
 
+    /// A recording is going, so file jobs wait.
+    var isWaitingForRecording: Bool { !growing.isEmpty }
+
     // MARK: - While recording
 
-    /// Recording started, or carried on after Undo Stop.
+    /// Recording started, or carried on after Undo Stop. A file job in progress
+    /// stops after its current bit and carries on after Stop.
     func recordingStarted(_ id: UUID) {
         growing.insert(id)
     }
 
-    /// Called every few seconds while recording. Starts a chunk once there are
-    /// 5 minutes of new audio.
-    func audioGrew(_ id: UUID) {
-        guard growing.contains(id), active?.id != id, !queue.contains(id), chunkReady(id) else { return }
-        enqueue(id)
-    }
-
-    /// Stopped for good (Undo Stop expired): check the rest, to the end.
+    /// Stopped for good (Undo Stop expired). Parakeet's live text is the
+    /// transcript; anything else gets a Parakeet pass now.
     func recordingFinal(_ id: UUID) {
         growing.remove(id)
-        enqueue(id)
-    }
-
-    /// A growing recording has a full chunk waiting.
-    private func chunkReady(_ id: UUID) -> Bool {
-        guard growing.contains(id), !lowPower, transcripts[id]?.stoppedByUser != true else { return false }
-        let total = WavReader.sampleCount(RecordingStore.audioURL(id))
-        let done = Int64((transcripts[id]?.doneUpTo ?? 0) * Double(WavReader.rate))
-        return total - done >= (Self.chunkSeconds + Self.settleSeconds) * WavReader.rate
-    }
-
-    /// Where to end a chunk: in the longest gap between live lines in the 30 s
-    /// before `target` (so live lines never get split), at its quietest moment.
-    /// Without live text, the quietest moment in the 20 s before `target`.
-    private func cutPoint(_ id: UUID, audio: URL, target: Int64, after pos: Int64) -> Int64 {
-        let rate = Double(WavReader.rate)
-        let high = Double(target) / rate
-        let low = max(high - 30, Double(pos) / rate + 60)
-        let lines = LiveTranscriber.shared.texts[id]?.lines ?? []
-        var best: (from: Double, to: Double)?
-        for (a, b) in zip(lines, lines.dropFirst()) where b.start > a.end {
-            let mid = (a.end + b.start) / 2
-            guard mid > low, mid < high else { continue }
-            if best == nil || b.start - a.end > best!.to - best!.from { best = (a.end, b.start) }
+        if transcripts[id] == nil, needsFilePass(id) {
+            enqueue(id)
+        } else {
+            runQueue()
         }
-        if let best, best.to - best.from >= 0.25 {
-            let cut = WavReader.quietPoint(audio, from: Int64(best.from * rate), to: Int64(best.to * rate))
-            if cut > pos { return cut }
-        }
-        let cut = WavReader.quietPoint(audio, before: target, searchSeconds: 20)
-        return cut > pos ? cut : target
     }
 
     // MARK: - Editing lines
@@ -326,25 +195,20 @@ final class Transcriber {
         try? TranscriptStore.save(t, for: id)
     }
 
+    // MARK: - Running jobs
+
     private func runQueue() {
-        guard workTask == nil, modelState == .ready, !queue.isEmpty else { return }
+        guard workTask == nil, LiveTranscriber.shared.isModelReady, growing.isEmpty, !queue.isEmpty else { return }
         workTask = Task {
-            while let id = nextJob() {
+            while let id = queue.first, growing.isEmpty {
                 let result = await transcribe(id)
-                // A finished file, or a recording with no full chunk left: done for
-                // now. Skipped for the recording in progress: comes back later.
+                // Waiting for a recording to stop: stays in the queue.
                 if result == .done { queue.removeAll { $0 == id } }
             }
-            await engine.unload() // free the memory until the next chunk or recording
+            await engine.unload() // free the memory for the recording or the next job
             workTask = nil
             runQueue()
         }
-    }
-
-    /// The recording in progress goes first, so its text upgrades during class
-    /// even while an imported file is being transcribed.
-    private func nextJob() -> UUID? {
-        queue.first { growing.contains($0) && chunkReady($0) } ?? queue.first
     }
 
     private enum JobResult { case done, yielded }
@@ -352,72 +216,50 @@ final class Transcriber {
     private func transcribe(_ id: UUID) async -> JobResult {
         let audio = RecordingStore.audioURL(id)
         guard FileManager.default.fileExists(atPath: audio.path) else { return .done }
-        var t = transcripts[id] ?? Transcript(model: WhisperEngine.variant)
+        var t = transcripts[id] ?? Transcript(model: Self.modelName)
         guard !t.finished else { return .done }
-        if growing.contains(id), !chunkReady(id) { return .done }
         cancelRequested.remove(id)
 
         let rate = Double(WavReader.rate)
-        var total = WavReader.sampleCount(audio)
+        let total = WavReader.sampleCount(audio)
         var pos = min(Int64(t.doneUpTo * rate), total)
+        t.model = Self.modelName
+        transcripts[id] = t
         active = Job(id: id, doneSeconds: Double(pos) / rate, totalSeconds: Double(total) / rate)
 
-        guard let folder = modelFolder else { active = nil; return .done }
         do {
-            try await engine.load(folder: folder, base: Self.modelBase)
+            try await engine.begin()
         } catch {
-            errors[id] = "Couldn't load the model: \(error.localizedDescription)"
+            await engine.unload()
+            errors[id] = "Couldn't load the speech model. Verbatim is getting it again."
+            LiveTranscriber.shared.modelBroken()
             active = nil
             return .done
         }
 
+        let words = WordFilter(id, from: t.doneUpTo, existing: t.lines)
+        let offset = Double(pos) / rate
         let started = Date()
         let startPos = pos
+        var lastSave = Date()
         var result = JobResult.done
-        while !cancelRequested.contains(id) {
-            total = WavReader.sampleCount(audio)
-            let isGrowing = growing.contains(id)
-            var end: Int64
-            if isGrowing {
-                guard chunkReady(id) else { break }
-                end = cutPoint(id, audio: audio, target: pos + Self.chunkSeconds * WavReader.rate, after: pos)
-            } else {
-                guard pos < total else { break }
-                end = min(pos + Self.pieceSeconds * WavReader.rate, total)
-                if end < total { end = WavReader.quietPoint(audio, before: end) }
-                if end <= pos { end = min(pos + Self.pieceSeconds * WavReader.rate, total) }
-            }
-            active = Job(
-                id: id,
-                doneSeconds: Double(pos) / rate,
-                totalSeconds: Double(total) / rate,
-                secondsLeft: active?.secondsLeft,
-                pieceStart: Double(pos) / rate,
-                pieceEnd: Double(end) / rate
-            )
+        var failed = false
 
-            if end - pos >= WavReader.rate / 2 { // skip a final crumb under half a second
-                do {
-                    let from = max(0, pos - Int64(Self.overlapSeconds * rate))
-                    let samples = try WavReader.samples(audio, from: from, count: end - from)
-                    let segments = try await engine.transcribe(samples, prompt: promptText(id, t, before: Double(pos) / rate))
-                    if cancelRequested.contains(id) { break }
-                    await waitWhileEditing(id, before: Double(end) / rate)
-                    if cancelRequested.contains(id) { break }
-                    // Start from what's on screen now, so edits and deletes made
-                    // while this piece was transcribing are kept.
-                    t.lines = (transcripts[id]?.lines ?? t.lines)
-                        + merged(id, segments, offset: Double(from) / rate, from: Double(pos) / rate, to: Double(end) / rate)
-                } catch {
-                    errors[id] = "Transcribing stopped: \(error.localizedDescription)"
-                    break
-                }
+        while pos < total {
+            if cancelRequested.contains(id) { break }
+            if !growing.isEmpty { result = .yielded; break }
+            let count = min(Self.blockSeconds * WavReader.rate, total - pos)
+            let samples: [Float]
+            do {
+                samples = try WavReader.samples(audio, from: pos, count: count)
+            } catch {
+                errors[id] = "Transcribing stopped: \(error.localizedDescription)"
+                failed = true
+                break
             }
-            pos = end
-            t.doneUpTo = Double(pos) / rate
-            t.finished = !growing.contains(id) && pos >= WavReader.sampleCount(audio)
-            transcripts[id] = t
-            try? TranscriptStore.save(t, for: id)
+            let out = await engine.feed(samples)
+            pos += count
+            add(out, to: id, offset: offset, words: words)
 
             let done = Double(pos - startPos)
             let elapsed = Date().timeIntervalSince(started)
@@ -425,49 +267,87 @@ final class Transcriber {
                 id: id,
                 doneSeconds: Double(pos) / rate,
                 totalSeconds: Double(total) / rate,
-                secondsLeft: !isGrowing && done > 0 ? elapsed / done * Double(max(0, total - pos)) : nil
+                secondsLeft: done > 0 && elapsed > 2 ? elapsed / done * Double(total - pos) : nil
             )
-
-            // The recording in progress has a chunk waiting: do that first, then
-            // carry on with this one.
-            if !isGrowing, queue.contains(where: { $0 != id && chunkReady($0) }) {
-                result = .yielded
-                break
+            if Date().timeIntervalSince(lastSave) > 10 {
+                if var now = transcripts[id] {
+                    now.doneUpTo = min(now.doneUpTo, Double(pos) / rate)
+                    try? TranscriptStore.save(now, for: id)
+                }
+                lastSave = Date()
             }
+        }
+
+        // Finish the last words of what was read, even when stopping early, so
+        // carrying on later starts cleanly at `pos`.
+        add(await engine.end(), to: id, offset: offset, words: words)
+        if var now = transcripts[id] {
+            now.doneUpTo = Double(pos) / rate
+            now.finished = pos >= total && !failed
+            // Edited lines up to here (all of them at the end). Later ones still
+            // show in the live text until the job carries on.
+            now.lines += words.lockedLeft(before: now.finished ? .infinity : now.doneUpTo)
+            now.lines.sort { $0.start < $1.start }
+            transcripts[id] = now
+            try? TranscriptStore.save(now, for: id)
         }
         cancelRequested.remove(id)
         active = nil
         return result
     }
 
-    /// The last bit of checked text before `seconds`, as context for Whisper.
-    /// Step 8 adds the word list here.
-    private func promptText(_ id: UUID, _ t: Transcript, before seconds: Double) -> String? {
-        let previous = (transcripts[id] ?? t).lines.filter { $0.end <= seconds + 0.5 }.suffix(3)
-        let text = previous.map(\.text).joined(separator: " ")
-        return text.isEmpty ? nil : String(text.suffix(150))
-    }
-
-    /// If Ryan is editing a live line in this piece, wait until he's done, so
-    /// his edit is kept (the line moves into the checked text locked).
-    private func waitWhileEditing(_ id: UUID, before seconds: Double) async {
-        while let e = LiveTranscriber.shared.editing, e.id == id, e.start < seconds, !cancelRequested.contains(id) {
-            try? await Task.sleep(for: .milliseconds(300))
+    /// Adds Parakeet's words to the transcript on screen. Re-reads it each time,
+    /// so edits and deletes made while it runs are kept.
+    private func add(_ out: LiveOutput, to id: UUID, offset: Double, words: WordFilter) {
+        guard !out.finals.isEmpty, var t = transcripts[id] else { return }
+        for p in out.finals {
+            let piece = LivePiece(text: p.text, start: p.start + offset, end: p.end + offset)
+            let locked = words.lockedLeft(before: piece.start)
+            if !locked.isEmpty {
+                t.lines += locked
+                t.lines.sort { $0.start < $1.start }
+            }
+            guard words.keeps(piece) else { continue }
+            let editingLast = LiveTranscriber.shared.editing.map { $0.id == id && $0.start == t.lines.last?.start } ?? false
+            LineBuilder.add(piece, to: &t.lines, extendLast: !editingLast)
+            t.doneUpTo = max(t.doneUpTo, piece.end)
         }
+        transcripts[id] = t
+    }
+}
+
+/// Keeps Ryan's changes to the live text when a recording is transcribed again:
+/// words inside lines he deleted are dropped, and lines he edited are kept as
+/// he wrote them (locked) instead of Parakeet's words for that bit.
+@MainActor
+private final class WordFilter {
+    /// Extra time around a line, because two passes don't time words exactly the same.
+    static let padding = 0.15
+
+    private let skip: [LiveText.Span]
+    private var locked: [Transcript.Line]
+
+    /// `existing`: lines already in the transcript (carrying on after Cancel or
+    /// a recording), so edited lines added last time aren't added twice.
+    init(_ id: UUID, from seconds: Double, existing: [Transcript.Line]) {
+        let live = LiveTranscriber.shared.texts[id]
+        locked = (live?.lines ?? []).filter { line in
+            line.isLocked && line.end > seconds
+                && !existing.contains { $0.start == line.start && $0.text == line.text }
+        }
+        skip = (live?.removed ?? []) + locked.map { LiveText.Span(start: $0.start, end: $0.end) }
     }
 
-    /// Whisper's words for [from, to), minus lines Ryan deleted, plus lines he
-    /// edited in the live text (kept as he wrote them), plus live lines Whisper
-    /// skipped.
-    private func merged(_ id: UUID, _ segments: [WhisperSegment], offset: Double, from: Double, to: Double) -> [Transcript.Line] {
-        let live = LiveTranscriber.shared.texts[id]
-        let lockedLines = (live?.lines ?? []).filter(\.isLocked)
-        let overlaps = { (s: Double, e: Double) in e >= offset && s <= to }
-        let skip = (live?.removed ?? []).filter { overlaps($0.start, $0.end) }
-            + lockedLines.filter { overlaps($0.start, $0.end) }.map { ChunkMerge.Span(start: $0.start, end: $0.end) }
-        let keep = lockedLines.filter { $0.middle >= from && $0.middle < to }
-        let others = (live?.lines ?? []).filter { !$0.isLocked && $0.end >= offset - 20 && $0.start <= to + 20 }
-        return ChunkMerge.lines(segments, offset: offset, keepFrom: from, skip: skip, locked: keep, live: others, keepTo: to)
+    func keeps(_ piece: LivePiece) -> Bool {
+        let mid = (piece.start + piece.end) / 2
+        return !skip.contains { mid >= $0.start - Self.padding && mid <= $0.end + Self.padding }
+    }
+
+    /// Edited lines that start before `seconds` and haven't been added yet.
+    func lockedLeft(before seconds: Double) -> [Transcript.Line] {
+        let due = locked.filter { $0.start < seconds }
+        locked.removeAll { $0.start < seconds }
+        return due
     }
 }
 

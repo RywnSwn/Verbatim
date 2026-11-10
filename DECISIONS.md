@@ -160,3 +160,17 @@ worse than live. Parakeet Unified's streaming WER is within 0.05 points of
 its own batch mode, and it doesn't hallucinate. One model also means one
 download and less memory on the 8 GB Mac. Replaces "Two passes: live +
 accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
+
+## Step 5c choices (2026-11-10)
+- A file job (import, "Transcribe again") waits while a recording is going,
+  instead of loading a second Parakeet. Simpler, and the 8 GB Mac only ever
+  holds one copy of the model. A running job pauses after 4 s of audio and
+  carries on after Stop. Imports take about a minute, so the wait is short.
+- Files use the same streaming Parakeet as live text, fed at full speed. No
+  new download. The batch mode is a bit more accurate but needs an extra
+  encoder; only worth it if Ryan finds files worse than live.
+- Recordings made with Apple's backup engine get a Parakeet pass by
+  themselves after Stop (no button to press). Ryan's edits and deletions
+  in the live text are kept in that pass and in "Transcribe again".
+- The old Whisper model (626 MB) is deleted on launch so Ryan gets the
+  space back. Old Whisper transcripts still open.

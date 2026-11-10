@@ -64,7 +64,8 @@ final class LiveTranscriber {
     /// Words Apple's engine is still working out. Shown after the last line.
     private(set) var volatile = ""
     private(set) var activeID: UUID?
-    /// The line being edited right now (recording, line start). New words never go into it.
+    /// The line being edited right now (recording, line start), live or file
+    /// text. New words never go into it.
     var editing: (id: UUID, start: Double)?
 
     /// Written to from the audio thread.
@@ -221,6 +222,7 @@ final class LiveTranscriber {
                 UserDefaults.standard.set(true, forKey: Self.preparedKey)
                 downloadTask = nil
                 modelState = .ready
+                Transcriber.shared.modelReady()
             } catch {
                 downloadTask = nil
                 if case .paused = modelState { return }
@@ -238,7 +240,7 @@ final class LiveTranscriber {
     }
 
     /// The model on disk didn't load (deleted or broken): get it again.
-    fileprivate func modelBroken() {
+    func modelBroken() {
         UserDefaults.standard.removeObject(forKey: Self.preparedKey)
         modelState = .failed(fraction: 0)
         startDownload()
@@ -318,7 +320,7 @@ actor LiveRunner {
         if let engine {
             await deliver(await engine.end(), offset: offset, engine: name, id: id, run: run)
         }
-        await parakeet.unload() // free the memory for the accurate pass
+        await parakeet.unload() // free the memory (a file job may be waiting)
         await MainActor.run { LiveTranscriber.shared.finished(id, run: run) }
     }
 

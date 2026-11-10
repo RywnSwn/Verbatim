@@ -7,6 +7,11 @@ visual design step). Don't move things around without asking Ryan.
 Live mockup: https://claude.ai/artifact/EyDJd3LDZtiTdGJmcA5vgr (private to Ryan).
 The `.dc.html` files here are a copy of it, one per screen.
 
+Since step 5c (Whisper dropped, 2026-11-10) the mockups are out of date in
+one way: there is no accurate pass any more. Ignore "Checked up to", grey
+live text, "Checking 10:40 to 10:45", "Checking is behind" and the
+"accurate model" download in them. Everything else still holds.
+
 ## Signature: the waveform
 Grey bars when someone talks, grey dots when it's quiet. No color.
 - Start screen: it animates into a line of words (audio becoming text).
@@ -23,10 +28,10 @@ Grey bars when someone talks, grey dots when it's quiet. No color.
    - Sidebar: recordings, newest first ("Today", "This week"). Meta text like
      "Wed 5 Nov, audio deletes in 3 days". Hint at bottom: drop a Voice Memo.
    - Transcript: time in a left gutter (normal font, tabular numbers), a flag icon
-     there for markers, **Speaker:** then the text. Checked text in full ink,
-     live text slightly grey, separated by a thin line "Checked up to 10:40".
+     there for markers, **Speaker:** then the text, all in full ink (no "Checked up to" line
+     since step 5c: the live text is the transcript).
    - Bottom bar: timer, waveform, Pause (⇧⌘P) and Stop (⌘R) in the middle,
-     status spot on the right ("Checking 10:40 to 10:45" / "Saved as you go, works offline").
+     status spot on the right ("Saved as you go, works offline").
    - Undo toast for markers (and for Stop).
 2. **Old transcript** (`Transcript.dc.html`): search box with "2 of 7" and yellow
    match highlights, Export, Copy. Double-click a line to edit (Enter saves, Esc
@@ -38,7 +43,7 @@ Grey bars when someone talks, grey dots when it's quiet. No color.
 3. **First launch / empty** (`Empty.dc.html`): one screen, no tour. Serif headline
    "Hear it once." / italic "Keep every word.", waveform-to-words animation,
    Start recording (⌘R), "Or drop a Voice Memo here". Below a thin line: mic status
-   and model download (size, time left, resumes, "you can record now").
+   and the one speech model download (size, time left, resumes, "you can record now").
 4. **Menu bar dropdown** (`Mini.dc.html`, replaces the mini window): icon = tiny
    waveform + timer. Dropdown: status line, last 2 lines, Copy new / last 10 min /
    all, Add marker, Pause, Stop recording, Open Verbatim.

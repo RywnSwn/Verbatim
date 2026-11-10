@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
 
-/// Which list a transcript line lives in: the accurate text, or the live text.
+/// Which list a transcript line lives in: a file transcription (transcript.json),
+/// or the live text (live.json).
 enum LineSource: Hashable {
     case checked
     case live
@@ -36,7 +37,7 @@ extension RecorderModel {
         }
     }
 
-    /// Lets later passes change the line again.
+    /// Lets "Transcribe again" change the line again.
     func unlockLine(_ id: UUID, _ source: LineSource, start: Double) {
         guard var line = Self.line(id, source, start: start), line.isLocked else { return }
         line.locked = nil
@@ -58,8 +59,8 @@ extension RecorderModel {
         return lines.first { $0.start == start }
     }
 
-    /// A live line the accurate pass has reached since: it lives in the
-    /// checked text now (locked, if Ryan edited it).
+    /// A live line a file transcription has reached since: it lives in the
+    /// transcript now (locked, if Ryan edited it).
     private static func resolved(_ id: UUID, _ source: LineSource, _ line: Transcript.Line) -> LineSource {
         guard source == .live else { return .checked }
         let done = Transcriber.shared.transcripts[id]?.doneUpTo ?? 0

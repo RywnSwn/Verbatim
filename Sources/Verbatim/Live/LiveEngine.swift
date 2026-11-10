@@ -33,8 +33,8 @@ struct LiveText: Codable, Equatable {
     var lines: [Transcript.Line] = []
     /// Which engines wrote it, for comparing them later.
     var engines: [String] = []
-    /// Lines Ryan deleted (seconds into audio.wav), so the accurate pass in
-    /// step 5 doesn't bring them back. nil in files from before editing.
+    /// Lines Ryan deleted (seconds into audio.wav), so "Transcribe again"
+    /// doesn't bring them back. nil in files from before editing.
     var removed: [Span]?
 
     struct Span: Codable, Equatable {

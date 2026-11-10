@@ -100,8 +100,8 @@ final class RecorderModel {
         refreshMicName()
         wirePipeline()
         observeSystem()
-        Transcriber.shared.start(with: recordings)
         LiveTranscriber.shared.start(with: recordings)
+        Transcriber.shared.start(with: recordings)
     }
 
     // MARK: - Start / Pause / Stop
@@ -249,8 +249,8 @@ final class RecorderModel {
             try? await Task.sleep(for: .seconds(10))
             guard let self, self.stoppedNote == stopped else { return }
             self.stoppedNote = nil
-            // Undo Stop is no longer possible, so the recording is final: check the
-            // rest of it (the 5 minute chunks during class did the start).
+            // Undo Stop is no longer possible, so the recording is final. Its live
+            // text is the transcript, unless Apple's engine wrote some of it.
             Transcriber.shared.recordingFinal(id)
         }
     }
@@ -558,7 +558,6 @@ final class RecorderModel {
         if Date().timeIntervalSince(lastSave) > 10 {
             updateCurrent { $0.samples = samples }
             saveCurrent()
-            if let id = currentID { Transcriber.shared.audioGrew(id) }
         }
         if elapsed >= Self.maxLength {
             stop(note: "Stopped at 3 hours, the longest a recording can be. Saved.")

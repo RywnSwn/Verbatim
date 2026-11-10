@@ -1,14 +1,16 @@
 import AppKit
 import SwiftUI
 
-/// Transcript lines with the time in a left gutter. Checked (accurate) text is
-/// in full ink; live text is a little grey, under a thin "Checked up to" line.
-/// Follows new text only if you're already at the bottom; otherwise a
-/// "Jump to live" button shows.
+/// Transcript lines with the time in a left gutter, all in full ink: Parakeet's
+/// live text is final once a line shows. Only the half-said words Apple's
+/// backup engine is still working out are lighter. Follows new text only if
+/// you're already at the bottom; otherwise a "Jump to live" button shows.
+/// `checked` is a file transcription (imports, "Transcribe again"); the live
+/// lines it hasn't reached yet come after it.
 ///
 /// Editing: click a line (Enter saves, Esc cancels, clicking away
 /// saves), or right-click for Copy / Edit / Delete. Edited lines turn full ink
-/// and get a lock; later passes never change them. Every change has Undo in
+/// and get a lock; "Transcribe again" keeps them. Every change has Undo in
 /// the bottom bar.
 struct TranscriptList: View {
     @Environment(RecorderModel.self) private var model
@@ -16,8 +18,6 @@ struct TranscriptList: View {
     let info: RecordingInfo
     let checked: [Transcript.Line]
     let live: [Transcript.Line]
-    /// Where the checked text ends (seconds into the audio), for the divider.
-    var checkedUpTo: Double?
     var volatile: String = ""
     var isLive = false
 
@@ -35,13 +35,11 @@ struct TranscriptList: View {
 
     private enum Row: Identifiable {
         case line(Transcript.Line, LineSource)
-        case checkedUpTo(Double)
         case volatile(String)
 
         var id: String {
             switch self {
             case .line(let l, let s): TranscriptRow.id(s, l.start)
-            case .checkedUpTo: "checked"
             case .volatile: "volatile"
             }
         }
@@ -49,9 +47,6 @@ struct TranscriptList: View {
 
     private var rows: [Row] {
         var rows = checked.map { Row.line($0, .checked) }
-        if !checked.isEmpty, !live.isEmpty || !volatile.isEmpty, let last = checked.last {
-            rows.append(.checkedUpTo(checkedUpTo ?? last.end))
-        }
         rows += live.map { Row.line($0, .live) }
         let v = volatile.trimmingCharacters(in: .whitespaces)
         if !v.isEmpty { rows.append(.volatile(v)) }
@@ -65,15 +60,6 @@ struct TranscriptList: View {
                     switch row {
                     case .line(let line, let source):
                         lineRow(line, source)
-                    case .checkedUpTo(let seconds):
-                        HStack(spacing: 10) {
-                            Text("Checked up to \(info.timeLabel(seconds, style: timeStyle))")
-                                .font(.system(size: 13, design: .serif).italic())
-                                .foregroundStyle(.secondary)
-                            Rectangle().fill(Theme.line).frame(height: 1)
-                        }
-                        .padding(.leading, 70)
-                        .padding(.vertical, 4)
                     case .volatile(let text):
                         HStack(alignment: .firstTextBaseline, spacing: 18) {
                             Color.clear.frame(width: 52, height: 1)
@@ -169,7 +155,6 @@ struct TranscriptList: View {
     private func lineRow(_ line: Transcript.Line, _ source: LineSource) -> some View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
-        let grey = source == .live && !line.isLocked
         return HStack(alignment: .firstTextBaseline, spacing: 18) {
             Text(info.timeLabel(line.start, style: timeStyle))
                 .font(.callout)
@@ -193,7 +178,7 @@ struct TranscriptList: View {
                 Text(query.isEmpty ? AttributedString(line.text) : highlighted(line.text, source, line.start))
                     .font(Theme.transcript)
                     .lineSpacing(Theme.transcriptLineSpacing)
-                    .foregroundStyle(grey ? Theme.ink.opacity(0.62) : Theme.ink)
+                    .foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .pointerStyle(.horizontalText) // text cursor: says "you can type here"
             }
@@ -208,7 +193,7 @@ struct TranscriptList: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .help("You edited this line, so later passes won't change it. Click to unlock.")
+                .help("You edited this line, so Transcribe again keeps it. Click to unlock.")
                 .accessibilityLabel("Unlock line")
             }
         }
@@ -242,7 +227,7 @@ struct TranscriptList: View {
         if editing != nil { save() }
         draft = line.text
         editing = EditKey(source: source, start: line.start)
-        if source == .live { liveTranscriber.editing = (info.id, line.start) }
+        liveTranscriber.editing = (info.id, line.start)
         Task { @MainActor in fieldFocused = true }
     }
 

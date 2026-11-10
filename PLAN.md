@@ -1,17 +1,12 @@
 # Plan
 
-Status (2026-11-09, fifth chat): steps 1, 2, 2b, 3, 4, 5, 6 and 11 merged
-into `main`. Step 6 merged before testing (Ryan tests through the in-app
-update): ask him to run the "Step 6 test list" below. Step 2b merged (Ryan asked to merge before testing; its test
-list is below). Step 5 is still not tested
-by Ryan: ask him to run the "Step 5 test list" below. Also still
-unanswered: line editing on a real Mac, step 3 accuracy on a real class
-Voice Memo.
-Next: step 5c (drop Whisper, see below), then step 7. App icon later.
-Fix on 2026-11-10: accurate pass was dropping sentences (prompt too long,
-see step 5 notes). Ask Ryan to record the same kind of lecture again and
-compare live vs checked text. Second test (Transcribe again): no more
-missing sentences, but doubled lines and made-up text; fixed the same day.
+Status (2026-11-10, step 5c chat): steps 1, 2, 2b, 3, 4, 5, 6 and 11 merged
+into `main`. Step 5c (drop Whisper, Parakeet only) is built on branch
+`claude/step-5c-parakeet-only`, PR open, not tested by Ryan yet: ask him to
+run the "Step 5c test list" below. Steps 2b and 6 also not tested yet (their
+test lists are below). Step 5's test list is gone with Whisper.
+Still unanswered: line editing on a real Mac.
+Next: step 7. App icon later.
 Question for Ryan: markers (⌘D, "Copy marked parts only") are in the spec
 and layout but in no step. Add them to step 7 or 10, or drop them?
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
@@ -30,16 +25,16 @@ class depends on it.
 2b. [x] **Visual design.** "Notebook" look picked by Ryan and built.
        App icon still to do (Ryan didn't like the first try: a waveform
        turning into text lines; do it later, show him options first).
-3. [~] **Transcribe a file.** Drop a Voice Memo, WhisperKit transcribes it,
-       model download with resume. Ryan tests accuracy on real classes.
+3. [x] **Transcribe a file.** Drop a Voice Memo, it gets transcribed (was
+       WhisperKit, Parakeet since step 5c), model download with resume.
 4. [x] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
        (backup while Parakeet downloads).
-5. [x] **Background accurate pass.** Voice detector cuts ~5 min chunks at
-       pauses, one job at a time, overlap merge, live text upgrades.
+5. [x] **Background accurate pass.** Whisper checked 5 min chunks during
+       class. Removed again in step 5c.
 6. [x] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
        export .txt/.md, search. Merged, not tested by Ryan yet.
-5c. [ ] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
-       "Plan for step 5c" below.
+5c. [x] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). Built,
+       PR open, not tested by Ryan yet. See "How file transcription works".
 7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
 8. [ ] **Corrections memory.** Word list via Parakeet vocabulary boosting
        (~100 MB extra download, Ryan said yes), fix rules, Words screen.
@@ -57,45 +52,71 @@ class depends on it.
       Foundation Models (offline, free). Needs Apple Intelligence on.
       Ryan can still rename.
 
-## Plan for step 5c: drop Whisper (do this next, in its own chat)
-Why: in Ryan's two lecture tests Whisper skipped sentences, doubled lines
-and made text up ("I'm not a vampire" x15), even after fixes. Parakeet's
-live text was better. FluidAudio's own benchmark (LibriSpeech test-clean):
-Parakeet Unified streaming 2.21% avg WER, batch 2.16%, so the live text is
-already about as accurate as it gets, and RNNT can't invent sentences.
-What to build:
-- Recordings: the live text IS the transcript. No checking pass, no
-  "Checked up to" divider, no "Checking 10:40 to 10:45", live lines full
-  ink once final (half-said words can stay lighter). Edits/locks/deletes
-  keep working as they do on live lines.
-- Imports and "Transcribe again": run Parakeet over the WAV (feed the
-  existing streaming engine at full speed, ~66x real time per FluidAudio,
-  so a 1 h class in about a minute). Same model, no new download. Decide
-  whether an import waits while recording (one model in memory, 8 GB Mac)
-  or uses a second instance; waiting is simpler.
-- Recordings made with Apple's backup engine (Parakeet wasn't ready):
-  offer/auto "Transcribe again" with Parakeet after Stop.
-- Remove WhisperKit (Package.swift), `WhisperEngine.swift`, the Whisper
-  download/prepare lines on the start screen, `ChunkMerge` / `TextCheck`
-  and the 5 min chunk logic in `Transcriber`. Keep the queue idea for files.
-- On launch, delete the old Whisper model folder (626 MB) in
-  App Support/Verbatim/Models once, so Ryan gets the space back.
-- Old recordings with a Whisper transcript.json still open and show it.
-- Step 8 changes: no Whisper prompt any more. Ryan wants the extra
-  download for names (2026-11-10): FluidAudio vocabulary boosting. Checked
-  in FluidAudio 0.18.0: `StreamingUnifiedAsrManager.configureVocabularyBoosting`
+## How file transcription works (step 5c, Whisper dropped)
+- Recordings: the live text (`live.json`) IS the transcript. No checking
+  pass, no "Checked up to" divider, no "Checking ..." in the bottom bar.
+  Live lines are full ink; only Apple's half-said words are lighter.
+- `Transcribe/Transcriber.swift`: a queue of whole files, one at a time,
+  run through its own `ParakeetEngine` (same model as live, no new
+  download). Audio is fed in 4 s blocks at full speed (FluidAudio's
+  streaming manager processes every full window it has, no pacing), words
+  go through the same `LineBuilder` as live text. Saved to
+  `transcript.json` (model `parakeet-unified-en-0.6b`) every 10 s and at
+  the end; `doneUpTo` = end of the last word, so Cancel / crash / Continue
+  pick up there. Engine freed when the queue is empty.
+- What goes in the queue: imports, "Transcribe again", and recordings
+  whose live text is empty or has `Apple` in `engines` (backup engine was
+  used). Those start by themselves when Undo Stop expires
+  (`recordingFinal`) or on next launch.
+- While recording (`growing` not empty) file jobs wait (status line:
+  "Starts when you stop recording"). A running job stops after its
+  current 4 s block, frees the model, and carries on after Stop. Chosen
+  over a second model instance: simpler, and the 8 GB Mac only ever holds
+  one Parakeet.
+- Ryan's edits to the live text survive a file pass (`WordFilter`): words
+  inside deleted live lines (`LiveText.removed`) are dropped, locked live
+  lines are put in as he wrote them instead of Parakeet's words there.
+- Screen: transcript.json lines (if any), then live lines past `doneUpTo`
+  (`TranscriptTools.shownLines`). So during "Transcribe again" the new
+  text grows on top of the old live text.
+- Model state for files now comes from `LiveTranscriber.modelState`
+  (Parakeet). `LiveTranscriber` calls `Transcriber.modelReady()` when the
+  download finishes.
+- Old Whisper recordings: their `transcript.json` still opens and shows.
+  An unfinished one carries on with Parakeet.
+- Launch cleanup: everything in `App Support/Verbatim/Models` except
+  `Live/` (Parakeet) is deleted, so the 626 MB Whisper model is gone. The
+  old `modelFolder` / `modelPrepared` UserDefaults keys are removed.
+- Removed: WhisperKit (Package.swift), `WhisperEngine.swift`,
+  `ChunkMerge.swift` (with `TextCheck`), chunk cutting and quiet points,
+  Low Power Mode wait, the start screen's second model line.
+- Start screen: one line, "Speech model ready" / "Downloading the speech
+  model".
+- Later, only if Ryan finds files worse than live: FluidAudio's
+  `UnifiedAsrManager` (batch, full-attention 15 s encoder, same checkpoint)
+  is a bit more accurate for files but needs an extra encoder download.
+- Step 8 notes: no Whisper prompt any more. Names via FluidAudio vocabulary
+  boosting (Ryan said yes to the extra download, 2026-11-10). Checked in
+  FluidAudio 0.18.0: `StreamingUnifiedAsrManager.configureVocabularyBoosting`
   (works live, not only on files) with `CustomVocabularyContext` + a
   separate Parakeet CTC 110M model (`Repo.parakeetCtc110m`, ~97.5 MB
   download, ~64 MB extra memory). See FluidAudio
-  `Documentation/ASR/CustomVocabulary.md`. Plus find/replace fix rules for
-  anything it still misses. Words screen as planned.
-- Spec and design docs: remove "accurate pass" parts.
-- Optional later: FluidAudio's `UnifiedAsrManager` (batch, full-attention
-  15 s encoder, same checkpoint) is a bit more accurate for files but needs
-  an extra encoder download. Not worth it unless Ryan finds files worse.
-Test list for Ryan: record a lecture video, text is final right away and
-stays the same after Stop; import a Voice Memo, done in about a minute;
-Settings/start screen no longer mention a second model; disk space back.
+  `Documentation/ASR/CustomVocabulary.md`. Configure it in `ParakeetEngine`
+  so live and files both get it. Plus find/replace fix rules. Words screen.
+
+## Step 5c test list for Ryan
+1. Update. Start screen shows only one model line ("Speech model ready").
+2. Record a lecture video for a few minutes: text is black right away, no
+   "Checked up to" line, nothing changes after Stop.
+3. Drop a long Voice Memo: done in about a minute or two for an hour.
+   Status line shows minutes and time left.
+4. Start recording while a Voice Memo is transcribing: the memo pauses
+   ("Starts when you stop recording"), and finishes after you stop.
+5. More > Transcribe again on a recording where you edited and deleted a
+   line: your edit and the deletion stay.
+6. Finder > Go > Go to Folder > `~/Library/Application Support/Verbatim/Models`:
+   only a `Live` folder left (the 626 MB Whisper model is gone).
+7. Old transcripts made with Whisper still open.
 
 ## Ryan's feedback: the app feels empty (2026-11-10)
 Ryan: "Claude is a simple app but it feels well fleshed out, small things
@@ -109,7 +130,7 @@ listing small touches and showing Ryan a mockup before building.
 - Is Parakeet's live text good enough in a real class? Is 2 s delay OK?
 - Does Apple's engine need the Speech Recognition permission at all?
   (We ask only when it's actually used.)
-- Is large-v3 turbo (626 MB) fast enough on Ryan's M2? Test in step 3.
+- Is Parakeet on files as good as live? (Same model; it should be.)
 - How speaker labels work offline (diarization model choice, milestone 7).
 - Is Ryan's Mac a MacBook Air (no fan, slows down when hot) or Pro?
 - Should a recording be able to "Keep audio" past 7 days?
@@ -135,7 +156,7 @@ Ask Mr. Yurt before recording class.
 
 ## How recording works (step 2)
 - Audio: `AVCaptureSession` on the chosen mic, converted to 16 kHz mono
-  Int16 (what Whisper wants), ~115 MB per hour. `Audio/AudioPipeline.swift`.
+  Int16 (what Parakeet wants), ~115 MB per hour. `Audio/AudioPipeline.swift`.
 - File: `~/Library/Application Support/Verbatim/Recordings/<id>/audio.wav`
   plus `recording.json` (formatVersion 1, events with sample positions for
   pause, sleep, mic change, undo stop, recovered). `Audio/WavWriter.swift`
@@ -165,38 +186,14 @@ Ask Mr. Yurt before recording class.
 6. Settings (Cmd+,): pick AirPods, see the warning, switch back.
 7. Record 30+ min untouched: Mac doesn't sleep.
 
-## How transcription works (step 3)
-- WhisperKit 1.1.1 from `argmax-oss-swift`, model
-  `large-v3-v20240930_626MB`, stored in
-  `~/Library/Application Support/Verbatim/Models` (outside the app, so
-  updates don't re-download). Only `Transcribe/WhisperEngine.swift` imports
-  WhisperKit.
-- Download starts on first launch; WhisperKit's downloader resumes partial
-  files. Our side: progress, time left, Pause, auto retry every 20 s.
-  After download the model is loaded once ("Getting the model ready") to
-  fetch the tokenizer while online and let macOS optimise it.
-- `Transcribe/Transcriber.swift`: queue, one job at a time, model unloaded
-  when idle. Each job cuts the WAV into ~2 min pieces at the quietest
-  0.1 s near the cut, transcribes, shifts times, saves `transcript.json`
-  after every piece (so text appears as it goes; Cancel and crashes keep
-  progress; Continue resumes). Junk phrases ("Thanks for watching") dropped.
-  Step 5 should reuse this piece logic.
-- Recordings are queued 10 s after Stop (when Undo Stop expires). On launch,
-  unfinished ones are re-queued unless Ryan pressed Cancel.
+## How importing works (step 3)
+(Step 3 used Whisper for the text; step 5c replaced that, see above.)
 - Import: drop a file on the window or Cmd+O. `AudioImport` converts it
   to our WAV with AVAssetReader, original untouched. Imports show time
   since start in the gutter, recordings show clock time (pauses skipped).
 - Transcript view: status line on top, time gutter, Copy all (Shift+Cmd+C,
   plain text, no speakers yet), More menu (Play audio, Show in Finder,
   Transcribe again, Move to Trash).
-
-## Step 3 test list for Ryan
-1. First launch: model download line on the start screen, Pause/Resume.
-2. After download: "Getting the model ready", then "ready".
-3. Old recordings get text by themselves. Text appears piece by piece.
-4. Drop a real class Voice Memo: accuracy? names? how long did it take?
-5. Copy all, paste into Claude.
-6. Cancel halfway, then Continue.
 
 ## How updates work (step 11, pulled forward)
 - `Updates/Updater.swift`: on launch and every 4 h, reads
@@ -239,7 +236,7 @@ Ask Mr. Yurt before recording class.
   (`exact:`, `traits: []` so its TTS/diarizer/text-normaliser parts are left
   out). Only `Live/ParakeetEngine.swift` imports FluidAudio.
 - Download: ~600 MB to `App Support/Verbatim/Models/Live/parakeet-unified-en-0.6b-coreml`,
-  starts on first launch next to the Whisper download, resumes, Pause, auto
+  starts on first launch, resumes, Pause, auto
   retry every 20 s, then loaded once ("Getting live text ready") and freed.
   Flag `liveModelPrepared` in UserDefaults.
 - Backup: Apple SpeechAnalyzer (`Live/AppleSpeechEngine.swift`) when
@@ -252,34 +249,28 @@ Ask Mr. Yurt before recording class.
   Pause/sleep/disk-full send `.flush` (last words finished, engine reset);
   the engine is picked again when audio comes back, so Parakeet takes over
   from Apple after the next Pause. Times are seconds into audio.wav (the
-  runner counts samples), so they line up with Whisper's.
-- Memory: Parakeet loaded at the first audio, unloaded after Stop (before
-  Whisper starts 10 s later). If no engine can listen, it looks again
+  runner counts samples), so they line up with file transcription.
+- Memory: Parakeet loaded at the first audio, unloaded after Stop. If no engine can listen, it looks again
   every 15 s of audio.
 - Lines: `LineBuilder` joins words; new line after a sentence end (70+
   chars), a pause over 1.6 s, or 260 chars.
 - Saved to `Recordings/<id>/live.json` (formatVersion 1) every 10 s and at
   Pause/Stop. Undo Stop keeps adding to it.
-- Screen: live lines a little grey; status line on top only when Apple's
+- Screen: live lines in full ink (grey before 5c); status line on top only when Apple's
   engine or nothing is listening. Auto-scroll only at the bottom, else
-  "Jump to live". Copy all works while recording. After Stop, live lines
-  the accurate pass hasn't reached show grey under "Checked up to 10:40".
-- Step 5 should replace the grey live part with Whisper text as each chunk
-  finishes, during recording. It must keep lines with `locked: true`
-  (Ryan edited them) and skip text inside `LiveText.removed` spans (lines
-  he deleted), or his changes come back.
+  "Jump to live". Copy all works while recording.
 
 ## Editing lines (pulled forward from step 6, Ryan's ask while testing step 4)
 - Click a line (one click, Ryan's ask; was double-click): inline field.
   Text cursor shows over lines. Enter saves, Esc cancels, clicking away
   saves, emptying it deletes. Right-click: Copy this line, Copy from here
   down, Edit line, Delete line, Unlock.
-- Works on live and accurate lines, while recording and after.
+- Works on live lines and file transcription lines, while recording and after.
 - Edited lines get `locked: true`, turn full ink, show a lock (click to
   unlock). New live words never go into a line being edited or locked.
 - "Line edited. Undo" / "Deleted a line. Undo" in the bottom bar for 10 s.
 - Lines are found by their start time (`Model/LineEdits.swift`).
-- Transcriber re-reads the lines on screen before adding each piece, so
+- Transcriber re-reads the lines on screen before adding each batch of words, so
   edits made while it transcribes are kept. "Transcribe again" still
   throws edits away (explicit action).
 - Text in lines is no longer selectable outside edit mode (a click
@@ -290,11 +281,11 @@ Ask Mr. Yurt before recording class.
 1. Start screen: "Downloading live text model" line with %, Pause works.
    Then "Getting live text ready", then "Live text ready".
 2. Record yourself reading something aloud: text appears ~2 s behind, in
-   grey, with punctuation. Names? (Nyankupon, Anansi, Kweku Tsin)
+   with punctuation. Names? (Nyankupon, Anansi, Kweku Tsin)
 3. Scroll up while it records: it stops following, "Jump to live" shows.
 4. Pause, Resume: last words before Pause show up, carries on fine.
 5. Copy all while recording, paste into Claude.
-6. Stop: live text stays (grey) until the accurate text replaces it.
+6. Stop: live text stays as it is.
 7. Activity Monitor > Memory: how much Verbatim uses while recording.
 8. If you record before Parakeet finishes: a line says it's using the
    Mac's built-in engine. Does that text look OK?
@@ -302,70 +293,11 @@ Ask Mr. Yurt before recording class.
    shows, new words keep coming below. Undo in the bottom bar works.
 10. Right-click a line > Delete line, then Undo.
 
-## How the background accurate pass works (step 5)
-- `Transcriber.growing`: recordings still getting audio (recording, paused,
-  or in the 10 s Undo Stop window). `RecorderModel` calls
-  `recordingStarted` (start, Undo Stop), `audioGrew` (every 10 s) and
-  `recordingFinal` (when Undo Stop expires; replaces the old enqueue).
-- A chunk starts once there are 5 min + 15 s of unchecked audio
-  (`chunkSeconds`, `settleSeconds`). The 15 s lets live text for that bit
-  become final.
-- Cut: the longest gap between live lines in the 30 s before the 5 min
-  mark, at its quietest 0.1 s, so live lines are never split. No live text:
-  quietest moment in the 20 s before the mark (`WavReader.quietPoint`).
-- Overlap: each piece starts 1 s before the cut. Whisper runs with word
-  timestamps; `Transcribe/ChunkMerge.swift` drops words whose middle is
-  before the cut, inside a deleted live line (`LiveText.removed`) or inside
-  a locked live line, then adds the locked live lines as they are. A line
-  belongs to the side of the cut its middle is on (`Line.middle`,
-  `LiveText.unchecked(after:)`).
-- Prompt: the last 3 checked lines (max 150 chars, 32 tokens) go to
-  Whisper as context. Was 120 tokens: WhisperKit's decoder holds only 224
-  tokens per 30 s window including the prompt, so fast speech got cut off
-  and the rest of the window skipped (Ryan's first real test, a history
-  lecture: whole sentences missing, accurate text worse than live). Step 8's
-  word list must fit in this small budget too.
-- Clean-up (`ChunkMerge.cleaned`, `TextCheck`, compares word pairs): drops
-  Whisper segments that loop ("I'm not a vampire" x8), the start of a
-  segment that repeats the end of the one before, segments that mostly
-  repeat the two before, and segments with almost nothing in common with
-  the live text around them (made up). Then a live line whose word pairs
-  are mostly missing from Whisper's text within 20 s is kept as it is
-  (`ChunkMerge.skipped`). By text, not time: the first version compared
-  times and doubled lines in Ryan's second test. Segments that just repeat the prompt are dropped.
-  Step 8 adds the word list in `Transcriber.promptText`.
-- While Ryan edits a live line inside the chunk, the merge waits until he
-  is done. Undo of a live edit/delete after the line got upgraded applies
-  to the checked text (`LineEdits.restore`).
-- The recording in progress jumps ahead of imports: a file job yields after
-  its current piece when a recording chunk is ready.
-- Memory: Whisper loads for each chunk and unloads after (queue empty), so
-  during class it is in memory only while checking. Parakeet stays loaded.
-- Low Power Mode: chunks wait, bottom bar says so, and everything catches
-  up after Stop (spec). Turning it off starts a waiting chunk.
-- Screen: recording view shows checked text, the "Checked up to" divider,
-  then grey live text. Bottom bar status spot: "Checking 10:40 to 10:45".
-- Post-stop and imported files use the same code (2 min pieces, overlap,
-  word merge).
-- Not done: "falling behind" message, Settings choice for the 5 min
-  (both step 10). Possible screen jump when a chunk lands while scrolled up:
-  ask Ryan.
-
-## Step 5 test list for Ryan
-1. Record 12+ min (a video or podcast is fine). Around 5:15 the bottom
-   right says "Checking ..." for a bit, then the top part turns from grey
-   to black with "Checked up to ..." under it. Again around 10:30.
-2. Read the seam around the 5 min mark: any doubled or missing words?
-3. While recording, delete a grey line and edit another one before they
-   get checked. After the check: deleted stays gone, edited stays as you
-   wrote it with the lock.
-4. Scroll up while a check lands: does the screen jump?
-5. Stop: the last few minutes get checked within a minute or so.
-6. Activity Monitor: memory while "Checking" shows vs between checks.
-7. Turn on Low Power Mode while recording: bottom right says checking
-   waits. Stop: it catches up.
-8. Import a Voice Memo, then start recording: the recording's checks still
-   happen during the import.
+## Background accurate pass (step 5, removed in 5c)
+Whisper checked 5 min chunks during class and merged them with the live
+text. In Ryan's two lecture tests it skipped sentences, doubled lines and
+made text up, and read worse than Parakeet's live text, so step 5c removed
+it. Details are in git history (`ChunkMerge.swift`, PLAN.md before 5c).
 
 ## How the look works (step 2b)
 - Ryan compared three looks on a preview page
@@ -380,7 +312,6 @@ Ask Mr. Yurt before recording class.
   standard Mac. App tint is the ink blue (links, progress, toggles).
 - Copy all sits in its own toolbar item with the glass background hidden,
   so it shows as an ink capsule.
-- "Checked up to" divider in serif italic.
 - Start screen animation (Ryan: it stopped abruptly): speech eases in and
   out, pauses at commas and full stops, words hold then fade, then repeat. Live text 62% ink, half-said
   words 45%.
@@ -399,7 +330,7 @@ Ask Mr. Yurt before recording class.
   "Nothing new since last copy" for 1.8 s (`copyFeedback`).
 - Copy new: `RecordingInfo.copiedUpTo` (saved in recording.json) = end of
   the last copied line, from any copy. Copy new takes lines whose middle
-  is after it, so it still works after the accurate pass reshapes lines.
+  is after it, so it still works after "Transcribe again" reshapes lines.
 - Text format: one line per transcript line, no speakers yet (step 7 adds
   `[Mr. Yurt]: "text"`). Settings > General "Include times when copying
   and exporting" (default off) puts `[10:42] ` in front.
@@ -432,5 +363,5 @@ Ask Mr. Yurt before recording class.
 1. Update, open an old transcript: serif text, warm white, ink Copy all.
 2. Switch the Mac to dark mode (System Settings > Appearance): still
    easy to read? Copy all turns light.
-3. Record a minute: live grey text readable? "Checked up to" line looks OK?
+3. Record a minute: live text readable?
 4. Anything that looks off or cramped: tell Claude in plain words.

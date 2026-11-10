@@ -39,8 +39,8 @@ enum TranscriptRow {
 extension RecorderModel {
     // MARK: - Lines on screen
 
-    /// Checked text, then the live text the accurate pass hasn't reached yet.
-    /// Same as what the transcript view shows (without half-said words).
+    /// File transcription text (if any), then the live text it hasn't reached
+    /// yet. Same as what the transcript view shows (without half-said words).
     func shownLines(_ id: UUID) -> [(line: Transcript.Line, source: LineSource)] {
         let transcript = Transcriber.shared.transcripts[id]
         var rows = (transcript?.lines ?? []).map { ($0, LineSource.checked) }

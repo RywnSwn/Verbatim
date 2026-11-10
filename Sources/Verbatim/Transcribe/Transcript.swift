@@ -1,7 +1,10 @@
 import Foundation
 
-/// The accurate transcript of one recording, saved as transcript.json next to audio.wav.
-/// Saved after every piece, so a crash or Cancel keeps what was done.
+/// Parakeet's transcript of a whole file (imports, "Transcribe again", or a
+/// recording whose live text came from Apple's backup engine), saved as
+/// transcript.json next to audio.wav. Saved as it goes, so a crash or Cancel
+/// keeps what was done. Older recordings may have one written by Whisper.
+/// Recordings with Parakeet live text have none: live.json is their transcript.
 struct Transcript: Codable, Equatable {
     static let currentFormat = 1
 
@@ -10,7 +13,7 @@ struct Transcript: Codable, Equatable {
         var start: Double
         var end: Double
         var text: String
-        /// Ryan edited this line: later passes never change it. nil = not locked.
+        /// Ryan edited this line: "Transcribe again" keeps it. nil = not locked.
         var locked: Bool? = nil
 
         var isLocked: Bool { locked == true }
@@ -45,7 +48,7 @@ enum TranscriptStore {
     }
 }
 
-/// Reads pieces of our 16 kHz mono WAV files as Float samples for Whisper.
+/// Reads pieces of our 16 kHz mono WAV files as Float samples.
 enum WavReader {
     static let rate: Int64 = 16_000
 
@@ -63,35 +66,16 @@ enum WavReader {
             raw.bindMemory(to: Int16.self).map { Float($0) / 32_768 }
         }
     }
+}
 
-    /// The quietest 0.1 s moment in the few seconds before `target`, so pieces
-    /// are cut between words, not through them.
-    static func quietPoint(_ url: URL, before target: Int64, searchSeconds: Int64 = 8) -> Int64 {
-        quietest(url, from: max(0, target - searchSeconds * rate), to: target) ?? target
-    }
+extension Transcript.Line {
+    /// Middle of the line. Decides which side of a point in time a line is on.
+    var middle: Double { (start + end) / 2 }
+}
 
-    /// The middle of the quietest 0.1 s between `from` and `to` (samples).
-    /// `to` if the stretch is too short to look at.
-    static func quietPoint(_ url: URL, from: Int64, to: Int64) -> Int64 {
-        quietest(url, from: from, to: to) ?? to
-    }
-
-    private static func quietest(_ url: URL, from: Int64, to: Int64) -> Int64? {
-        let window: Int64 = 1_600
-        guard to - from >= window, let samples = try? samples(url, from: from, count: to - from),
-              samples.count >= Int(window) else { return nil }
-        var best: Int64?
-        var bestEnergy = Float.greatestFiniteMagnitude
-        var i = 0
-        while i + Int(window) <= samples.count {
-            var energy: Float = 0
-            for j in i..<(i + Int(window)) { energy += samples[j] * samples[j] }
-            if energy < bestEnergy {
-                bestEnergy = energy
-                best = from + Int64(i) + window / 2
-            }
-            i += Int(window) / 4
-        }
-        return best
+extension LiveText {
+    /// Live lines a file transcription hasn't replaced yet.
+    func unchecked(after doneUpTo: Double) -> [Transcript.Line] {
+        lines.filter { $0.middle >= doneUpTo }
     }
 }
