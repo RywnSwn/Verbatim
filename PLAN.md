@@ -522,3 +522,18 @@ Ask Mr. Yurt before recording class.
 5. Play audio on a new recording: the blue mark sits on the exact word.
 6. Edit a line, then More > Transcribe again: your edit is still there.
 7. Old recordings still open and look the same.
+
+## Audio shrink after Stop (2026-11-10, Ryan's ask)
+- `Audio/AudioSquash.swift`: WAV (~115 MB/h, crash safe while recording)
+  becomes AAC 32 kbps in `audio.m4a` (~14 MB/h) once the recording is
+  final (Undo Stop over), not queued/being transcribed, not importing, and
+  nothing is recording. New file's length is checked before the WAV goes.
+  Failures keep the WAV (retried next launch). Old recordings shrink too,
+  one at a time, starting at launch.
+- `RecordingStore.audioURL` = m4a if present, else WAV; writers use
+  `wavURL`. `AudioReader` (AVAudioFile, opened once) reads either for
+  Transcriber. Not live while recording: an unfinished AAC file can be
+  lost in a crash (Ryan agreed).
+- Test: record 1 min, Stop, wait 15 s: Finder shows audio.m4a, no WAV;
+  Play and Transcribe again still work; "Delete Audio Only" shows the
+  small size. Old recordings shrink after the update.
