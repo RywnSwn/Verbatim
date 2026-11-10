@@ -180,7 +180,7 @@ struct TranscriptList: View {
     /// Parakeet gave (step 5c). Older or edited lines have none, so the word is
     /// estimated: the line's time shared out by word length, with a little
     /// extra after commas and full stops.
-    private func wordHighlighted(_ line: Transcript.Line) -> AttributedString {
+    private func wordHighlighted(_ line: Transcript.Line) -> Text {
         let text = line.text
         var words: [Range<String.Index>] = []
         var i = text.startIndex
@@ -190,14 +190,14 @@ struct TranscriptList: View {
             while i < text.endIndex, !text[i].isWhitespace { i = text.index(after: i) }
             if start < i { words.append(start..<i) }
         }
-        guard !words.isEmpty else { return AttributedString(text) }
+        guard !words.isEmpty else { return Text(text) }
         var current = words.count - 1
         if let starts = line.words, starts.count == words.count {
             let t = playback.time + 0.05
             current = max(0, (starts.lastIndex { $0 <= t }) ?? 0)
             return marked(text, words[current])
         }
-        guard line.end > line.start else { return AttributedString(text) }
+        guard line.end > line.start else { return Text(text) }
         let weights: [Double] = words.map { r in
             let w = text[r]
             var weight = Double(w.count) + 2
@@ -217,12 +217,13 @@ struct TranscriptList: View {
         return marked(text, words[current])
     }
 
-    private func marked(_ text: String, _ word: Range<String.Index>) -> AttributedString {
-        var result = AttributedString(text)
-        if let r = Range(word, in: result) {
-            result[r].backgroundColor = Theme.accent.opacity(0.22)
-        }
-        return result
+    /// The word gets a `WordMark`, which `WordMarkRenderer` draws as a soft
+    /// rounded box behind it (a plain text background has square corners).
+    private func marked(_ text: String, _ word: Range<String.Index>) -> Text {
+        let before = Text(String(text[..<word.lowerBound]))
+        let mark = Text(String(text[word])).customAttribute(WordMark())
+        let after = Text(String(text[word.upperBound...]))
+        return Text("\(before)\(mark)\(after)")
     }
 
     /// The line's text with search hits in yellow; the current hit stronger.
@@ -264,8 +265,16 @@ struct TranscriptList: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text(!query.isEmpty ? highlighted(line.text, source, line.start)
-                    : isPlaying ? wordHighlighted(line) : AttributedString(line.text))
+                Group {
+                    if !query.isEmpty {
+                        Text(highlighted(line.text, source, line.start))
+                    } else if isPlaying {
+                        wordHighlighted(line)
+                            .textRenderer(WordMarkRenderer(color: Theme.accent.opacity(0.22)))
+                    } else {
+                        Text(line.text)
+                    }
+                }
                     .font(Theme.transcript)
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .foregroundStyle(Theme.ink)
@@ -452,5 +461,26 @@ struct ExportMenu: View {
         }
         .disabled(!hasLines)
         .help(hasLines ? "Save the transcript as a file" : "Nothing to export yet")
+    }
+}
+
+/// Marks the word being heard while audio plays.
+struct WordMark: TextAttribute {}
+
+/// Draws a rounded box behind words marked with `WordMark`, then the text.
+/// Boxes first, so a box never covers the edge of the letter before it.
+struct WordMarkRenderer: TextRenderer {
+    var color: Color
+
+    func draw(layout: Text.Layout, in ctx: inout GraphicsContext) {
+        for line in layout {
+            for run in line where run[WordMark.self] != nil {
+                let rect = run.typographicBounds.rect.insetBy(dx: -3, dy: -1)
+                ctx.fill(RoundedRectangle(cornerRadius: 5, style: .continuous).path(in: rect), with: .color(color))
+            }
+        }
+        for line in layout {
+            for run in line { ctx.draw(run) }
+        }
     }
 }

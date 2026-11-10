@@ -44,14 +44,25 @@ struct BottomBar: View {
     private var recordingBar: some View {
         HStack(spacing: 16) {
             HStack(spacing: 14) {
+                // The timer never shrinks or wraps (Ryan saw "00:0..." in a narrow
+                // window); the waveform gives up room instead, keeping the newest bars.
                 Text(RecorderModel.clock(model.elapsed))
                     .font(.system(size: 17, weight: .medium).monospacedDigit())
                     .foregroundStyle(paused ? .secondary : .primary)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .layoutPriority(2)
                 Waveform(levels: model.levels, paused: paused)
+                    .fixedSize()
+                    .frame(minWidth: 0, maxWidth: 240, alignment: .trailing)
+                    .clipped()
                 if paused {
                     Text("Paused")
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -63,6 +74,8 @@ struct BottomBar: View {
                     .help("Stop and save (⌘R)")
             }
             .controlSize(.large)
+            .fixedSize()
+            .layoutPriority(3)
 
             statusSpot
                 .frame(maxWidth: .infinity, alignment: .trailing)
