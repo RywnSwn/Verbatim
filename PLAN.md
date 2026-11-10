@@ -41,8 +41,8 @@ class depends on it.
 5c. [ ] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
        "Plan for step 5c" below.
 7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
-8. [ ] **Corrections memory.** Word list as Whisper hint, confirmed fix
-       rules, Words screen.
+8. [ ] **Corrections memory.** Word list via Parakeet vocabulary boosting
+       (~100 MB extra download, Ryan said yes), fix rules, Words screen.
 9. [ ] **Storage.** History sidebar, 7-day audio delete, Storage screen,
        Recently deleted, Export everything.
 10. [ ] **Polish.** First-launch screen, menu bar dropdown, Settings, notifications,
@@ -81,9 +81,14 @@ What to build:
 - On launch, delete the old Whisper model folder (626 MB) in
   App Support/Verbatim/Models once, so Ryan gets the space back.
 - Old recordings with a Whisper transcript.json still open and show it.
-- Step 8 changes: no Whisper prompt any more. Word list becomes fix rules
-  (find/replace) and maybe FluidAudio vocabulary boosting
-  (`configureVocabularyBoosting`, needs an extra CTC model; check size).
+- Step 8 changes: no Whisper prompt any more. Ryan wants the extra
+  download for names (2026-11-10): FluidAudio vocabulary boosting. Checked
+  in FluidAudio 0.18.0: `StreamingUnifiedAsrManager.configureVocabularyBoosting`
+  (works live, not only on files) with `CustomVocabularyContext` + a
+  separate Parakeet CTC 110M model (`Repo.parakeetCtc110m`, ~97.5 MB
+  download, ~64 MB extra memory). See FluidAudio
+  `Documentation/ASR/CustomVocabulary.md`. Plus find/replace fix rules for
+  anything it still misses. Words screen as planned.
 - Spec and design docs: remove "accurate pass" parts.
 - Optional later: FluidAudio's `UnifiedAsrManager` (batch, full-attention
   15 s encoder, same checkpoint) is a bit more accurate for files but needs
