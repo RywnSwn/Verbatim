@@ -13,9 +13,9 @@ the "Step 5c test list" and the audio shrink test. App icon later.
 Step 7 (speaker labels) merged 2026-11-10 (RywnSwn/Verbatim#13) before
 testing, at Ryan's ask: ask him for the "Step 7 test list". Step 7b
 (markers) built the same day in the same chat (Ryan's ask): see "How markers
-work". Step 7c (voice memory) built in the same chat too, on
-`claude/step-7c-voice-memory` (stacked on 7b): see "How voice memory
-works". Next: step 8.
+work". Step 7c (voice memory) built in the same chat too: see "How voice
+memory works". 7b and 7c merged 2026-11-10 (RywnSwn/Verbatim#14, #15) before
+testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Next: step 8.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -55,11 +55,11 @@ class depends on it.
        "Plan for step 5c" below.
 7. [x] **Speaker labels.** Speaker 1, 2..., rename once, click to fix.
        Merged, not tested by Ryan yet (see "How speaker labels work").
-7b. [x] **Markers** (Ryan said yes, 2026-11-10). Built, not tested. ⌘D while recording or
+7b. [x] **Markers** (Ryan said yes, 2026-11-10). Merged, not tested. ⌘D while recording or
        right-click a line > Add marker here (also after class). Flag next to
        the time. Copy and export put "⚑ " in front of marked lines. "Copy
        marked parts only". Undo in the bottom bar.
-7c. [x] **Voice memory** (Ryan's ask, 2026-11-10). Built, not tested. Remember a voice once
+7c. [x] **Voice memory** (Ryan's ask, 2026-11-10). Merged, not tested. Remember a voice once
        Ryan names it, so next time "Mr. Yurt" is named by itself. Sortformer
        can enroll saved voice audio (`enrollSpeaker`); check FluidAudio's
        docs on how well it maps. Needs a "Voices" list to rename or forget.
