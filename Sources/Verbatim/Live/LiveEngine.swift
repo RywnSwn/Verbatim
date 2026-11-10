@@ -52,6 +52,9 @@ struct LiveText: Codable, Equatable {
         var finished = false
         /// Ryan pressed Cancel: don't restart it by itself on next launch.
         var stoppedByUser = false
+        /// Lines Ryan edited before "Transcribe again", still to be put back
+        /// in place (as he wrote them) as the pass gets to them.
+        var keep: [Transcript.Line]?
     }
 
     /// Lines after an old Whisper transcript's end (`doneUpTo`), by their middle.
@@ -60,7 +63,6 @@ struct LiveText: Codable, Equatable {
     }
 
     var madeWithBackupEngine: Bool { engines.contains(AppleSpeechEngine.name) }
-    var hasEdits: Bool { lines.contains(where: \.isLocked) || !(removed ?? []).isEmpty }
 }
 
 enum LiveStore {

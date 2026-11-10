@@ -7,7 +7,11 @@ list is below). Step 5 is still not tested
 by Ryan: ask him to run the "Step 5 test list" below. Also still
 unanswered: line editing on a real Mac, step 3 accuracy on a real class
 Voice Memo.
-Next: step 5c (drop Whisper, see below), then step 7. App icon later.
+Step 5c (drop Whisper) built on branch `claude/step-5c-mine`, PR open, not
+tested by Ryan: see "Step 5c test list". Next: step 7. App icon later.
+(Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
+branch `claude/step-5c-parakeet-only` couldn't be deleted from the
+container; Ryan can delete it on GitHub.)
 Fix on 2026-11-10 (sixth chat): Play audio now plays in the app (it opened
 Apple Music and was "broken"), plus Delete Audio Only. Ryan: Parakeet is
 "pretty good". Not tested by Ryan yet: see "In-app player test list".
@@ -41,7 +45,7 @@ class depends on it.
        pauses, one job at a time, overlap merge, live text upgrades.
 6. [x] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
        export .txt/.md, search. Merged, not tested by Ryan yet.
-5c. [ ] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
+5c. [~] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
        "Plan for step 5c" below.
 7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
 8. [ ] **Corrections memory.** Word list via Parakeet vocabulary boosting
@@ -60,7 +64,7 @@ class depends on it.
       Foundation Models (offline, free). Needs Apple Intelligence on.
       Ryan can still rename.
 
-## Plan for step 5c: drop Whisper (do this next, in its own chat)
+## Plan for step 5c: drop Whisper (built, see "How step 5c works")
 Why: in Ryan's two lecture tests Whisper skipped sentences, doubled lines
 and made text up ("I'm not a vampire" x15), even after fixes. Parakeet's
 live text was better. FluidAudio's own benchmark (LibriSpeech test-clean):
@@ -476,3 +480,45 @@ Ask Mr. Yurt before recording class.
 5. Pick another recording: the audio stops.
 6. Right-click a recording in the sidebar > Delete Audio Only (size shown):
    text stays, sidebar says "no audio", Undo in the bottom bar works.
+
+## How step 5c works (Parakeet only)
+- `live.json` (`LiveText`) is the transcript. Recordings made with Parakeet
+  need nothing after Stop. All lines full ink; only Apple's half-said words
+  are lighter.
+- `Transcribe/Transcriber.swift` (rewritten): a queue of files. Each job
+  feeds the WAV to its own `ParakeetEngine` in 30 s pieces at full speed,
+  adding words to live.json through `LiveTranscriber.addPass`. Progress in
+  `LiveText.pass` (`doneUpTo`, `finished`, `stoppedByUser`), saved after
+  every piece; after a crash it carries on from the last word saved.
+- Files wait while a recording is going (`growing`): a running job flushes
+  its words and stops at the end of its piece, then carries on after the
+  recording is final (Undo Stop expired). Status line: "Waits until you
+  stop recording".
+- Used for: imports, "Transcribe again", recordings with no live text, and
+  recordings made with Apple's backup engine (redone by themselves after
+  Stop if Parakeet is ready; otherwise "Redo with Parakeet" link).
+- "Transcribe again" keeps edits: locked lines go into `pass.keep` and are
+  put back in place as the pass gets there (Parakeet's words inside them
+  are dropped); `removed` spans stay removed.
+- Word times: `Transcript.Line.words` = start of each word (0.01 s), made
+  by `LineBuilder`. The player uses them; edits clear them.
+- Old recordings: a Whisper `transcript.json` still shows (as "checked"
+  lines, then live lines after its end under "Old transcript ends at").
+  An unfinished one with no live text gets "Continue", which runs
+  Parakeet from where Whisper stopped.
+- Whisper model folder: everything in App Support/Verbatim/Models except
+  `Live` is deleted once on launch (`whisperModelRemoved` flag).
+- Start screen: one "speech model" line (was two).
+
+## Step 5c test list for Ryan
+1. After updating: start screen shows one "Speech model ready" line, no
+   "accurate model". Finder > App Support/Verbatim/Models: only `Live` left.
+2. Record a few minutes (a lecture video is fine): text is black right
+   away, no "Checked up to", nothing changes after Stop.
+3. Drop a Voice Memo: "Transcribing ... min left", done in about a minute
+   per hour of audio. Cancel halfway, then Continue.
+4. Import a file, then start recording before it finishes: the file says
+   it waits, then finishes after you stop.
+5. Play audio on a new recording: the blue mark sits on the exact word.
+6. Edit a line, then More > Transcribe again: your edit is still there.
+7. Old recordings still open and look the same.

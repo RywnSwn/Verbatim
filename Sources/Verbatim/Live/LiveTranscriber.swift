@@ -181,14 +181,32 @@ final class LiveTranscriber {
 
     /// Words from going over the file, added to whatever is on screen now (so
     /// edits made meanwhile are kept), plus progress. Saved every time.
+    /// Ryan's edits from before "Transcribe again" are kept: words inside a
+    /// line he deleted are dropped, and a line he edited goes back in as he
+    /// wrote it instead of Parakeet's words for that bit.
     func addPass(_ words: [LivePiece], offset: Double, to id: UUID, doneUpTo: Double?, finished: Bool) {
         var t = texts[id] ?? LiveText(pass: LiveText.FilePass())
-        for p in words {
-            let extend = !(editing?.id == id && editing?.start == t.lines.last?.start)
-            LineBuilder.add(LivePiece(text: p.text, start: p.start + offset, end: p.end + offset), to: &t.lines, extendLast: extend)
-        }
-        if !words.isEmpty, t.engines.last != ParakeetEngine.name { t.engines.append(ParakeetEngine.name) }
         var pass = t.pass ?? LiveText.FilePass()
+        var keep = pass.keep ?? []
+        let removed = t.removed ?? []
+        for p in words {
+            let word = LivePiece(text: p.text, start: p.start + offset, end: p.end + offset)
+            while let first = keep.first, first.start <= word.start {
+                t.lines.append(keep.removeFirst())
+            }
+            let mid = (word.start + word.end) / 2
+            let inEdited = (t.lines.last.map { $0.isLocked && mid <= $0.end } ?? false)
+                || keep.contains { mid >= $0.start && mid <= $0.end }
+            if inEdited || removed.contains(where: { mid >= $0.start && mid <= $0.end }) { continue }
+            let extend = !(editing?.id == id && editing?.start == t.lines.last?.start)
+            LineBuilder.add(word, to: &t.lines, extendLast: extend)
+        }
+        if finished {
+            t.lines += keep
+            keep = []
+        }
+        pass.keep = keep.isEmpty ? nil : keep
+        if !words.isEmpty, t.engines.last != ParakeetEngine.name { t.engines.append(ParakeetEngine.name) }
         if let doneUpTo { pass.doneUpTo = max(pass.doneUpTo, doneUpTo) }
         pass.finished = finished
         t.pass = pass

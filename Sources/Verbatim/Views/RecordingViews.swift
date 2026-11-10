@@ -312,10 +312,9 @@ struct TranscriptStatusLine: View {
             }
             return ("Transcribed the first \(minutes) min.", "Continue", { transcriber.enqueue(id) })
         }
-        // Made with the Mac's backup engine, and Ryan edited it (else it's redone by itself).
+        // Made with the Mac's backup engine before Parakeet was here.
         if text?.pass == nil, text?.madeWithBackupEngine == true, info.hasAudio, live.isModelReady {
-            let note = text?.hasEdits == true ? " Redoing it replaces your edits." : ""
-            return ("Made with your Mac's built-in engine. Parakeet is more accurate.\(note)",
+            return ("Made with your Mac's built-in engine. Parakeet is more accurate, and your edits are kept.",
                     "Redo with Parakeet", { transcriber.redo(id) })
         }
         return nil

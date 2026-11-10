@@ -16,14 +16,14 @@ One screen, no tour (see `docs/design/`). It shows:
 1. **Microphone permission.** One sentence on why, then the system prompt.
    If denied: a clear screen with a button that opens
    System Settings > Privacy & Security > Microphone. No dead ends.
-2. **Download the Whisper model.** Show the size before downloading
-   (e.g. "about 600 MB, one time only"). Internet in Myanmar can be slow or
-   drop, so:
+2. **Download the speech model (Parakeet).** One model for live text and
+   files. Show the size before downloading ("about 600 MB, one time only").
+   Internet in Myanmar can be slow or drop, so:
    - downloads **resume** after a disconnect or app quit
-   - the file is checked after download (size/hash) so a broken file never loads
-   - the app is usable while it downloads (live transcript works, accurate
-     pass waits and says so)
-   - Apple's speech assets (for the live engine) download the same way
+   - a model that doesn't load is downloaded again
+   - the app is usable while it downloads: live text uses Apple's built-in
+     engine, and Parakeet redoes that recording after Stop once it's here
+   - Apple's speech assets (for the backup engine) download the same way
 3. No separate test step; Ryan tests with Voice Memos instead.
 
 ## 2. Main window
@@ -53,26 +53,23 @@ One screen, no tour (see `docs/design/`). It shows:
 | Forgot to Pause during work time | Fine. Silence and quiet chatter are skipped by the voice detector, so no junk text. |
 | Pause/Resume | Still one audio file. Transcript shows "Paused 10:12 to 10:20". |
 | AirPods connect mid-class | MacBook mic is always the default. Never auto-switches to AirPods (worse quality). AirPods only if picked by hand, with a warning. If the chosen mic disappears, falls back to the MacBook mic and says so in the status spot. Never stops recording. |
-| Low battery | Warn at 15%. In Low Power Mode, the background accurate pass pauses and catches up at Stop. |
+| Low battery | Warn at 15%. |
 | Disk almost full | Check before starting (need ~200 MB per hour). Warn if low. |
 | Starting a second recording | Not allowed while one is running. |
 | No internet in class | Everything works offline after the first setup. |
 
 ## 4. Transcript behaviour
 
-- **Live text looks slightly different** (lighter grey) from accurate text,
-  so you can tell what has been upgraded. Subtle, not distracting.
-- **Upgrades don't yank the screen.** Auto-scroll only if you're already at
-  the bottom. If you scrolled up, a "Jump to live" button appears.
-- If you're **selecting or editing** a line, the background pass doesn't
-  touch it until you're done.
-- **Edited lines are locked** (small lock icon). Later passes never change
-  them. Click the lock to unlock.
-- **Chunk seams:** the overlap between chunks is merged so words aren't
-  doubled or dropped.
-- **Whisper hallucinations** (it invents "Thank you for watching!" on
-  silence): only speech parts go to Whisper, and known junk phrases are
-  filtered out.
+- **The live text is the transcript** (step 5c, Whisper dropped). Parakeet's
+  lines are final as soon as they show, in full ink. Only half-said words
+  from Apple's backup engine are lighter. Nothing changes after Stop.
+- **New text doesn't yank the screen.** Auto-scroll only if you're already
+  at the bottom. If you scrolled up, a "Jump to live" button appears.
+- If you're **editing** a line, new words never go into it.
+- **Edited lines are locked** (small lock icon). "Transcribe again" keeps
+  them, and keeps deleted lines deleted. Click the lock to unlock.
+- **Recorded with Apple's backup engine** (Parakeet still downloading):
+  after Stop, Parakeet redoes the whole recording by itself.
 - **Speaker labels:** teacher name comes from settings (default
   "Mr. Yurt"). Click a label to fix it. Renaming a speaker renames all
   their lines in that recording.
@@ -101,9 +98,9 @@ One screen, no tour (see `docs/design/`). It shows:
   'Anansi'?" Yes / No. Nothing is learned without a yes.
 - Fixes are whole-word and smart about capitals, so a rule never breaks
   other words.
-- The **word list** (names like Nyankupon, Anansi, Kweku Tsin) is fed to
-  Whisper as a hint. Whisper only reads ~200 tokens of hint, so the most
-  used / most recent words go first.
+- The **word list** (names like Nyankupon, Anansi, Kweku Tsin) boosts those
+  words in Parakeet, live and in files (FluidAudio vocabulary boosting,
+  ~100 MB extra download). Fix rules catch whatever it still misses.
 - A Words screen in Settings to see, edit and delete rules (in case one
   was a mistake).
 - Starts pre-filled with the known hard names.
@@ -122,7 +119,9 @@ One screen, no tour (see `docs/design/`). It shows:
 
 - Drag a file onto the window, or File > Transcribe a recording.
 - Accepts .m4a (Voice Memos), .mp3, .wav, and the audio from .mp4/.mov.
-- Progress bar with time left, and Cancel.
+- Progress bar with time left, and Cancel. About a minute for a 1 h class.
+- Waits while a recording is going (one model in memory on an 8 GB Mac),
+  and says so.
 - The file is copied in, so the 7-day rule deletes the copy, never your
   original.
 - Unsupported file: a clear message saying which types work.
@@ -135,8 +134,6 @@ One screen, no tour (see `docs/design/`). It shows:
 - Timestamps: clock time / time since start
 
 **Transcription**
-- Whisper model: a short list with size and speed, one marked Recommended
-- Background pass every: 5 min (default)
 - Advanced (collapsed): live engine choice, for comparing engines
 
 **Words**
@@ -161,5 +158,5 @@ Not adding: themes, cloud sync, accounts, summaries, AI chat inside the app.
   transcripts and settings) as a manual backup.
 - Saved files carry a format version number, so future updates can read
   old transcripts without breaking them.
-- The Whisper model is stored outside the app, so updates are small and
+- The speech model is stored outside the app, so updates are small and
   don't re-download it.

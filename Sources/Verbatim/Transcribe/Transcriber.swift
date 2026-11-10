@@ -86,13 +86,18 @@ final class Transcriber {
         runQueue()
     }
 
-    /// Throws the text away (edits too) and does the whole file again with Parakeet.
+    /// Does the whole file again with Parakeet. Ryan's edited lines and deleted
+    /// lines in the live text are kept (old Whisper text is dropped).
     func redo(_ id: UUID) {
         guard active?.id != id, !growing.contains(id) else { return }
         queue.removeAll { $0 == id }
         transcripts[id] = nil
         try? FileManager.default.removeItem(at: TranscriptStore.url(id))
-        live.setText(LiveText(pass: LiveText.FilePass()), for: id)
+        let old = live.texts[id]
+        let edited = (old?.lines ?? []).filter(\.isLocked)
+        var fresh = LiveText(pass: LiveText.FilePass(keep: edited.isEmpty ? nil : edited))
+        fresh.removed = old?.removed
+        live.setText(fresh, for: id)
         enqueue(id)
     }
 
@@ -141,12 +146,12 @@ final class Transcriber {
     }
 
     /// Stopped for good (Undo Stop expired). If live text came from the Mac's
-    /// backup engine (or nobody listened), redo it with Parakeet, unless Ryan
-    /// already edited it (then the transcript offers it instead).
+    /// backup engine (or nobody listened), redo it with Parakeet by itself
+    /// (edits kept). If Parakeet isn't here yet, the transcript offers it later.
     func recordingFinal(_ id: UUID) {
         growing.remove(id)
         let text = live.texts[id]
-        if isModelReady, text?.pass == nil, (text?.lines.isEmpty ?? true) || (text?.madeWithBackupEngine == true && text?.hasEdits == false) {
+        if isModelReady, text?.pass == nil, (text?.lines.isEmpty ?? true) || text?.madeWithBackupEngine == true {
             redo(id)
         }
         runQueue()
