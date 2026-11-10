@@ -23,12 +23,8 @@ Fix on 2026-11-10: accurate pass was dropping sentences (prompt too long,
 see step 5 notes). Ask Ryan to record the same kind of lecture again and
 compare live vs checked text. Second test (Transcribe again): no more
 missing sentences, but doubled lines and made-up text; fixed the same day.
-Question for Ryan: markers (⌘D, "Copy marked parts only") are in the spec
-and layout but in no step. Asked again 2026-11-10 (he'd forgotten what
-they are): add them to step 10, or drop them?
-Idea for later (Ryan asked for "smarter" names): remember voices across
-recordings (Sortformer can enroll a saved voice), so Mr. Yurt is named by
-itself. Or guess names from what's said ("Thanks, Mr. Yurt").
+Markers are step 7b and voice memory is step 7c (Ryan, 2026-11-10), both
+after he tests step 7.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -57,6 +53,14 @@ class depends on it.
        "Plan for step 5c" below.
 7. [~] **Speaker labels.** Speaker 1, 2..., rename once, click to fix. Built, waiting
        for Ryan's test (see "How speaker labels work").
+7b. [ ] **Markers** (Ryan said yes, 2026-11-10). ⌘D while recording or
+       right-click a line > Add marker here (also after class). Flag next to
+       the time. Copy and export put "⚑ " in front of marked lines. "Copy
+       marked parts only". Undo in the bottom bar.
+7c. [ ] **Voice memory** (Ryan's ask, 2026-11-10). Remember a voice once
+       Ryan names it, so next time "Mr. Yurt" is named by itself. Sortformer
+       can enroll saved voice audio (`enrollSpeaker`); check FluidAudio's
+       docs on how well it maps. Needs a "Voices" list to rename or forget.
 8. [ ] **Corrections memory.** Word list via Parakeet vocabulary boosting
        (~100 MB extra download, Ryan said yes), fix rules, Words screen.
 9. [ ] **Storage.** History sidebar, 7-day audio delete, Storage screen,
