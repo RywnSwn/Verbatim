@@ -7,8 +7,9 @@ list is below). Step 5 is still not tested
 by Ryan: ask him to run the "Step 5 test list" below. Also still
 unanswered: line editing on a real Mac, step 3 accuracy on a real class
 Voice Memo.
-Step 5c (drop Whisper) built on branch `claude/step-5c-mine`, PR open, not
-tested by Ryan: see "Step 5c test list". Next: step 7. App icon later.
+Step 5c (drop Whisper) merged 2026-11-10 (RywnSwn/Verbatim#12) at Ryan's
+ask, with the audio shrink after Stop. Not fully tested yet: ask Ryan for
+the "Step 5c test list" and the audio shrink test. Next: step 7. App icon later.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -45,7 +46,7 @@ class depends on it.
        pauses, one job at a time, overlap merge, live text upgrades.
 6. [x] **Transcript tools.** Timestamps, (edit + lock done in step 4), Copy / Copy new,
        export .txt/.md, search. Merged, not tested by Ryan yet.
-5c. [~] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
+5c. [x] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
        "Plan for step 5c" below.
 7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
 8. [ ] **Corrections memory.** Word list via Parakeet vocabulary boosting
