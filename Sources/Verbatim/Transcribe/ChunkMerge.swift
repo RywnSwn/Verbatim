@@ -21,17 +21,20 @@ enum ChunkMerge {
     ///   - keepFrom: the cut where the previous piece ended. Earlier words are dropped.
     ///   - skip: deleted lines and locked lines; Whisper's words there are dropped.
     ///   - locked: Ryan's edited live lines that belong to this piece. Added as they are.
-    ///   - live: the other live lines of this piece. Any that Whisper mostly
-    ///     skipped are kept as they are, so no words go missing.
+    ///   - live: Ryan's unedited live lines around this piece. Used to spot
+    ///     text Whisper made up, and live lines Whisper skipped (kept as they are).
+    ///   - keepTo: where this piece ends. Live lines after it belong to the next one.
     static func lines(
         _ segments: [WhisperSegment],
         offset: Double,
         keepFrom: Double,
         skip: [Span],
         locked: [Transcript.Line],
-        live: [Transcript.Line] = []
+        live: [Transcript.Line] = [],
+        keepTo: Double = .infinity
     ) -> [Transcript.Line] {
-        let missed = skipped(live, by: segments, offset: offset, keepFrom: keepFrom)
+        let segments = cleaned(segments, offset: offset, live: live)
+        let missed = skipped(live, by: segments, offset: offset, from: keepFrom, to: keepTo)
         let skip = skip + missed.map { Span(start: $0.start, end: $0.end) }
         let locked = locked + missed
         var out: [Transcript.Line] = []
@@ -63,25 +66,77 @@ enum ChunkMerge {
         return out.sorted { $0.start < $1.start }
     }
 
-    /// Whisper sometimes skips a stretch of speech (it stops early in a 30 s
-    /// window, or decides it was silence). Live lines where Whisper has less
-    /// than half as many words as the live text are such a stretch.
-    static let missedRatio = 0.5
-
-    static func skipped(_ live: [Transcript.Line], by segments: [WhisperSegment], offset: Double, keepFrom: Double) -> [Transcript.Line] {
-        let mids: [Double] = segments.flatMap { s -> [Double] in
-            s.words.isEmpty ? [(s.start + s.end) / 2 + offset] : s.words.map { ($0.start + $0.end) / 2 + offset }
+    /// Drops Whisper's usual mistakes, in order:
+    /// - one phrase over and over ("I'm not a vampire. I'm not a vampire. ..."),
+    /// - starting by saying the end of the segment before again (those words go),
+    /// - a segment that mostly repeats the two before it,
+    /// - a segment with almost nothing in common with the live text said around
+    ///   the same time (made up on unclear audio: "I think that's a great way to
+    ///   get to know what he's doing").
+    static func cleaned(_ segments: [WhisperSegment], offset: Double, live: [Transcript.Line]) -> [WhisperSegment] {
+        var kept: [WhisperSegment] = []
+        for original in segments {
+            var segment = original
+            var words = TextCheck.words(segment.text)
+            if TextCheck.loops(words) { continue }
+            if let previous = kept.last {
+                let n = TextCheck.overlap(TextCheck.words(previous.text), words)
+                if n >= 4 {
+                    if n >= words.count - 1 { continue }
+                    guard let trimmed = dropFirst(n, of: segment) else { continue }
+                    segment = trimmed
+                    words = TextCheck.words(segment.text)
+                }
+            }
+            if words.count >= 4 {
+                let recent = TextCheck.pairs(kept.suffix(2).flatMap { TextCheck.words($0.text) })
+                if TextCheck.found(words, in: recent) >= 0.7 { continue }
+            }
+            if words.count >= 5 {
+                let s = segment.start + offset, e = segment.end + offset
+                let near = live.filter { $0.end >= s - 10 && $0.start <= e + 10 }.flatMap { TextCheck.words($0.text) }
+                if near.count >= 5, TextCheck.found(words, in: TextCheck.pairs(near)) < 0.2 { continue }
+            }
+            kept.append(segment)
         }
-        // Segments without word times count as one word each, so give their
-        // live lines the benefit of the doubt.
-        let hasWordTimes = segments.allSatisfy { !$0.words.isEmpty }
-        return live.filter { line in
-            guard !line.isLocked, line.middle >= keepFrom else { return false }
-            let liveWords = line.text.split(whereSeparator: \.isWhitespace).count
-            guard liveWords >= 4 else { return false }
-            let whisperWords = mids.filter { $0 >= line.start - 0.5 && $0 <= line.end + 0.5 }.count
-            if !hasWordTimes { return whisperWords == 0 }
-            return Double(whisperWords) < Double(liveWords) * missedRatio
+        return kept
+    }
+
+    /// The segment without its first `n` words. nil if it has no word times
+    /// (then it can't be cut, and stays whole).
+    private static func dropFirst(_ n: Int, of segment: WhisperSegment) -> WhisperSegment? {
+        guard !segment.words.isEmpty else { return segment }
+        var count = 0
+        var rest = segment.words[...]
+        while count < n, let w = rest.first {
+            count += TextCheck.words(w.text).count
+            rest = rest.dropFirst()
+        }
+        guard let first = rest.first, let last = rest.last else { return nil }
+        let text = rest.map(\.text).joined()
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.rangeOfCharacter(from: .alphanumerics) != nil else { return nil }
+        return WhisperSegment(start: first.start, end: last.end, text: text, words: Array(rest))
+    }
+
+    /// Whisper sometimes skips a stretch of speech (it stops early in a 30 s
+    /// window, or decides it was silence). A live line whose word pairs are
+    /// mostly missing from Whisper's text around it is such a stretch: keep the
+    /// live line. Compared by text, not by time, because Whisper's and the live
+    /// engine's word times can be a few seconds apart (the time check made
+    /// doubled lines).
+    static let missedBelow = 0.4
+
+    static func skipped(_ live: [Transcript.Line], by segments: [WhisperSegment], offset: Double, from: Double, to: Double) -> [Transcript.Line] {
+        live.filter { line in
+            guard !line.isLocked, line.middle >= from, line.middle < to else { return false }
+            let words = TextCheck.words(line.text)
+            guard words.count >= 4 else { return false }
+            let near = segments
+                .filter { $0.end + offset >= line.start - 20 && $0.start + offset <= line.end + 20 }
+                .flatMap { TextCheck.words($0.text) }
+            return TextCheck.found(words, in: TextCheck.pairs(near)) < missedBelow
         }
     }
 
@@ -111,5 +166,45 @@ extension LiveText {
     /// Live lines the accurate text hasn't replaced yet.
     func unchecked(after doneUpTo: Double) -> [Transcript.Line] {
         lines.filter { $0.middle >= doneUpTo }
+    }
+}
+
+/// Compares bits of text by word pairs ("the king", "king is"), ignoring
+/// case and punctuation. Pairs, not single words, so common words like "the"
+/// don't make different text look the same.
+enum TextCheck {
+    static func words(_ text: String) -> [String] {
+        text.lowercased()
+            .split { !($0.isLetter || $0.isNumber || $0 == "'" || $0 == "\u{2019}") }
+            .map { $0.filter { $0 != "'" && $0 != "\u{2019}" } }
+            .filter { !$0.isEmpty }
+    }
+
+    static func pairs(_ words: [String]) -> Set<String> {
+        guard words.count > 1 else { return Set(words) }
+        return Set(zip(words, words.dropFirst()).map { $0 + " " + $1 })
+    }
+
+    /// Share of the word pairs in `words` that are in `other` (0 to 1).
+    static func found(_ words: [String], in other: Set<String>) -> Double {
+        let p = pairs(words)
+        guard !p.isEmpty else { return 1 }
+        return Double(p.filter(other.contains).count) / Double(p.count)
+    }
+
+    /// Says the same few words over and over.
+    static func loops(_ words: [String]) -> Bool {
+        guard words.count >= 12 else { return false }
+        return Double(pairs(words).count) / Double(words.count - 1) < 0.5
+    }
+
+    /// How many words at the start of `next` repeat the end of `previous`.
+    static func overlap(_ previous: [String], _ next: [String]) -> Int {
+        let most = min(previous.count, next.count, 40)
+        guard most > 0 else { return 0 }
+        for k in stride(from: most, through: 1, by: -1) where Array(previous.suffix(k)) == Array(next.prefix(k)) {
+            return k
+        }
+        return 0
     }
 }

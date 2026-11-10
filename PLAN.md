@@ -10,7 +10,8 @@ Voice Memo.
 Next: step 7. App icon later.
 Fix on 2026-11-10: accurate pass was dropping sentences (prompt too long,
 see step 5 notes). Ask Ryan to record the same kind of lecture again and
-compare live vs checked text.
+compare live vs checked text. Second test (Transcribe again): no more
+missing sentences, but doubled lines and made-up text; fixed the same day.
 Question for Ryan: markers (⌘D, "Copy marked parts only") are in the spec
 and layout but in no step. Add them to step 7 or 10, or drop them?
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
@@ -282,10 +283,14 @@ Ask Mr. Yurt before recording class.
   and the rest of the window skipped (Ryan's first real test, a history
   lecture: whole sentences missing, accurate text worse than live). Step 8's
   word list must fit in this small budget too.
-- Safety net: a live line where Whisper has under half the live line's
-  words (`ChunkMerge.skipped`) is kept as it is, so Whisper skipping a
-  stretch never loses text. Also drops a segment that just repeats the end
-  of the one before. Segments that just repeat the prompt are dropped.
+- Clean-up (`ChunkMerge.cleaned`, `TextCheck`, compares word pairs): drops
+  Whisper segments that loop ("I'm not a vampire" x8), the start of a
+  segment that repeats the end of the one before, segments that mostly
+  repeat the two before, and segments with almost nothing in common with
+  the live text around them (made up). Then a live line whose word pairs
+  are mostly missing from Whisper's text within 20 s is kept as it is
+  (`ChunkMerge.skipped`). By text, not time: the first version compared
+  times and doubled lines in Ryan's second test. Segments that just repeat the prompt are dropped.
   Step 8 adds the word list in `Transcriber.promptText`.
 - While Ryan edits a live line inside the chunk, the merge waits until he
   is done. Undo of a live edit/delete after the line got upgraded applies

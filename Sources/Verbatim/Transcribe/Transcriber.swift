@@ -466,8 +466,8 @@ final class Transcriber {
         let skip = (live?.removed ?? []).filter { overlaps($0.start, $0.end) }
             + lockedLines.filter { overlaps($0.start, $0.end) }.map { ChunkMerge.Span(start: $0.start, end: $0.end) }
         let keep = lockedLines.filter { $0.middle >= from && $0.middle < to }
-        let others = (live?.lines ?? []).filter { !$0.isLocked && $0.middle >= from && $0.middle < to }
-        return ChunkMerge.lines(segments, offset: offset, keepFrom: from, skip: skip, locked: keep, live: others)
+        let others = (live?.lines ?? []).filter { !$0.isLocked && $0.end >= offset - 20 && $0.start <= to + 20 }
+        return ChunkMerge.lines(segments, offset: offset, keepFrom: from, skip: skip, locked: keep, live: others, keepTo: to)
     }
 }
 
