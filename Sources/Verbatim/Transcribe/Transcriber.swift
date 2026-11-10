@@ -308,8 +308,8 @@ final class Transcriber {
         var voiceBase: Int?
         if SpeakerModel.shared.isReady {
             do {
-                try await speakers.begin()
-                voiceBase = live.newVoiceSession(id)
+                let names = try await speakers.begin(known: VoiceLibrary.shared.knownVoices())
+                voiceBase = live.newVoiceSession(id, names: names)
             } catch {
                 await speakers.unload()
                 SpeakerModel.shared.broken()
@@ -391,8 +391,9 @@ final class Transcriber {
             cancelRequested.remove(id)
             active = nil
         }
+        let names: [Int: String]
         do {
-            try await speakers.begin()
+            names = try await speakers.begin(known: VoiceLibrary.shared.knownVoices())
         } catch {
             await speakers.unload()
             SpeakerModel.shared.broken()
@@ -422,7 +423,7 @@ final class Transcriber {
         }
         await speakers.finish()
         let frames = await speakers.frames
-        live.applyVoices(id, frames: frames, base: live.newVoiceSession(id))
+        live.applyVoices(id, frames: frames, base: live.newVoiceSession(id), names: names)
         return true
     }
 

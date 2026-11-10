@@ -195,3 +195,9 @@ accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
   are offered in every recording. No speaker settings.
 - Recordings without speakers (old ones) get them by themselves once the
   model is downloaded, without changing the text.
+
+## Voice memory: saved clips + Sortformer enrollment (2026-11-10, step 7c)
+- Renaming a speaker is the only way to save a voice: no setup screen.
+  Ryan already does it, and the bottom bar says it happened (with Undo).
+- Clips stay on the Mac (Settings > Voices to forget). Max 3 known voices
+  per recording so one of the 4 slots is always free for others.

@@ -1,12 +1,16 @@
 import AVFoundation
 import SwiftUI
 
-/// Settings > General: microphone and times. The rest arrives in step 10.
+/// Settings: General (microphone and times), Voices (step 7c), Updates.
+/// The rest arrives in step 10.
 struct SettingsView: View {
     var body: some View {
         TabView {
             Tab("General", systemImage: "gearshape") {
                 GeneralSettings()
+            }
+            Tab("Voices", systemImage: "person.wave.2") {
+                VoiceSettings()
             }
             Tab("Updates", systemImage: "arrow.down.circle") {
                 UpdateSettings()
@@ -121,5 +125,70 @@ struct UpdateSettings: View {
             guard let last = updater.lastChecked else { return "" }
             return "You have the newest version. Last checked \(last.formatted(date: .omitted, time: .shortened))"
         }
+    }
+}
+
+/// Settings > Voices (step 7c): voices Verbatim remembers. Switch one off or
+/// forget it. Nothing to set up: renaming a speaker adds it.
+struct VoiceSettings: View {
+    private var library: VoiceLibrary { .shared }
+    @State private var confirmForget: VoiceLibrary.Voice?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("When you rename a speaker in a transcript (like Speaker 1 to Mr. Yurt), Verbatim saves 20 seconds of that voice on this Mac. New recordings then know them by name from the first line.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if library.voices.isEmpty {
+                Text("No voices yet. Click a speaker's name in a transcript and pick Rename.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(library.voices.sorted { $0.savedAt > $1.savedAt }) { voice in
+                        row(voice)
+                        if voice.id != library.voices.sorted(by: { $0.savedAt > $1.savedAt }).last?.id { Divider() }
+                    }
+                }
+                .background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                if library.voices.filter(\.enabled).count > VoiceLibrary.maxInUse {
+                    Text("Only the \(VoiceLibrary.maxInUse) newest switched-on voices are used, so there's room for new people too.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(24)
+        .alert("Forget \(confirmForget?.name ?? "")'s voice?", isPresented: Binding(
+            get: { confirmForget != nil }, set: { if !$0 { confirmForget = nil } }
+        )) {
+            Button("Forget", role: .destructive) {
+                if let v = confirmForget { library.forget(v.id) }
+                confirmForget = nil
+            }
+            Button("Cancel", role: .cancel) { confirmForget = nil }
+        } message: {
+            Text("The saved sound is deleted. Transcripts keep their names. To get it back, rename the speaker again.")
+        }
+    }
+
+    private func row(_ voice: VoiceLibrary.Voice) -> some View {
+        HStack(spacing: 12) {
+            Toggle(isOn: Binding(get: { voice.enabled }, set: { library.setEnabled(voice.id, $0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(voice.name).font(.body.weight(.medium))
+                    Text("From \(voice.from), \(Int(voice.seconds)) s")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
+            .help(voice.enabled ? "Used in new recordings. Untick to stop without forgetting." : "Not used. Tick to use it again.")
+            Spacer()
+            Button("Forget…") { confirmForget = voice }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 }

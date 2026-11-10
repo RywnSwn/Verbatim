@@ -13,7 +13,9 @@ the "Step 5c test list" and the audio shrink test. App icon later.
 Step 7 (speaker labels) merged 2026-11-10 (RywnSwn/Verbatim#13) before
 testing, at Ryan's ask: ask him for the "Step 7 test list". Step 7b
 (markers) built the same day in the same chat (Ryan's ask): see "How markers
-work". Next: 7c (voice memory).
+work". Step 7c (voice memory) built in the same chat too, on
+`claude/step-7c-voice-memory` (stacked on 7b): see "How voice memory
+works". Next: step 8.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -57,7 +59,7 @@ class depends on it.
        right-click a line > Add marker here (also after class). Flag next to
        the time. Copy and export put "⚑ " in front of marked lines. "Copy
        marked parts only". Undo in the bottom bar.
-7c. [ ] **Voice memory** (Ryan's ask, 2026-11-10). Remember a voice once
+7c. [x] **Voice memory** (Ryan's ask, 2026-11-10). Built, not tested. Remember a voice once
        Ryan names it, so next time "Mr. Yurt" is named by itself. Sortformer
        can enroll saved voice audio (`enrollSpeaker`); check FluidAudio's
        docs on how well it maps. Needs a "Voices" list to rename or forget.
@@ -622,3 +624,30 @@ Ask Mr. Yurt before recording class.
 3. Play a recording, press ⌘D: the line being heard gets the flag.
 4. Copy arrow > Copy marked parts only: just those lines, with ⚑ in front.
 5. Export as Markdown: marked lines start with ⚑.
+
+## How voice memory works (step 7c)
+- `Model/VoiceLibrary.swift`. Renaming a voice to a real name ("Rename
+  Speaker 1 everywhere", or "Change them too" with a name) saves up to 20 s
+  of it (longest lines first, 8 s max from each, edges trimmed) in App
+  Support/Verbatim/Voices (`voices.json` + `<id>.f32`). Same name again
+  replaces the old clip. Needs 6 s or more, and the audio.
+- `SpeakerEngine.begin(known:)` plays the clips to Sortformer first
+  (`enrollSpeaker`, `overwritingAssignedSpeakerName: false`); the slot each
+  lands in gets the name in `LiveText.voiceNames` (`newVoiceSession(names:)`).
+  Live recording, file passes and Find speakers all do this.
+- At most 3 known voices per session (newest switched-on ones), so one of
+  Sortformer's 4 slots stays free for new people.
+- Bottom bar after renaming: "... Verbatim will know this voice next time.
+  Undo" (undo takes back the name and the saved voice).
+- Settings > Voices: list, tick to use, Forget... (asks first).
+- Risk to check with Ryan: a known voice that isn't in the recording keeps
+  a slot; someone who sounds similar might get that name. Fix by renaming.
+
+## Step 7c test list for Ryan
+1. In a recording with speakers, click Speaker 1 > Rename everywhere, type
+   a name: the bottom bar says Verbatim will know this voice next time.
+2. Settings > Voices: the name is there, "From ..., 20 s".
+3. Record or import something new with the same person: their lines say
+   the name from the start, not "Speaker 1".
+4. Record a video with other people: does anyone wrongly get that name?
+5. Settings > Voices: untick it, record again: back to "Speaker 1".
