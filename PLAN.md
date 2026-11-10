@@ -10,9 +10,9 @@ Voice Memo.
 Step 5c (drop Whisper) merged 2026-11-10 (RywnSwn/Verbatim#12) at Ryan's
 ask, with the audio shrink after Stop. Not fully tested yet: ask Ryan for
 the "Step 5c test list" and the audio shrink test. App icon later.
-Step 7 (speaker labels) built 2026-11-10 on branch
-`claude/step-7-speaker-labels`, not merged, not tested by Ryan: see "How
-speaker labels work (step 7)" and its test list. Next after it: step 8.
+Step 7 (speaker labels) merged 2026-11-10 (RywnSwn/Verbatim#13) before
+testing, at Ryan's ask: ask him for the "Step 7 test list". Next: step 7b
+(markers) in a new chat.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -51,8 +51,8 @@ class depends on it.
        export .txt/.md, search. Merged, not tested by Ryan yet.
 5c. [x] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
        "Plan for step 5c" below.
-7. [~] **Speaker labels.** Speaker 1, 2..., rename once, click to fix. Built, waiting
-       for Ryan's test (see "How speaker labels work").
+7. [x] **Speaker labels.** Speaker 1, 2..., rename once, click to fix.
+       Merged, not tested by Ryan yet (see "How speaker labels work").
 7b. [ ] **Markers** (Ryan said yes, 2026-11-10). ⌘D while recording or
        right-click a line > Add marker here (also after class). Flag next to
        the time. Copy and export put "⚑ " in front of marked lines. "Copy
