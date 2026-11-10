@@ -9,7 +9,10 @@ unanswered: line editing on a real Mac, step 3 accuracy on a real class
 Voice Memo.
 Step 5c (drop Whisper) merged 2026-11-10 (RywnSwn/Verbatim#12) at Ryan's
 ask, with the audio shrink after Stop. Not fully tested yet: ask Ryan for
-the "Step 5c test list" and the audio shrink test. Next: step 7. App icon later.
+the "Step 5c test list" and the audio shrink test. App icon later.
+Step 7 (speaker labels) built 2026-11-10 on branch
+`claude/step-7-speaker-labels`, not merged, not tested by Ryan: see "How
+speaker labels work (step 7)" and its test list. Next after it: step 8.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -48,7 +51,8 @@ class depends on it.
        export .txt/.md, search. Merged, not tested by Ryan yet.
 5c. [x] **Drop Whisper, Parakeet only** (Ryan's call, 2026-11-10). See
        "Plan for step 5c" below.
-7. [ ] **Speaker labels.** Teacher vs Student, click to fix.
+7. [~] **Speaker labels.** Teacher vs Student, click to fix. Built, waiting
+       for Ryan's test (see "How speaker labels work").
 8. [ ] **Corrections memory.** Word list via Parakeet vocabulary boosting
        (~100 MB extra download, Ryan said yes), fix rules, Words screen.
 9. [ ] **Storage.** History sidebar, 7-day audio delete, Storage screen,
@@ -122,7 +126,8 @@ listing small touches and showing Ryan a mockup before building.
 - Does Apple's engine need the Speech Recognition permission at all?
   (We ask only when it's actually used.)
 - Is large-v3 turbo (626 MB) fast enough on Ryan's M2? Test in step 3.
-- How speaker labels work offline (diarization model choice, milestone 7).
+- Speaker labels in a real class: is Mr. Yurt always "Mr. Yurt"? Do quiet
+  students far from the Mac get missed (Sortformer's known weak spot)?
 - Is Ryan's Mac a MacBook Air (no fan, slows down when hot) or Pro?
 - Should a recording be able to "Keep audio" past 7 days?
 
@@ -538,3 +543,51 @@ Ask Mr. Yurt before recording class.
 - Test: record 1 min, Stop, wait 15 s: Finder shows audio.m4a, no WAV;
   Play and Transcribe again still work; "Delete Audio Only" shows the
   small size. Old recordings shrink after the update.
+
+## How speaker labels work (step 7)
+- Model: NVIDIA Sortformer through FluidAudio (trait `Diarizer` turned on in
+  `Package.swift`), "balanced" v2.1, 6-bit (palettized): ~100 MB download,
+  light on memory, about 1.5 s behind the audio, up to 4 voices at once.
+  Picked over LS-EEND (more false alarms) and pyannote (worst in noise).
+  Nemotron 3 (8 voices) is gated on Hugging Face, so not usable yet.
+- `Live/SpeakerEngine.swift`: the engine, `VoiceFrames` (which voice in
+  every 0.08 s) and `SpeakerModel` (download, after Parakeet is ready;
+  saved in Models/Live next to Parakeet). Start screen shows its progress
+  under "Speech model ready".
+- Live: `LiveRunner` feeds the same samples to it (before Parakeet, so it's
+  ahead), for the whole recording including pauses. Each word gets the voice
+  heard most during it; a new voice starts a new line (`LineBuilder`).
+- Files (imports, Transcribe again): `Transcriber` runs it next to Parakeet.
+- "Find speakers": recordings with text but no voices (old ones, or made
+  before the model was here) get a speakers-only pass by themselves after
+  the model downloads, one at a time, after any files, waiting while
+  recording. Lines are split at the word where the voice changes (one-word
+  changes are ignored). More menu > "Find speakers again" redoes it.
+- Saved: `Line.voice` (number, = listening session * 4 + Sortformer slot),
+  `Line.speaker` (Ryan's pick for one line), `LiveText.voiceNames` (Ryan's
+  pick for a whole voice), `voiceSessions`, `speakersFound`.
+- Names (`Model/Speakers.swift`): the voice with the most words in each
+  listening session is the teacher (Settings > General "Teacher", default
+  Mr. Yurt); every other voice shows as "Students show as" (default
+  Student). Stored as "#teacher"/"#student", so renaming in Settings
+  changes every recording.
+- Fixing: click the bold name (or right-click > Speaker): Mr. Yurt, Student,
+  names typed in this recording, Someone else... (types a name). If other
+  lines share that voice, the bottom bar says "N more lines sound like the
+  same voice. Change them too", then Undo.
+- Copy: `[Mr. Yurt]: "text"`; Markdown export: `**Mr. Yurt:** text`. Lines
+  with no speaker stay plain.
+- Old Whisper lines (transcript.json) never get speakers.
+
+## Step 7 test list for Ryan
+1. Update (test build from the step 7 branch). Start screen: "Downloading
+   speaker labels" under "Speech model ready", then it goes away.
+2. Old recordings: "Finding who said what" at the top, then names appear.
+   Is the teacher right?
+3. Record a lecture video with two people talking (or talk over a video):
+   names show up live, a new line when the speaker changes.
+4. Click a name, pick Student: then "Change them too" in the bottom bar.
+   Undo works. Try Someone else... with a classmate's name.
+5. Settings > General: change Teacher to "Mr. Y": every transcript changes.
+6. Copy all, paste: `[Mr. Yurt]: "..."` lines.
+7. In class (with Mr. Yurt's OK): are students picked up, or missed?
