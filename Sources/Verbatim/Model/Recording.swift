@@ -61,7 +61,16 @@ enum RecordingStore {
         root.appending(path: id.uuidString, directoryHint: .isDirectory)
     }
 
-    static func audioURL(_ id: UUID) -> URL { folder(id).appending(path: "audio.wav") }
+    /// The full-size file written while recording (crash safe).
+    static func wavURL(_ id: UUID) -> URL { folder(id).appending(path: "audio.wav") }
+    /// The squashed copy made after Stop (AAC, about 8 times smaller).
+    static func m4aURL(_ id: UUID) -> URL { folder(id).appending(path: "audio.m4a") }
+
+    /// The recording's audio: the squashed file once it exists, else the WAV.
+    static func audioURL(_ id: UUID) -> URL {
+        let m4a = m4aURL(id)
+        return FileManager.default.fileExists(atPath: m4a.path) ? m4a : wavURL(id)
+    }
     static func infoURL(_ id: UUID) -> URL { folder(id).appending(path: "recording.json") }
 
     /// Size of the audio file in bytes, nil if it's gone.

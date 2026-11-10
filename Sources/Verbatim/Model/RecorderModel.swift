@@ -91,7 +91,7 @@ final class RecorderModel {
     @ObservationIgnored private var lineUndo: (() -> Void)?
     @ObservationIgnored private var fileToShow: URL?
     /// Delete Audio Only, for Undo: which recording and where its audio went in the Trash.
-    @ObservationIgnored private var audioUndo: (id: UUID, trashURL: URL)?
+    @ObservationIgnored private var audioUndo: (id: UUID, trashURL: URL, original: URL)?
 
     var current: RecordingInfo? { recordings.first { $0.id == currentID } }
     var isBusy: Bool { phase != .idle }
@@ -104,6 +104,8 @@ final class RecorderModel {
         observeSystem()
         LiveTranscriber.shared.start(with: recordings) // loads the texts Transcriber looks at
         Transcriber.shared.start(with: recordings)
+        // After init: AudioSquash looks at RecorderModel.shared.
+        Task { @MainActor in AudioSquash.shared.run() }
     }
 
     // MARK: - Start / Pause / Stop
@@ -150,7 +152,7 @@ final class RecorderModel {
         info.events.append(.init(kind: .started, at: now, sample: 0, note: Microphones.mic(for: dev).displayName))
         do {
             try RecordingStore.create(info)
-            let writer = try WavWriter(creating: RecordingStore.audioURL(info.id))
+            let writer = try WavWriter(creating: RecordingStore.wavURL(info.id))
             pipeline.attach(writer)
             LiveTranscriber.shared.recordingStarted(info.id, samples: 0)
             try pipeline.startCapture(device: dev)
@@ -270,7 +272,7 @@ final class RecorderModel {
             return
         }
         do {
-            let writer = try WavWriter(appendingTo: RecordingStore.audioURL(info.id))
+            let writer = try WavWriter(appendingTo: RecordingStore.wavURL(info.id))
             pipeline.attach(writer)
             LiveTranscriber.shared.recordingStarted(info.id, samples: writer.samplesWritten)
             try pipeline.startCapture(device: dev)
@@ -400,6 +402,7 @@ final class RecorderModel {
         if t.active?.id == id || t.isQueued(id) || t.importing.contains(id) || t.isGrowing(id) {
             return "Wait for the text to finish"
         }
+        if AudioSquash.shared.working == id { return "Shrinking the audio" }
         return nil
     }
 
@@ -434,7 +437,7 @@ final class RecorderModel {
         try? RecordingStore.save(recordings[i])
 
         guard let url = trashed as URL? else { return }
-        audioUndo = (id, url)
+        audioUndo = (id, url, audio)
         let s = Status(text: "Deleted the audio for \(info.title). The text stays.", action: .undoAudioDelete)
         status = s
         Task { [weak self] in
@@ -450,7 +453,7 @@ final class RecorderModel {
         audioUndo = nil
         if status?.action == .undoAudioDelete { status = nil }
         do {
-            try FileManager.default.moveItem(at: undo.trashURL, to: RecordingStore.audioURL(undo.id))
+            try FileManager.default.moveItem(at: undo.trashURL, to: undo.original)
         } catch {
             status = Status(text: "Couldn't bring the audio back. It's still in the Trash.")
             return
@@ -504,7 +507,7 @@ final class RecorderModel {
         Transcriber.shared.setImporting(info.id, true)
 
         let id = info.id
-        let destination = RecordingStore.audioURL(id)
+        let destination = RecordingStore.wavURL(id)
         let access = url.startAccessingSecurityScopedResource()
         Task { [weak self] in
             defer { if access { url.stopAccessingSecurityScopedResource() } }
@@ -773,7 +776,7 @@ final class RecorderModel {
     private func recoverUnfinished() {
         var notices: [String] = []
         for var info in RecordingStore.loadAll() where info.isActive {
-            let audio = RecordingStore.audioURL(info.id)
+            let audio = RecordingStore.wavURL(info.id)
             let samples = (try? WavWriter.repair(audio)) ?? info.samples
             let modified = (try? audio.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
             let endedAt = modified ?? info.createdAt.addingTimeInterval(info.duration)

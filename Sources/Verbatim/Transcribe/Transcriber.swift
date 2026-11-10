@@ -155,6 +155,7 @@ final class Transcriber {
             redo(id)
         }
         runQueue()
+        AudioSquash.shared.run()
     }
 
     // MARK: - Editing old Whisper lines
@@ -200,6 +201,7 @@ final class Transcriber {
             await engine.unload() // free the memory until the next file
             workTask = nil
             runQueue()
+            AudioSquash.shared.run() // shrink the audio of files that are done
         }
     }
 
@@ -212,8 +214,16 @@ final class Transcriber {
               let pass = live.texts[id]?.pass, !pass.finished else { return true }
         cancelRequested.remove(id)
 
-        let rate = Double(WavReader.rate)
-        let total = WavReader.sampleCount(audio)
+        // WAV or the squashed m4a. Opened once, so squashing can't pull it away.
+        let reader: AudioReader
+        do {
+            reader = try AudioReader(audio)
+        } catch {
+            errors[id] = "Couldn't open the audio: \(error.localizedDescription)"
+            return true
+        }
+        let rate = reader.rate
+        let total = reader.length
         var pos = min(Int64(pass.doneUpTo * rate), total)
         active = Job(id: id, doneSeconds: Double(pos) / rate, totalSeconds: Double(total) / rate)
         defer {
@@ -238,10 +248,10 @@ final class Transcriber {
                 live.addPass(out.finals, offset: offset, to: id, doneUpTo: Double(pos) / rate, finished: false)
                 return cancelRequested.contains(id)
             }
-            let end = min(pos + Self.pieceSeconds * WavReader.rate, total)
+            let end = min(pos + Self.pieceSeconds * Int64(rate), total)
             let samples: [Float]
             do {
-                samples = try WavReader.samples(audio, from: pos, count: end - pos)
+                samples = try reader.samples(from: pos, count: end - pos)
             } catch {
                 errors[id] = "Transcribing stopped: \(error.localizedDescription)"
                 return true
