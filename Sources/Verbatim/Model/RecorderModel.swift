@@ -13,7 +13,7 @@ final class RecorderModel {
 
     /// What the status spot in the bottom bar says. `action` adds a text link.
     struct Status: Equatable {
-        enum Action { case stopRecording, resume, undoDelete, undoLine, showFile, undoAudioDelete }
+        enum Action { case stopRecording, resume, undoDelete, undoLine, showFile, undoAudioDelete, changeVoice }
         var text: String
         var action: Action?
         var id = UUID()

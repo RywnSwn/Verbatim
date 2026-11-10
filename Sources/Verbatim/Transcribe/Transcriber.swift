@@ -140,7 +140,9 @@ final class Transcriber {
         let labels = Speakers.Labeler(lines: old?.lines ?? [], names: old?.voiceNames)
         let edited = (old?.lines ?? []).filter(\.isLocked).map { line in
             var l = line
-            l.speaker = labels.choice(line)
+            // A real name stays; "Speaker 2" would mean someone else in the new pass.
+            let name = labels.name(line)
+            l.speaker = name?.hasPrefix("Speaker ") == true ? nil : name
             l.voice = nil
             return l
         }

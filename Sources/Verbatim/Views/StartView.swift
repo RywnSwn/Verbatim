@@ -278,7 +278,7 @@ struct SpeakerModelNote: View {
                 ProgressView(value: f)
                     .progressViewStyle(.linear)
                     .controlSize(.mini)
-                Text("You can record now. Names like \(Speakers.teacherName) show up once this is done, on old recordings too.")
+                Text("You can record now. Lines get speakers once this is done, on old recordings too.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

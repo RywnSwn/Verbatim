@@ -5,7 +5,7 @@ import Observation
 /// Who is talking when (step 7). Runs NVIDIA's Sortformer (streaming, the
 /// "balanced" v2.1 model, 6-bit so it's ~100 MB and light on memory) next to
 /// Parakeet. It tells voices apart, up to 4 at a time, about 1.5 s behind the
-/// audio. It doesn't know names: the voice that talks most is the teacher.
+/// audio. It doesn't know names: they show as "Speaker 1", "Speaker 2" (see Speakers).
 /// The only other file that talks to FluidAudio. Loaded only while in use.
 actor SpeakerEngine {
     static let sizeText = "about 100 MB"

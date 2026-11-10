@@ -418,11 +418,12 @@ actor LiveRunner {
 
     private func deliver(_ out: LiveOutput, offset: Double, engine: String, id: UUID, run: Int) async {
         guard !out.finals.isEmpty || out.volatile != nil else { return }
-        var out = out
+        var labelled = out
         if let speakerStart, !out.finals.isEmpty {
-            out.finals = await speakers.label(out.finals, shift: offset - speakerStart, base: voiceBase)
+            labelled.finals = await speakers.label(out.finals, shift: offset - speakerStart, base: voiceBase)
         }
-        await MainActor.run { LiveTranscriber.shared.apply(out, offset: offset, engine: engine, to: id, run: run) }
+        let ready = labelled
+        await MainActor.run { LiveTranscriber.shared.apply(ready, offset: offset, engine: engine, to: id, run: run) }
     }
 
     /// The speaker model listens for the whole run (Pause just means no audio

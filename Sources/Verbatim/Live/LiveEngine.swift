@@ -43,7 +43,7 @@ struct LiveText: Codable, Equatable {
     /// nil = written live while recording.
     var pass: FilePass?
     /// Names Ryan gave a whole voice ("Change all"), by voice number as text:
-    /// "#teacher", "#student" or a name.
+    /// a name, or "#v5" (same as voice 5).
     var voiceNames: [String: String]?
     /// How many times the speaker model started listening on this recording.
     /// Each time it numbers voices 0 to 3 again, so voice = time * 4 + number.

@@ -1,76 +1,98 @@
 import Foundation
 
-/// Speaker labels (step 7). The speaker model only tells voices apart. Names
-/// come from here: the voice that says the most is the teacher (name from
-/// Settings, default Mr. Yurt), every other voice shows as Student. Ryan can
-/// fix any line, or a whole voice, by clicking its label.
+/// Speaker labels (step 7). The speaker model only tells voices apart, so
+/// voices show as "Speaker 1", "Speaker 2"... (1 = talks the most), for a
+/// class, a video, anything. Ryan renames a voice once ("Mr. Yurt") and every
+/// line in it changes. Names he typed before are offered in every recording,
+/// so next class it's two clicks.
 ///
 /// What a line shows, first match wins:
 /// 1. `Line.speaker`: Ryan picked it for this line.
-/// 2. `LiveText.voiceNames[voice]`: Ryan picked it for the whole voice.
-/// 3. The voice says the most in its listening session: teacher. Else student.
-/// No voice (old recordings, no speaker model yet): no label.
+/// 2. `LiveText.voiceNames[voice]`: Ryan named the whole voice.
+/// 3. "Speaker N".
+/// Both 1 and 2 hold a name, or "#v5" = "same as voice 5" (picking another
+/// speaker from the menu). No voice (old recordings, no speaker model yet):
+/// no label.
 enum Speakers {
-    static let teacherKey = "teacherName"
-    static let studentKey = "studentLabel"
-    static let teacherDefault = "Mr. Yurt"
-    static let studentDefault = "Student"
+    /// Names Ryan typed, newest first, offered in every recording.
+    static let recentKey = "recentSpeakerNames"
 
-    /// Stored instead of the names, so changing Settings changes every line.
-    static let teacher = "#teacher"
-    static let student = "#student"
+    static var recentNames: [String] { UserDefaults.standard.stringArray(forKey: recentKey) ?? [] }
 
-    static var teacherName: String { setting(teacherKey) ?? teacherDefault }
-    static var studentName: String { setting(studentKey) ?? studentDefault }
-
-    private static func setting(_ key: String) -> String? {
-        let s = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return s.isEmpty ? nil : s
+    static func remember(_ name: String) {
+        var names = recentNames.filter { $0.caseInsensitiveCompare(name) != .orderedSame }
+        names.insert(name, at: 0)
+        UserDefaults.standard.set(Array(names.prefix(8)), forKey: recentKey)
     }
 
-    /// "#teacher" -> "Mr. Yurt". Names stay as they are.
-    static func display(_ choice: String) -> String {
-        switch choice {
-        case teacher: teacherName
-        case student: studentName
-        default: choice
-        }
+    static func token(_ voice: Int) -> String { "#v\(voice)" }
+
+    static func voice(of token: String) -> Int? {
+        token.hasPrefix("#v") ? Int(token.dropFirst(2)) : nil
     }
 
     /// Works out labels for one recording's lines.
     struct Labeler {
         var names: [String: String]
-        var teachers: Set<Int>
+        /// Voices from most words to least.
+        var ranked: [Int]
+        /// "Speaker N" number of each voice Ryan hasn't named.
+        var numbers: [Int: Int]
 
         init(lines: [Transcript.Line], names: [String: String]?) {
             self.names = names ?? [:]
-            // Words per voice, then the top voice of each listening session.
             var words: [Int: Int] = [:]
             for l in lines {
                 guard let v = l.voice else { continue }
                 words[v, default: 0] += l.text.split(whereSeparator: \.isWhitespace).count
             }
-            var best: [Int: (voice: Int, words: Int)] = [:]
-            for (v, n) in words {
-                let session = v / 4
-                if let b = best[session], b.words > n || (b.words == n && b.voice < v) { continue }
-                best[session] = (v, n)
+            ranked = words.keys.sorted { words[$0]! != words[$1]! ? words[$0]! > words[$1]! : $0 < $1 }
+            var numbers: [Int: Int] = [:]
+            for v in ranked where self.names["\(v)"] == nil { numbers[v] = numbers.count + 1 }
+            self.numbers = numbers
+        }
+
+        /// The name a voice shows.
+        func name(voice: Int, depth: Int = 0) -> String {
+            if let n = names["\(voice)"] {
+                if let other = Speakers.voice(of: n) {
+                    return depth < 5 && other != voice ? name(voice: other, depth: depth + 1) : "Speaker"
+                }
+                return n
             }
-            teachers = Set(best.values.map { $0.voice })
+            return "Speaker \(numbers[voice] ?? ranked.count + 1)"
         }
 
-        /// What the voice shows if Ryan hasn't picked anything for the line.
-        func choice(voice: Int) -> String {
-            names["\(voice)"] ?? (teachers.contains(voice) ? Speakers.teacher : Speakers.student)
-        }
-
-        /// "#teacher", "#student", a name, or nil (no label).
+        /// What's picked for the line: a name, "#v5", or nil (no label).
         func choice(_ line: Transcript.Line) -> String? {
-            if let s = line.speaker { return s }
-            return line.voice.map { choice(voice: $0) }
+            line.speaker ?? line.voice.map(Speakers.token)
         }
 
-        func name(_ line: Transcript.Line) -> String? { choice(line).map(Speakers.display) }
+        func display(_ choice: String) -> String {
+            Speakers.voice(of: choice).map { name(voice: $0) } ?? choice
+        }
+
+        func name(_ line: Transcript.Line) -> String? { choice(line).map(display) }
+
+        /// Everyone to offer in the menu: this recording's speakers, then names
+        /// Ryan used in other recordings. (choice, name), no name twice.
+        func options(_ lines: [Transcript.Line]) -> [SpeakerOption] {
+            var out: [SpeakerOption] = []
+            var seen = Set<String>()
+            func add(_ choice: String) {
+                let n = display(choice)
+                if seen.insert(n.lowercased()).inserted { out.append(SpeakerOption(choice: choice, name: n)) }
+            }
+            for v in ranked { add(Speakers.token(v)) }
+            for l in lines { if let s = l.speaker { add(s) } }
+            for n in Speakers.recentNames { add(n) }
+            return out
+        }
+    }
+
+    struct SpeakerOption: Hashable {
+        var choice: String
+        var name: String
     }
 
     @MainActor
@@ -151,51 +173,48 @@ enum Speakers {
 // MARK: - Fixing labels (click a label)
 
 extension RecorderModel {
-    /// Ryan picked who said this line. If more lines share its voice and show
-    /// something else, the bottom bar offers to change them too.
+    /// Ryan picked who said this line. If more lines share its voice, the
+    /// bottom bar offers to change them too.
     func setSpeaker(_ id: UUID, start: Double, to choice: String) {
         let live = LiveTranscriber.shared
         guard let line = live.lines(id).first(where: { $0.start == start }) else { return }
         let before = Speakers.labeler(id)
         guard before.choice(line) != choice else { return }
+        if Speakers.voice(of: choice) == nil { Speakers.remember(choice) }
         var changed = line
-        changed.speaker = choice
+        // Back to its own voice: just follow the voice again.
+        changed.speaker = choice == line.voice.map(Speakers.token) ? nil : choice
         live.replaceLine(id, start: start, with: changed)
 
-        let name = Speakers.display(choice)
-        guard let voice = line.voice else {
+        let name = before.display(choice)
+        guard let voice = line.voice, choice != Speakers.token(voice) else {
             flash("Changed to \(name).")
             return
         }
         let others = live.lines(id).filter { $0.start != start && $0.voice == voice && $0.speaker == nil }
-        guard before.choice(voice: voice) != choice, !others.isEmpty else {
+        guard !others.isEmpty else {
             flash("Changed to \(name).")
             return
         }
         let more = others.count == 1 ? "1 more line sounds" : "\(others.count) more lines sound"
         offer("Changed to \(name). \(more) like the same voice.", .changeVoice) { [weak self] in
-            self?.setVoice(id, voice: voice, to: choice, count: others.count + 1)
+            self?.renameVoice(id, voice: voice, to: choice)
         }
     }
 
-    /// Every line in this voice (that Ryan didn't pick himself) becomes `choice`.
-    func setVoice(_ id: UUID, voice: Int, to choice: String, count: Int) {
+    /// Every line in this voice (that Ryan didn't pick himself) becomes `choice`
+    /// (a name, or "#v5" to join another speaker).
+    func renameVoice(_ id: UUID, voice: Int, to choice: String) {
         let live = LiveTranscriber.shared
+        if Speakers.voice(of: choice) == nil { Speakers.remember(choice) }
+        let before = Speakers.labeler(id)
+        let oldName = before.name(voice: voice)
         let old = live.texts[id]?.voiceNames?["\(voice)"]
         live.setVoiceName(id, voice: voice, to: choice)
-        let name = Speakers.display(choice)
-        offerLineUndo(count == 1 ? "Changed 1 line to \(name)." : "Changed \(count) lines to \(name).") {
+        let count = live.lines(id).filter { $0.voice == voice && $0.speaker == nil }.count
+        let lines = count == 1 ? "1 line" : "\(count) lines"
+        offerLineUndo("\(oldName) is now \(before.display(choice)) (\(lines)).") {
             LiveTranscriber.shared.setVoiceName(id, voice: voice, to: old)
         }
-    }
-
-    /// Names to offer in the label menu: teacher, student, then names Ryan
-    /// typed in this recording.
-    func speakerNames(_ id: UUID) -> [String] {
-        let t = LiveTranscriber.shared.texts[id]
-        var names = (t?.lines ?? []).compactMap(\.speaker) + (t?.voiceNames?.values.map { $0 } ?? [])
-        names.removeAll { $0 == Speakers.teacher || $0 == Speakers.student }
-        var seen = Set<String>()
-        return names.filter { seen.insert($0).inserted }.sorted()
     }
 }

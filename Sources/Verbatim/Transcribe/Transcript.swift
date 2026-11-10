@@ -19,8 +19,8 @@ struct Transcript: Codable, Equatable {
         /// Which voice said it (step 7), from the speaker model. Numbers are only
         /// meaningful inside one recording. nil = no speaker known.
         var voice: Int? = nil
-        /// Who Ryan said it is, for this line only: "#teacher", "#student" or a
-        /// name. Wins over the voice. See `Speakers`.
+        /// Who Ryan said it is, for this line only: a name, or "#v5" (same as
+        /// voice 5). Wins over the voice. See `Speakers`.
         var speaker: String? = nil
 
         var isLocked: Bool { locked == true }

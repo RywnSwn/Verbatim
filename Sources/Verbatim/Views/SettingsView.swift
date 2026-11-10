@@ -1,7 +1,7 @@
 import AVFoundation
 import SwiftUI
 
-/// Settings > General: speaker names, microphone and times. The rest arrives in step 10.
+/// Settings > General: microphone and times. The rest arrives in step 10.
 struct SettingsView: View {
     var body: some View {
         TabView {
@@ -21,23 +21,10 @@ struct GeneralSettings: View {
     @AppStorage(Microphones.chosenKey) private var chosenID = ""
     @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
     @AppStorage(TimeStyle.copyKey) private var timesInCopies = false
-    @AppStorage(Speakers.teacherKey) private var teacherName = ""
-    @AppStorage(Speakers.studentKey) private var studentName = ""
     @State private var mics: [Mic] = []
 
     var body: some View {
         Form {
-            TextField("Teacher:", text: $teacherName, prompt: Text(Speakers.teacherDefault))
-                .frame(maxWidth: 220)
-            TextField("Students show as:", text: $studentName, prompt: Text(Speakers.studentDefault))
-                .frame(maxWidth: 220)
-            Text("The voice that talks the most gets the teacher's name. Click a name in a transcript to fix it. Changing these changes every recording.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Divider()
-                .padding(.vertical, 6)
 
             Picker("Microphone:", selection: $chosenID) {
                 Text("MacBook mic (recommended)").tag("")
