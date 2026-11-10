@@ -7,6 +7,9 @@ import SwiftUI
 /// Follows new text only if you're already at the bottom; otherwise a
 /// "Jump to live" button shows.
 ///
+/// Speakers (step 7): "Mr. Yurt:" in bold in front of each line. Click it to
+/// pick who said it (or right-click > Speaker).
+///
 /// Editing: click a line (Enter saves, Esc cancels, clicking away
 /// saves), or right-click for Copy / Edit / Delete. Edited lines turn full ink
 /// and get a lock; new words never go into them. Every change has Undo in
@@ -30,6 +33,12 @@ struct TranscriptList: View {
     @FocusState private var fieldFocused: Bool
     /// Last time you scrolled by hand, so playing audio doesn't yank the view away.
     @State private var lastUserScroll = Date.distantPast
+    /// "Someone else…": the line being named, and the name typed so far.
+    @State private var naming: Double?
+    @State private var nameDraft = ""
+    // Not read here: they make the names redraw when Settings change.
+    @AppStorage(Speakers.teacherKey) private var teacherName = ""
+    @AppStorage(Speakers.studentKey) private var studentName = ""
 
     private var playback: Playback { .shared }
     /// Times in the gutter play from that line (finished recordings with audio).
@@ -79,12 +88,13 @@ struct TranscriptList: View {
     }
 
     var body: some View {
+        let labels = Speakers.labeler(info.id)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.lineGap) {
                 ForEach(rows) { row in
                     switch row {
                     case .line(let line, let source):
-                        lineRow(line, source)
+                        lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil)
                     case .checkedUpTo(let seconds):
                         HStack(spacing: 10) {
                             Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
@@ -140,6 +150,17 @@ struct TranscriptList: View {
             withAnimation(.easeOut(duration: 0.3)) { position.scrollTo(id: id, anchor: .center) }
         }
         .onChange(of: model.matchJump) { jumpToMatch() }
+        .alert("Who said this?", isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil } })) {
+            TextField("Name", text: $nameDraft)
+            Button("OK") {
+                let name = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let start = naming, !name.isEmpty { model.setSpeaker(info.id, start: start, to: name) }
+                naming = nil
+            }
+            Button("Cancel", role: .cancel) { naming = nil }
+        } message: {
+            Text("Type a name, like a classmate's. It shows up in this menu for other lines too.")
+        }
         .onAppear { if !model.searchText.isEmpty { jumpToMatch() } }
         .overlay(alignment: .bottom) {
             if isLive, !atBottom {
@@ -245,10 +266,36 @@ struct TranscriptList: View {
         return result
     }
 
-    private func lineRow(_ line: Transcript.Line, _ source: LineSource) -> some View {
+    /// "Mr. Yurt:" in bold, then the line.
+    private func labelled(_ text: Text, _ name: String?) -> Text {
+        guard let name else { return text }
+        return Text("\(Text(name + ":").fontWeight(.semibold)) \(text)")
+    }
+
+    /// Who said it: teacher, student, names typed in this recording, or a new name.
+    @ViewBuilder private func speakerItems(_ line: Transcript.Line, current: String?) -> some View {
+        let pick = Binding<String>(
+            get: { current ?? "" },
+            set: { model.setSpeaker(info.id, start: line.start, to: $0) }
+        )
+        Picker("Who said this?", selection: pick) {
+            Text(Speakers.display(Speakers.teacher)).tag(Speakers.teacher)
+            Text(Speakers.display(Speakers.student)).tag(Speakers.student)
+            ForEach(model.speakerNames(info.id), id: \.self) { Text($0).tag($0) }
+        }
+        .pickerStyle(.inline)
+        Divider()
+        Button("Someone else…") {
+            nameDraft = ""
+            naming = line.start
+        }
+    }
+
+    private func lineRow(_ line: Transcript.Line, _ source: LineSource, speaker: String?) -> some View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
         let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
+        let name = speaker.map(Speakers.display)
         return HStack(alignment: .firstTextBaseline, spacing: 18) {
             timeGutter(line, isPlaying: isPlaying)
             if isEditing {
@@ -267,14 +314,17 @@ struct TranscriptList: View {
             } else {
                 Group {
                     if !query.isEmpty {
-                        Text(highlighted(line.text, source, line.start))
+                        labelled(Text(highlighted(line.text, source, line.start)), name)
                     } else if isPlaying {
-                        wordHighlighted(line)
+                        labelled(wordHighlighted(line), name)
                             .textRenderer(WordMarkRenderer(color: Theme.accent.opacity(0.22)))
                     } else {
-                        Text(line.text)
+                        labelled(Text(line.text), name)
                     }
                 }
+                    .overlay(alignment: .topLeading) {
+                        if let name { SpeakerLabelButton(name: name) { speakerItems(line, current: speaker) } }
+                    }
                     .font(Theme.transcript)
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .foregroundStyle(Theme.ink)
@@ -315,6 +365,9 @@ struct TranscriptList: View {
             Button("Copy from here down") { model.copyLines(info, linesFrom(line, source)) }
             Divider()
             Button("Edit line") { begin(line, source) }
+            if source == .live {
+                Menu("Speaker") { speakerItems(line, current: speaker) }
+            }
             Button("Delete line") { model.deleteLine(info.id, source, start: line.start) }
             if line.isLocked {
                 Divider()
@@ -396,6 +449,41 @@ extension RecordingInfo {
                 : String(format: "%d:%02d", s / 60, s % 60)
         }
         return wallTime(atSecond: seconds).formatted(.dateTime.hour().minute())
+    }
+}
+
+/// Sits exactly on top of the bold "Mr. Yurt:" (same text, see-through), so
+/// clicking the name opens the menu right there. Shaded on hover.
+struct SpeakerLabelButton<Items: View>: View {
+    let name: String
+    @ViewBuilder let items: () -> Items
+    @State private var hovering = false
+
+    var body: some View {
+        Menu {
+            items()
+        } label: {
+            Text(name + ":")
+                .font(Theme.transcript)
+                .fontWeight(.semibold)
+                // See-through, so the name under it shows. On hover it draws
+                // itself over the shade (the shade would hide the one under it).
+                .foregroundStyle(hovering ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Color.clear))
+                .background {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Theme.line.opacity(hovering ? 0.9 : 0))
+                        .padding(.horizontal, -3)
+                }
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hovering = $0 }
+        .pointerStyle(.link)
+        .help("Who said this? Click to change")
+        .accessibilityLabel("Speaker: \(name). Change")
     }
 }
 

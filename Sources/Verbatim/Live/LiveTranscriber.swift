@@ -93,6 +93,7 @@ final class LiveTranscriber {
         }
         if UserDefaults.standard.bool(forKey: Self.preparedKey) {
             modelState = .ready
+            SpeakerModel.shared.startIfNeeded()
         } else {
             startDownload()
             // Until Parakeet is here, Apple's engine fills in. Get its model now,
@@ -171,6 +172,45 @@ final class LiveTranscriber {
     }
 
     func reload(_ id: UUID) { texts[id] = LiveStore.load(id) }
+
+    // MARK: - Speakers (step 7)
+
+    /// The speaker model starts listening on this recording again. Returns the
+    /// number to add to its voices (0 to 3), so they don't mix with earlier ones.
+    func newVoiceSession(_ id: UUID) -> Int {
+        var t = texts[id] ?? LiveText()
+        let n = t.voiceSessions ?? 0
+        t.voiceSessions = n + 1
+        commit(t, id)
+        return n * 4
+    }
+
+    /// Ryan named a whole voice ("Change them too"). nil takes it back.
+    func setVoiceName(_ id: UUID, voice: Int, to choice: String?) {
+        guard var t = texts[id] else { return }
+        var names = t.voiceNames ?? [:]
+        names["\(voice)"] = choice
+        t.voiceNames = names.isEmpty ? nil : names
+        commit(t, id)
+    }
+
+    /// Voices from the speaker model going over the whole file. Lines where
+    /// the voice changes partway are split there. Names Ryan gave voices before
+    /// are dropped (the numbers are new); names he gave single lines stay.
+    func applyVoices(_ id: UUID, frames: VoiceFrames, base: Int) {
+        guard var t = texts[id] else { return }
+        t.lines = Speakers.relabel(t.lines, frames: frames, base: base)
+        t.voiceNames = nil
+        t.speakersFound = true
+        commit(t, id)
+    }
+
+    /// Marks the speaker pass done without changing anything (no audio, failed).
+    func markSpeakersFound(_ id: UUID) {
+        guard var t = texts[id] else { return }
+        t.speakersFound = true
+        commit(t, id)
+    }
 
     // MARK: - Going over a file (Transcriber)
 
@@ -263,6 +303,7 @@ final class LiveTranscriber {
                 downloadTask = nil
                 modelState = .ready
                 Transcriber.shared.modelReady()
+                SpeakerModel.shared.startIfNeeded()
             } catch {
                 downloadTask = nil
                 if case .paused = modelState { return }
@@ -324,6 +365,11 @@ final class LiveTranscriber {
 actor LiveRunner {
     private let parakeet = ParakeetEngine()
     private let apple = AppleSpeechEngine()
+    private let speakers = SpeakerEngine()
+    /// Where the speaker model started listening (seconds into audio.wav), and
+    /// the number added to its voices. nil = not listening (model not here).
+    private var speakerStart: Double?
+    private var voiceBase = 0
 
     func run(id: UUID, run: Int, stream: AsyncStream<LiveInput>, position start: Int64) async {
         var position = start
@@ -331,10 +377,13 @@ actor LiveRunner {
         var name = ""
         var offset = 0.0
         var nextTry: Int64 = 0
+        await startSpeakers(id: id, position: position)
 
         for await input in stream {
             switch input {
             case .samples(let samples):
+                // Speakers first: then it's ahead of the words that need it.
+                if speakerStart != nil { await speakers.feed(samples) }
                 if engine == nil, position >= nextTry {
                     (engine, name) = await pick(run: run)
                     offset = Double(position) / 16_000
@@ -358,15 +407,37 @@ actor LiveRunner {
         }
 
         if let engine {
+            if speakerStart != nil { await speakers.finish() }
             await deliver(await engine.end(), offset: offset, engine: name, id: id, run: run)
         }
         await parakeet.unload() // free the memory for files waiting to be transcribed
+        await speakers.unload()
+        speakerStart = nil
         await MainActor.run { LiveTranscriber.shared.finished(id, run: run) }
     }
 
     private func deliver(_ out: LiveOutput, offset: Double, engine: String, id: UUID, run: Int) async {
         guard !out.finals.isEmpty || out.volatile != nil else { return }
+        var out = out
+        if let speakerStart, !out.finals.isEmpty {
+            out.finals = await speakers.label(out.finals, shift: offset - speakerStart, base: voiceBase)
+        }
         await MainActor.run { LiveTranscriber.shared.apply(out, offset: offset, engine: engine, to: id, run: run) }
+    }
+
+    /// The speaker model listens for the whole run (Pause just means no audio
+    /// for a while), if it's downloaded. Without it, lines have no speaker.
+    private func startSpeakers(id: UUID, position: Int64) async {
+        speakerStart = nil
+        guard await MainActor.run(body: { SpeakerModel.shared.isReady }) else { return }
+        do {
+            try await speakers.begin()
+            voiceBase = await MainActor.run { LiveTranscriber.shared.newVoiceSession(id) }
+            speakerStart = Double(position) / 16_000
+        } catch {
+            await speakers.unload()
+            await MainActor.run { SpeakerModel.shared.broken() }
+        }
     }
 
     /// Parakeet if it's downloaded, otherwise Apple's engine, otherwise nothing.

@@ -7,9 +7,10 @@ let package = Package(
     dependencies: [
         // FluidAudio runs NVIDIA Parakeet, for live text and for files. Pinned on purpose.
         // (WhisperKit was removed in step 5c: Parakeet only.)
-        // traits: [] leaves out its text-to-speech, speaker and text-normalising
-        // parts, which Verbatim doesn't use (smaller app).
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.18.0", traits: []),
+        // traits: ["Diarizer"] keeps its speaker part (step 7: Sortformer, who
+        // spoke when) and leaves out text-to-speech and text-normalising,
+        // which Verbatim doesn't use (smaller app).
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.18.0", traits: ["Diarizer"]),
     ],
     targets: [
         .executableTarget(

@@ -90,6 +90,8 @@ final class RecorderModel {
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var lineUndo: (() -> Void)?
     @ObservationIgnored private var fileToShow: URL?
+    /// What the text link in the status spot does, for `offer`.
+    @ObservationIgnored private var offered: (() -> Void)?
     /// Delete Audio Only, for Undo: which recording and where its audio went in the Trash.
     @ObservationIgnored private var audioUndo: (id: UUID, trashURL: URL, original: URL)?
 
@@ -314,6 +316,11 @@ final class RecorderModel {
             if let url = fileToShow { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             status = nil
         case .undoAudioDelete: undoAudioDelete()
+        case .changeVoice:
+            let run = offered
+            offered = nil
+            if status?.action == .changeVoice { status = nil }
+            run?()
         }
     }
 
@@ -563,6 +570,19 @@ final class RecorderModel {
             guard let self, self.status == s else { return }
             self.status = nil
             self.lineUndo = nil
+        }
+    }
+
+    /// A message with a text link that does `run`, for 10 seconds.
+    func offer(_ text: String, _ action: Status.Action, run: @escaping () -> Void) {
+        offered = run
+        let s = Status(text: text, action: action)
+        status = s
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, self.status == s else { return }
+            self.status = nil
+            self.offered = nil
         }
     }
 

@@ -20,12 +20,17 @@ final class Transcriber {
         var doneSeconds: Double
         var totalSeconds: Double
         var secondsLeft: Double?
+        /// Only finding who spoke (the text is already there).
+        var speakersOnly = false
     }
 
     /// Audio handed to the model at a time. Progress is saved after each.
     static let pieceSeconds: Int64 = 30
 
     private(set) var queue: [UUID] = []
+    /// Recordings with text but no speakers yet, for the speaker model to go
+    /// over (step 7). Done after the files in `queue`.
+    private(set) var speakerQueue: [UUID] = []
     private(set) var active: Job?
     private(set) var importing: Set<UUID> = []
     /// Old Whisper transcripts (transcript.json), from before step 5c.
@@ -36,6 +41,7 @@ final class Transcriber {
     private(set) var growing: Set<UUID> = []
 
     @ObservationIgnored private let engine = ParakeetEngine()
+    @ObservationIgnored private let speakers = SpeakerEngine()
     @ObservationIgnored private var workTask: Task<Void, Never>?
     @ObservationIgnored private var cancelRequested: Set<UUID> = []
 
@@ -63,6 +69,40 @@ final class Transcriber {
                 if old == nil || (old?.finished == false && old?.stoppedByUser == false) { enqueue(r.id) }
             }
         }
+        queueSpeakers(recordings)
+    }
+
+    /// The speaker model finished downloading: label what's already there.
+    func speakerModelReady() {
+        queueSpeakers(RecorderModel.shared.recordings)
+    }
+
+    /// Recordings that have text but no speakers yet (made before step 7, or
+    /// before the speaker model was here) get speakers found by themselves.
+    private func queueSpeakers(_ recordings: [RecordingInfo]) {
+        guard SpeakerModel.shared.isReady else { return }
+        for r in recordings.reversed() where !r.isActive && r.hasAudio && needsSpeakers(r.id) {
+            findSpeakers(r.id)
+        }
+    }
+
+    private func needsSpeakers(_ id: UUID) -> Bool {
+        guard let t = live.texts[id], t.speakersFound != true, !t.lines.isEmpty else { return false }
+        if let pass = t.pass, !pass.finished { return false } // gets them while being transcribed
+        return !t.lines.contains { $0.voice != nil }
+    }
+
+    /// Goes over the file with the speaker model only, keeping the text. Also
+    /// "Find speakers again" in the More menu, if the labels came out wrong.
+    func findSpeakers(_ id: UUID) {
+        guard !speakerQueue.contains(id), active?.id != id else { return }
+        errors[id] = nil
+        speakerQueue.append(id)
+        runQueue()
+    }
+
+    func isFindingSpeakers(_ id: UUID) -> Bool {
+        speakerQueue.contains(id) || (active?.id == id && active?.speakersOnly == true)
     }
 
     /// Parakeet finished downloading: start anything that was waiting.
@@ -91,12 +131,22 @@ final class Transcriber {
     func redo(_ id: UUID) {
         guard active?.id != id, !growing.contains(id) else { return }
         queue.removeAll { $0 == id }
+        speakerQueue.removeAll { $0 == id } // the new pass finds speakers as it goes
         transcripts[id] = nil
         try? FileManager.default.removeItem(at: TranscriptStore.url(id))
         let old = live.texts[id]
-        let edited = (old?.lines ?? []).filter(\.isLocked)
+        // Edited lines are kept with the speaker they show now (their voice
+        // numbers mean nothing to the new pass).
+        let labels = Speakers.Labeler(lines: old?.lines ?? [], names: old?.voiceNames)
+        let edited = (old?.lines ?? []).filter(\.isLocked).map { line in
+            var l = line
+            l.speaker = labels.choice(line)
+            l.voice = nil
+            return l
+        }
         var fresh = LiveText(pass: LiveText.FilePass(keep: edited.isEmpty ? nil : edited))
         fresh.removed = old?.removed
+        fresh.voiceSessions = old?.voiceSessions
         live.setText(fresh, for: id)
         enqueue(id)
     }
@@ -104,6 +154,10 @@ final class Transcriber {
     func cancel(_ id: UUID) {
         if active?.id == id { cancelRequested.insert(id) }
         queue.removeAll { $0 == id }
+        if speakerQueue.contains(id) || (active?.id == id && active?.speakersOnly == true) {
+            speakerQueue.removeAll { $0 == id }
+            live.markSpeakersFound(id) // Ryan said no: don't start it again by itself
+        }
         if var text = live.texts[id], var pass = text.pass, !pass.finished {
             pass.stoppedByUser = true
             text.pass = pass
@@ -115,6 +169,7 @@ final class Transcriber {
     func forget(_ id: UUID) {
         if active?.id == id { cancelRequested.insert(id) }
         queue.removeAll { $0 == id }
+        speakerQueue.removeAll { $0 == id }
         growing.remove(id)
         transcripts[id] = nil
         errors[id] = nil
@@ -153,6 +208,8 @@ final class Transcriber {
         let text = live.texts[id]
         if isModelReady, text?.pass == nil, (text?.lines.isEmpty ?? true) || text?.madeWithBackupEngine == true {
             redo(id)
+        } else if SpeakerModel.shared.isReady, needsSpeakers(id) {
+            findSpeakers(id)
         }
         runQueue()
         AudioSquash.shared.run()
@@ -192,13 +249,20 @@ final class Transcriber {
     // MARK: - Running
 
     private func runQueue() {
-        guard workTask == nil, isModelReady, growing.isEmpty, !queue.isEmpty else { return }
+        let files = isModelReady && !queue.isEmpty
+        let voices = SpeakerModel.shared.isReady && !speakerQueue.isEmpty
+        guard workTask == nil, growing.isEmpty, files || voices else { return }
         workTask = Task {
-            while let id = queue.first, growing.isEmpty {
+            while isModelReady, let id = queue.first, growing.isEmpty {
                 let finished = await transcribe(id)
                 if finished { queue.removeAll { $0 == id } }
             }
             await engine.unload() // free the memory until the next file
+            while queue.isEmpty, SpeakerModel.shared.isReady, let id = speakerQueue.first, growing.isEmpty {
+                let finished = await speakersOnly(id)
+                if finished { speakerQueue.removeAll { $0 == id } }
+            }
+            await speakers.unload()
             workTask = nil
             runQueue()
             AudioSquash.shared.run() // shrink the audio of files that are done
@@ -237,6 +301,18 @@ final class Transcriber {
             errors[id] = "Couldn't load the speech model: \(error.localizedDescription)"
             return true
         }
+        // Speakers as it goes, if the speaker model is here. Without it the
+        // text still comes; speakers are found afterwards.
+        var voiceBase: Int?
+        if SpeakerModel.shared.isReady {
+            do {
+                try await speakers.begin()
+                voiceBase = live.newVoiceSession(id)
+            } catch {
+                await speakers.unload()
+                SpeakerModel.shared.broken()
+            }
+        }
 
         let offset = Double(pos) / rate
         let started = Date()
@@ -245,7 +321,9 @@ final class Transcriber {
             if cancelRequested.contains(id) || !growing.isEmpty {
                 // Finish the words heard so far, so it can carry on cleanly from here.
                 let out = await engine.end()
-                live.addPass(out.finals, offset: offset, to: id, doneUpTo: Double(pos) / rate, finished: false)
+                if voiceBase != nil { await speakers.finish() }
+                let words = await voiced(out.finals, voiceBase)
+                live.addPass(words, offset: offset, to: id, doneUpTo: Double(pos) / rate, finished: false)
                 return cancelRequested.contains(id)
             }
             let end = min(pos + Self.pieceSeconds * Int64(rate), total)
@@ -256,12 +334,14 @@ final class Transcriber {
                 errors[id] = "Transcribing stopped: \(error.localizedDescription)"
                 return true
             }
+            if voiceBase != nil { await speakers.feed(samples) }
             let out = await engine.feed(samples)
             pos = end
             // Words come out a couple of seconds behind the audio, so after a
             // crash it carries on from the last word that made it into the text.
             let lastWord = out.finals.last.map { $0.end + offset }
-            live.addPass(out.finals, offset: offset, to: id, doneUpTo: lastWord, finished: false)
+            let words = await voiced(out.finals, voiceBase)
+            live.addPass(words, offset: offset, to: id, doneUpTo: lastWord, finished: false)
 
             let done = Double(pos - startPos)
             let elapsed = Date().timeIntervalSince(started)
@@ -273,8 +353,74 @@ final class Transcriber {
             )
             await Task.yield()
         }
+        if voiceBase != nil { await speakers.finish() }
         let out = await engine.end()
-        live.addPass(out.finals, offset: offset, to: id, doneUpTo: Double(total) / rate, finished: true)
+        let words = await voiced(out.finals, voiceBase)
+        live.addPass(words, offset: offset, to: id, doneUpTo: Double(total) / rate, finished: true)
+        if voiceBase != nil { live.markSpeakersFound(id) }
+        return true
+    }
+
+    /// Words get voices. The speaker model started at the same place in the
+    /// file as Parakeet, so their times line up.
+    private func voiced(_ words: [LivePiece], _ base: Int?) async -> [LivePiece] {
+        guard let base, !words.isEmpty else { return words }
+        return await speakers.label(words, shift: 0, base: base)
+    }
+
+    /// The speaker model goes over the whole file, then the lines get voices
+    /// (split where the voice changes). The text itself doesn't change.
+    /// Returns false when it stopped for a recording and should start again later.
+    private func speakersOnly(_ id: UUID) async -> Bool {
+        let audio = RecordingStore.audioURL(id)
+        guard FileManager.default.fileExists(atPath: audio.path), live.texts[id] != nil else { return true }
+        cancelRequested.remove(id)
+        let reader: AudioReader
+        do {
+            reader = try AudioReader(audio)
+        } catch {
+            live.markSpeakersFound(id)
+            return true
+        }
+        let rate = reader.rate
+        let total = reader.length
+        active = Job(id: id, doneSeconds: 0, totalSeconds: Double(total) / rate, speakersOnly: true)
+        defer {
+            cancelRequested.remove(id)
+            active = nil
+        }
+        do {
+            try await speakers.begin()
+        } catch {
+            await speakers.unload()
+            SpeakerModel.shared.broken()
+            return false
+        }
+        var pos: Int64 = 0
+        let started = Date()
+        while pos < total {
+            if cancelRequested.contains(id) { return true }
+            if !growing.isEmpty { return false } // starts over after the recording
+            let end = min(pos + Self.pieceSeconds * Int64(rate), total)
+            guard let samples = try? reader.samples(from: pos, count: end - pos) else {
+                live.markSpeakersFound(id)
+                return true
+            }
+            await speakers.feed(samples)
+            pos = end
+            let elapsed = Date().timeIntervalSince(started)
+            active = Job(
+                id: id,
+                doneSeconds: Double(pos) / rate,
+                totalSeconds: Double(total) / rate,
+                secondsLeft: pos > 0 ? elapsed / Double(pos) * Double(total - pos) : nil,
+                speakersOnly: true
+            )
+            await Task.yield()
+        }
+        await speakers.finish()
+        let frames = await speakers.frames
+        live.applyVoices(id, frames: frames, base: live.newVoiceSession(id))
         return true
     }
 

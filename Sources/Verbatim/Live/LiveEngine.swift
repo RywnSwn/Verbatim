@@ -5,6 +5,8 @@ struct LivePiece: Sendable {
     var text: String
     var start: Double
     var end: Double
+    /// Which voice said it (step 7). Set by SpeakerEngine, not by the engines.
+    var voice: Int? = nil
 }
 
 /// What an engine hands back after each bit of audio.
@@ -40,6 +42,14 @@ struct LiveText: Codable, Equatable {
     /// Set when Parakeet goes over the audio file instead of listening live.
     /// nil = written live while recording.
     var pass: FilePass?
+    /// Names Ryan gave a whole voice ("Change all"), by voice number as text:
+    /// "#teacher", "#student" or a name.
+    var voiceNames: [String: String]?
+    /// How many times the speaker model started listening on this recording.
+    /// Each time it numbers voices 0 to 3 again, so voice = time * 4 + number.
+    var voiceSessions: Int?
+    /// The speaker model went over the whole file ("Find speakers").
+    var speakersFound: Bool?
 
     struct Span: Codable, Equatable {
         var start: Double
@@ -100,8 +110,9 @@ enum LineBuilder {
             lines[i].text = last.text + " " + text
             lines[i].end = max(last.end, piece.end)
             lines[i].words = last.words.map { $0 + starts }
+            if lines[i].voice == nil { lines[i].voice = piece.voice }
         } else {
-            lines.append(Transcript.Line(start: piece.start, end: piece.end, text: text, words: starts))
+            lines.append(Transcript.Line(start: piece.start, end: piece.end, text: text, words: starts, voice: piece.voice))
         }
     }
 
@@ -116,6 +127,8 @@ enum LineBuilder {
 
     private static func shouldBreak(after line: Transcript.Line, before piece: LivePiece, adding text: String) -> Bool {
         if piece.start - line.end > pauseGap { return true }
+        // Someone else talks: new line, so each line has one speaker.
+        if let a = line.voice, let b = piece.voice, a != b { return true }
         if line.text.count + text.count > hardMax { return true }
         if let c = line.text.last, ".?!".contains(c), line.text.count >= sentenceMin { return true }
         return false
