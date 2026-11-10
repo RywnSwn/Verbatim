@@ -93,6 +93,10 @@ What to build:
   `Documentation/ASR/CustomVocabulary.md`. Plus find/replace fix rules for
   anything it still misses. Words screen as planned.
 - Spec and design docs: remove "accurate pass" parts.
+- Save real word times (Parakeet gives token timings) on each line, e.g.
+  `Transcript.Line.words: [start]` or similar, dropped when Ryan edits the
+  line. The player's word highlight (`TranscriptList.wordHighlighted`)
+  estimates by word length today; switch it to real times when present.
 - Optional later: FluidAudio's `UnifiedAsrManager` (batch, full-attention
   15 s encoder, same checkpoint) is a bit more accurate for files but needs
   an extra encoder download. Not worth it unless Ryan finds files worse.
@@ -446,6 +450,9 @@ Ask Mr. Yurt before recording class.
 - Opened by the Play button in the toolbar, Recording > Play or Pause
   Audio (Option-Cmd-P), sidebar right-click > Play Audio, clicking a
   line's time, or right-click a line > Play from here.
+- The word being heard gets a light blue mark (Ryan's ask). Estimated
+  from the line's start/end by word length until step 5c saves real word
+  times. The ticker runs every 0.12 s for this.
 - The line being heard is shaded and its time turns ink blue; the view
   follows it unless you scrolled in the last 8 s or are editing/searching.
 - Closes when recording starts (mic would hear the speakers) or another
@@ -463,7 +470,8 @@ Ask Mr. Yurt before recording class.
    the bottom, sound plays in the app (no Apple Music).
 2. Drag the slider, try back/forward 15, change speed to 1.5x.
 3. Click a time on the left of any line: plays from there, that line is
-   shaded. Clicking the text itself still edits it.
+   shaded and the word being said is marked in light blue (does it keep
+   up, or run ahead/behind?). Clicking the text itself still edits it.
 4. Scroll away while it plays: it stops following for a few seconds.
 5. Pick another recording: the audio stops.
 6. Right-click a recording in the sidebar > Delete Audio Only (size shown):

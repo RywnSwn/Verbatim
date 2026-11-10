@@ -121,7 +121,7 @@ final class Playback {
         ticker?.cancel()
         ticker = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(250))
+                try? await Task.sleep(for: .milliseconds(120)) // smooth enough for the word highlight
                 guard let self, let p = self.player else { return }
                 if !self.scrubbing { self.time = p.currentTime }
                 if !p.isPlaying {

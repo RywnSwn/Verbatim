@@ -175,6 +175,45 @@ struct TranscriptList: View {
         withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: match.rowID, anchor: .center) }
     }
 
+    /// The playing line with the word being heard marked. Lines only save a
+    /// start and end, so the word is estimated: the line's time is shared out
+    /// by word length, with a little extra after commas and full stops.
+    /// Step 5c saves real word times; use those when a line has them.
+    private func wordHighlighted(_ line: Transcript.Line) -> AttributedString {
+        let text = line.text
+        var words: [Range<String.Index>] = []
+        var i = text.startIndex
+        while i < text.endIndex {
+            while i < text.endIndex, text[i].isWhitespace { i = text.index(after: i) }
+            let start = i
+            while i < text.endIndex, !text[i].isWhitespace { i = text.index(after: i) }
+            if start < i { words.append(start..<i) }
+        }
+        guard !words.isEmpty, line.end > line.start else { return AttributedString(text) }
+        let weights: [Double] = words.map { r in
+            let w = text[r]
+            var weight = Double(w.count) + 2
+            if let last = w.last {
+                if ".?!".contains(last) { weight += 5 } else if ",;:".contains(last) { weight += 3 }
+            }
+            return weight
+        }
+        let total = weights.reduce(0, +)
+        let fraction = (playback.time - line.start) / (line.end - line.start)
+        let target = min(max(fraction, 0), 1) * total
+        var current = words.count - 1
+        var sum = 0.0
+        for (k, w) in weights.enumerated() {
+            sum += w
+            if target < sum { current = k; break }
+        }
+        var result = AttributedString(text)
+        if let r = Range(words[current], in: result) {
+            result[r].backgroundColor = Theme.accent.opacity(0.22)
+        }
+        return result
+    }
+
     /// The line's text with search hits in yellow; the current hit stronger.
     private func highlighted(_ text: String, _ source: LineSource, _ start: Double) -> AttributedString {
         let ranges = RecorderModel.ranges(of: query, in: text)
@@ -215,7 +254,8 @@ struct TranscriptList: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text(query.isEmpty ? AttributedString(line.text) : highlighted(line.text, source, line.start))
+                Text(!query.isEmpty ? highlighted(line.text, source, line.start)
+                    : isPlaying ? wordHighlighted(line) : AttributedString(line.text))
                     .font(Theme.transcript)
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .foregroundStyle(grey ? Theme.ink.opacity(0.62) : Theme.ink)
