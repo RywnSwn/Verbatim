@@ -19,6 +19,19 @@ struct SidebarView: View {
     var body: some View {
         @Bindable var model = model
         List(selection: $model.selection) {
+            // Inside the list (not a top inset), so they sit below the window's
+            // buttons instead of under them (Ryan saw them overlap on macOS 26).
+            Section {
+                NewRecordingButton()
+                SidebarAction(title: "Add a Voice Memo", icon: "waveform.badge.plus", shortcut: "⌘O",
+                              help: "Pick a Voice Memo or other recording to turn into text. Or drop one anywhere.") {
+                    model.chooseFilesToImport()
+                }
+                RecentlyDeletedButton()
+            }
+            .selectionDisabled()
+            .listRowInsets(EdgeInsets(top: 0, leading: 2, bottom: 0, trailing: 2))
+
             ForEach(store.groups) { group in
                 Section(isExpanded: expanded(group)) {
                     let members = model.recordings.filter { $0.groupID == group.id }
@@ -58,19 +71,6 @@ struct SidebarView: View {
             if let id = model.selection { model.delete(id) }
         }
         .animation(.snappy(duration: 0.25), value: store.groups)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 1) {
-                NewRecordingButton()
-                SidebarAction(title: "Transcribe a Voice Memo", icon: "waveform.badge.plus", shortcut: "⌘O",
-                              help: "Pick a Voice Memo or other recording to turn into text. Or drop one anywhere.") {
-                    model.chooseFilesToImport()
-                }
-                RecentlyDeletedButton()
-            }
-            .padding(.horizontal, 10)
-            .padding(.top, 6)
-            .padding(.bottom, 4)
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Right-click empty space for a new group.")

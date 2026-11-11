@@ -33,8 +33,11 @@ struct BottomBar: View {
                     }
                 }
             }
-            .frame(height: 56)
-            .padding(.horizontal, 20)
+            // Grows for a long message in a narrow window instead of spilling
+            // past the window's rounded bottom edge. Extra side room clears the corners.
+            .frame(minHeight: 56)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 24)
         }
         .background(Theme.paper)
     }
@@ -116,8 +119,9 @@ struct BottomBar: View {
             }
         }
         .font(.callout)
-        .lineLimit(2)
+        .lineLimit(3)
         .multilineTextAlignment(.trailing)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// The normal message when nothing needs attention.
@@ -138,12 +142,16 @@ struct BottomBar: View {
 
     private func undoBar(_ text: String, undo: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 10) {
-            Spacer()
+            Spacer(minLength: 0)
             Text(text)
                 .font(.callout)
+                .lineLimit(3)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
             Button(undo, action: action)
                 .buttonStyle(.link)
                 .font(.callout.weight(.medium))
+                .fixedSize() // the link never wraps or gets cut
         }
     }
 }
