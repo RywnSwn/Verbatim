@@ -20,8 +20,58 @@ extension RecorderModel {
         line.locked = true
         line.words = nil // word times no longer match; the player estimates
         guard let old = Self.replace(id, source, start: start, with: line) else { return }
-        offerLineUndo("Line edited.") {
+        offerLineUndo("Line edited.") { [weak self] in
             Self.restore(id, source, start: start, old)
+            if self?.fixOffer?.start == start { self?.fixOffer = nil }
+        }
+        // Step 8: "Fix 'Father Nazi' to 'Anansi' in future transcripts too?"
+        if let fix = Fixes.offer(old: old.text, new: trimmed), WordList.shared.fix(for: fix.from)?.to != fix.to {
+            fixOffer = FixOffer(recordingID: id, start: start, fix: fix)
+        } else {
+            fixOffer = nil
+        }
+    }
+
+    // MARK: - Fixes (step 8)
+
+    /// Remember: the fix becomes a rule for new text, fixes the rest of this
+    /// transcript, and a name goes in the word list. One Undo takes it all back.
+    func rememberFix() {
+        guard let offer = fixOffer else { return }
+        fixOffer = nil
+        let list = WordList.shared
+        let replaced = list.addFix(offer.fix)
+        var addedWord: String?
+        if Fixes.looksLikeName(offer.fix.to), case .added(let w) = list.addWord(offer.fix.to) { addedWord = w }
+        let changed = LiveTranscriber.shared.applyRule(offer.fix, to: offer.recordingID)
+
+        var text = "Remembered."
+        if !changed.isEmpty {
+            text += changed.count == 1 ? " Fixed it in 1 more line." : " Fixed it in \(changed.count) more lines."
+        }
+        if let addedWord { text += " \(addedWord) is in the word list too." }
+        offerLineUndo(text) {
+            LiveTranscriber.shared.undoRule(changed, in: offer.recordingID)
+            if let addedWord { list.removeWord(addedWord) }
+            if let i = list.fixes.firstIndex(where: { $0.id == offer.fix.id }) {
+                let current = list.fixes[i]
+                list.removeFix(current)
+                if let replaced { list.insertFix(replaced, at: i) }
+            }
+        }
+    }
+
+    func dismissFix() { fixOffer = nil }
+
+    /// Right-click > Add a word to word list.
+    func addToWordList(_ raw: String) {
+        switch WordList.shared.addWord(raw) {
+        case .added(let w):
+            flash(isBusy ? "Added \(w) to the word list. Used after Pause or in the next recording." : "Added \(w) to the word list.")
+        case .alreadyThere(let w):
+            flash("\(w) is already in the word list.")
+        case .problem(let p):
+            flash(p)
         }
     }
 

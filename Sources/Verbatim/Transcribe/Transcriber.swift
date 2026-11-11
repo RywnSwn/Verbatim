@@ -325,7 +325,7 @@ final class Transcriber {
                 let out = await engine.end()
                 if voiceBase != nil { await speakers.finish() }
                 let words = await voiced(out.finals, voiceBase)
-                live.addPass(words, offset: offset, to: id, doneUpTo: Double(pos) / rate, finished: false)
+                live.addPass(words, fixes: out.fixes, offset: offset, to: id, doneUpTo: Double(pos) / rate, finished: false)
                 return cancelRequested.contains(id)
             }
             let end = min(pos + Self.pieceSeconds * Int64(rate), total)
@@ -343,7 +343,7 @@ final class Transcriber {
             // crash it carries on from the last word that made it into the text.
             let lastWord = out.finals.last.map { $0.end + offset }
             let words = await voiced(out.finals, voiceBase)
-            live.addPass(words, offset: offset, to: id, doneUpTo: lastWord, finished: false)
+            live.addPass(words, fixes: out.fixes, offset: offset, to: id, doneUpTo: lastWord, finished: false)
 
             let done = Double(pos - startPos)
             let elapsed = Date().timeIntervalSince(started)
@@ -358,7 +358,7 @@ final class Transcriber {
         if voiceBase != nil { await speakers.finish() }
         let out = await engine.end()
         let words = await voiced(out.finals, voiceBase)
-        live.addPass(words, offset: offset, to: id, doneUpTo: Double(total) / rate, finished: true)
+        live.addPass(words, fixes: out.fixes, offset: offset, to: id, doneUpTo: Double(total) / rate, finished: true)
         if voiceBase != nil { live.markSpeakersFound(id) }
         return true
     }

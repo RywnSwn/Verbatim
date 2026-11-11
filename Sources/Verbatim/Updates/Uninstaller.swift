@@ -14,6 +14,8 @@ enum Uninstaller {
             lib.appending(path: "HTTPStorages/\(bundleID)"),
             lib.appending(path: "Saved Application State/\(bundleID).savedState"),
             lib.appending(path: "Preferences/\(bundleID).plist"),
+            // The word list helper (step 8) has to live in FluidAudio's own folder.
+            ParakeetEngine.wordSpotterFolder,
         ]
     }
 

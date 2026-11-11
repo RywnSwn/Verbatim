@@ -206,6 +206,7 @@ struct LiveModelStatusLine: View {
             title("Speech model ready")
             note("Words show up a couple of seconds after they're said. A Voice Memo takes about a minute per hour. Works offline.")
             SpeakerModelNote()
+            WordModelNote()
         case .preparing:
             title("Getting the speech model ready")
             note("First time only, this can take a few minutes. Keep Verbatim open.")
@@ -298,5 +299,59 @@ struct SpeakerModelNote: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// The word spotter (step 8), after the speaker model. On the start screen it
+/// only shows while something is happening; in Settings > Words it always says
+/// where things stand.
+struct WordModelNote: View {
+    var inSettings = false
+    private var model: WordModel { .shared }
+
+    var body: some View {
+        switch model.state {
+        case .ready:
+            if inSettings { line("Listening for these words. Changes count from the next recording, or after Pause.") }
+        case .waiting:
+            if inSettings {
+                line(WordList.shared.words.isEmpty
+                     ? "Add a word and Verbatim downloads what it needs to listen for it (\(ParakeetEngine.wordSpotterSizeText), one time)."
+                     : "Downloads by itself (\(ParakeetEngine.wordSpotterSizeText), one time) once the speech model and speaker labels are here. Fixes work already.")
+            }
+        case .downloading(let f):
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Downloading the word list helper")
+                    Spacer()
+                    Text("\(Int(f * 100))% of \(ParakeetEngine.wordSpotterSizeText)").monospacedDigit()
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                ProgressView(value: f)
+                    .progressViewStyle(.linear)
+                    .controlSize(.mini)
+                line("You can record now. Names from the word list get listened for once this is done. Fixes work already.")
+            }
+            .padding(.top, 2)
+        case .preparing:
+            line("Getting the word list ready. First time only.")
+        case .failed(let f):
+            HStack(spacing: 8) {
+                Text("Word list download stopped at \(Int(f * 100))%. Trying again by itself.")
+                Button("Try now") { model.startIfNeeded() }
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func line(_ s: String) -> some View {
+        Text(s)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

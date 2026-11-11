@@ -36,6 +36,9 @@ struct TranscriptList: View {
     /// Typing a name: for a whole voice (Rename) or one line (Someone else).
     @State private var naming: Naming?
     @State private var nameDraft = ""
+    /// Right-click > Add a word to word list (step 8).
+    @State private var addingWord = false
+    @State private var wordDraft = ""
 
     private struct Naming {
         var start: Double
@@ -103,6 +106,9 @@ struct TranscriptList: View {
                         lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil,
                                 name: source == .live ? labels.name(line) : nil, options: options,
                                 marked: marked.contains(line.start))
+                        if let offer = model.fixOffer, offer.recordingID == info.id, offer.start == line.start {
+                            fixOfferRow(offer.fix)
+                        }
                     case .checkedUpTo(let seconds):
                         HStack(spacing: 10) {
                             Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
@@ -177,6 +183,16 @@ struct TranscriptList: View {
             Text(naming?.voice != nil
                  ? "Every line in this voice changes. Names you type are offered in your other recordings too."
                  : "Only this line changes. Names you type are offered in your other recordings too.")
+        }
+        .alert("Add to the word list", isPresented: $addingWord) {
+            TextField("Name, like Kweku Tsin", text: $wordDraft)
+            Button("Add") {
+                model.addToWordList(wordDraft)
+                wordDraft = ""
+            }
+            Button("Cancel", role: .cancel) { wordDraft = "" }
+        } message: {
+            Text("Verbatim listens for it, live and in files, and writes it the way you spell it here. See them all in Settings > Words.")
         }
         .onAppear { if !model.searchText.isEmpty { jumpToMatch() } }
         .overlay(alignment: .bottom) {
@@ -409,6 +425,7 @@ struct TranscriptList: View {
             if source == .live {
                 Menu("Speaker") { speakerItems(line, current: speaker, name: name, options: options) }
             }
+            Button("Add a word to word list…") { addingWord = true }
             Button("Delete line") { model.deleteLine(info.id, source, start: line.start) }
             if line.isLocked {
                 Divider()
@@ -417,6 +434,25 @@ struct TranscriptList: View {
         }
         .accessibilityAction(named: "Edit line") { begin(line, source) }
         .accessibilityAction(named: "Delete line") { model.deleteLine(info.id, source, start: line.start) }
+    }
+
+    /// Under a line Ryan just fixed: remember it for next time? (step 8)
+    private func fixOfferRow(_ fix: PhraseFix) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("Fix “\(fix.from)” to “\(fix.to)” in future transcripts too?")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Remember") { model.rememberFix() }
+                .buttonStyle(.link)
+                .fontWeight(.medium)
+                .help("New text gets this fix by itself. The rest of this transcript is fixed too, with Undo.")
+            Button("Just this once") { model.dismissFix() }
+                .buttonStyle(.link)
+        }
+        .font(.callout)
+        .padding(.leading, 70)
+        .padding(.top, -4)
+        .transition(.opacity)
     }
 
     /// The time on the left. On finished recordings it's a button: click to
