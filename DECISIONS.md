@@ -212,3 +212,11 @@ accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
   without Ryan clicking Remember.
 - The spotter model sits in FluidAudio's own folder, not Verbatim's, because
   FluidAudio 0.18.0 only reads its tokenizer from there.
+
+## Storage choices (2026-11-11, step 9)
+- Recently deleted keeps recordings 30 days (spec said "a few days"), like
+  Notes and Photos. Delete Now and Empty ask first since they can't be undone.
+- Old audio is deleted for good, not moved to the Mac Trash: privacy was the
+  reason for the 7-day rule, and the Trash would fill up. The sidebar warns 3
+  days ahead, right-click Keep Audio saves one, and nothing goes in the 2 days
+  after the update that added it.
