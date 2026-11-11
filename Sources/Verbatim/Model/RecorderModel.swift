@@ -27,7 +27,12 @@ final class RecorderModel {
 
     static let barCount = 40
     static let maxLength: TimeInterval = 3 * 3600
-    static let quietLimit: TimeInterval = 10 * 60
+    /// Settings > General: how many quiet minutes before "Still recording?"
+    /// (step 10, Ryan picked 5). 0 = never ask.
+    static let quietMinutesKey = "quietMinutes"
+    static var quietMinutes: Int {
+        UserDefaults.standard.object(forKey: quietMinutesKey) as? Int ?? 5
+    }
     static let bytesPerHour: Int64 = 16_000 * 2 * 3600
 
     private(set) var phase: Phase = .idle
@@ -91,6 +96,10 @@ final class RecorderModel {
     private(set) var findRequest = 0
 
     func requestFind() { findRequest += 1 }
+    /// The ⌘K menu (step 10).
+    var showCommandMenu = false
+    /// A group to rename in the sidebar (a new one gets named right away).
+    var renameGroupRequest: UUID?
     private(set) var micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
     private(set) var micName = "MacBook mic"
 
@@ -100,6 +109,8 @@ final class RecorderModel {
     @ObservationIgnored private var lastSave = Date.distantPast
     @ObservationIgnored private var lastLoud = Date()
     @ObservationIgnored private var quietWarned = false
+    @ObservationIgnored private var lastBatteryCheck = Date.distantPast
+    @ObservationIgnored private var batteryWarned = false
     @ObservationIgnored private var asleepSince: Date?
     @ObservationIgnored private var restartedAfterError = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -147,7 +158,15 @@ final class RecorderModel {
         selection = isBusy ? currentID : nil
     }
 
+    /// Starts in the group picked last time (start screen, ⌘R, menu bar).
     func start() async {
+        await start(in: GroupStore.shared.lastUsedID)
+    }
+
+    /// Starts a recording in a group (nil = Recents). It's named after the day,
+    /// since the group already says which class; auto-naming may give it a
+    /// better name after Stop.
+    func start(in groupID: UUID?) async {
         guard phase == .idle else { return }
 
         if micPermission == .notDetermined {
@@ -168,7 +187,11 @@ final class RecorderModel {
         }
 
         let now = Date()
-        var info = RecordingInfo(id: UUID(), title: "English", createdAt: now, state: .recording)
+        let group = GroupStore.shared.group(groupID)?.id
+        GroupStore.shared.lastUsedID = group
+        var info = RecordingInfo(id: UUID(), title: Self.dayTitle(now), createdAt: now, state: .recording)
+        info.groupID = group
+        info.autoTitle = true
         info.events.append(.init(kind: .started, at: now, sample: 0, note: Microphones.mic(for: dev).displayName))
         do {
             try RecordingStore.create(info)
@@ -195,6 +218,8 @@ final class RecorderModel {
         levels = Array(repeating: 0, count: Self.barCount)
         lastLoud = Date()
         quietWarned = false
+        batteryWarned = false
+        lastBatteryCheck = .distantPast
         phase = .recording
         beginKeepAwake()
 
@@ -265,6 +290,8 @@ final class RecorderModel {
         device = nil
         status = nil
         levels = Array(repeating: 0, count: Self.barCount)
+        Messages.shared.withdraw("stillRecording")
+        Messages.shared.withdraw("battery")
 
         let title = info?.title ?? "Recording"
         let length = Self.minutesText(info?.duration ?? 0)
@@ -278,6 +305,7 @@ final class RecorderModel {
             // Undo Stop is no longer possible, so the recording is final. Files
             // waiting for the recording to end can start now.
             Transcriber.shared.recordingFinal(id)
+            AutoName.shared.consider(id)
         }
     }
 
@@ -571,6 +599,7 @@ final class RecorderModel {
             state: .stopped
         )
         info.importedFrom = url.lastPathComponent
+        info.autoTitle = true
         do {
             try RecordingStore.create(info)
         } catch {
@@ -686,7 +715,30 @@ final class RecorderModel {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         recordings[i].title = trimmed
+        recordings[i].autoTitle = nil // Ryan named it: auto-naming leaves it alone
         try? RecordingStore.save(recordings[i])
+    }
+
+    /// Auto-naming (step 10): only if Ryan hasn't renamed it meanwhile.
+    func setAutoTitle(_ id: UUID, _ title: String) {
+        guard let i = recordingIndex(id), recordings[i].autoTitle == true else { return }
+        recordings[i].title = title
+        recordings[i].autoTitle = false // named once; don't redo it
+        try? RecordingStore.save(recordings[i])
+    }
+
+    func recordingIndex(_ id: UUID) -> Int? { recordings.firstIndex { $0.id == id } }
+
+    /// Changes one recording and saves it. The one being recorded is saved too.
+    func changeRecording(_ i: Int, _ change: (inout RecordingInfo) -> Void) {
+        guard recordings.indices.contains(i) else { return }
+        change(&recordings[i])
+        try? RecordingStore.save(recordings[i])
+    }
+
+    /// "Wed 12 Nov": a new recording's name until auto-naming or Ryan changes it.
+    static func dayTitle(_ date: Date) -> String {
+        date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
     }
 
     func reload() {
@@ -741,15 +793,22 @@ final class RecorderModel {
         elapsed = Double(samples) / 16_000
         restartedAfterError = false
 
+        let quietMinutes = Self.quietMinutes
         if level > 0.3 {
             lastLoud = Date()
             if quietWarned {
                 quietWarned = false
                 if status?.action == .stopRecording { status = nil }
+                Messages.shared.withdraw("stillRecording")
             }
-        } else if !quietWarned, Date().timeIntervalSince(lastLoud) > Self.quietLimit {
+        } else if !quietWarned, quietMinutes > 0, Date().timeIntervalSince(lastLoud) > Double(quietMinutes) * 60 {
             quietWarned = true
-            status = Status(text: "Quiet for 10 minutes. Still in class?", action: .stopRecording)
+            status = Status(text: "Quiet for \(quietMinutes) minutes. Still in class?", action: .stopRecording)
+            Messages.shared.post(Messages.stillRecording(minutes: quietMinutes, elapsed: elapsed))
+        }
+        if Date().timeIntervalSince(lastBatteryCheck) > 60 {
+            lastBatteryCheck = Date()
+            checkBattery()
         }
 
         if Date().timeIntervalSince(lastSave) > 10 {
@@ -757,7 +816,26 @@ final class RecorderModel {
             saveCurrent()
         }
         if elapsed >= Self.maxLength {
+            let title = current?.title ?? "The recording"
             stop(note: "Stopped at 3 hours, the longest a recording can be. Saved.")
+            Messages.shared.post(Messages.stoppedAtLimit(title))
+        }
+    }
+
+    /// Step 10: warn once at 15% on battery; the warning goes when plugged in.
+    private func checkBattery() {
+        guard let battery = Battery.read() else { return }
+        if battery.onBattery, battery.percent <= 15 {
+            guard !batteryWarned else { return }
+            batteryWarned = true
+            if status == nil || status?.action == nil {
+                status = Status(text: "Battery at \(battery.percent)%. Plug in to keep recording.")
+            }
+            Messages.shared.post(Messages.battery(battery.percent))
+        } else if batteryWarned, !battery.onBattery {
+            batteryWarned = false
+            if status?.text.hasPrefix("Battery at") == true { status = nil }
+            Messages.shared.withdraw("battery")
         }
     }
 
@@ -770,6 +848,7 @@ final class RecorderModel {
         phase = .paused
         saveCurrent()
         status = Status(text: "Can't save audio, the disk is full. Free up space, then", action: .resume)
+        Messages.shared.post(Messages.problem("Recording paused: the disk is full. Free up space, then press Resume."))
     }
 
     private func captureFailed() {
@@ -777,6 +856,7 @@ final class RecorderModel {
         if restartedAfterError {
             pause()
             status = Status(text: "The mic stopped working. Check it, then", action: .resume)
+            Messages.shared.post(Messages.problem("Recording paused: the mic stopped working. Check it, then press Resume."))
             return
         }
         restartedAfterError = true
@@ -855,6 +935,7 @@ final class RecorderModel {
         guard let fallback = Microphones.builtIn(), fallback.uniqueID != id else {
             pause()
             status = Status(text: "Mic unplugged and no other mic found. Plug one in, then", action: .resume)
+            Messages.shared.post(Messages.problem("Recording paused: the mic was unplugged. Plug one in, then press Resume."))
             return
         }
         if phase == .recording {

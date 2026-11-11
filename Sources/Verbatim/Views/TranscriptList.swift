@@ -26,6 +26,7 @@ struct TranscriptList: View {
     var isLive = false
 
     @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
+    @AppStorage(TextSize.key) private var textSize = TextSize.normal
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
     @State private var editing: EditKey?
@@ -100,6 +101,8 @@ struct TranscriptList: View {
         let marked = Markers.markedStarts(checked + live, info.markers)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.lineGap) {
+                RecordingHeader(info: info, lines: checked + live, isLive: isLive)
+                    .padding(.bottom, 10)
                 ForEach(rows) { row in
                     switch row {
                     case .line(let line, let source):
@@ -122,7 +125,7 @@ struct TranscriptList: View {
                         HStack(alignment: .firstTextBaseline, spacing: 18) {
                             Color.clear.frame(width: 52, height: 1)
                             Text(text)
-                                .font(Theme.transcript)
+                                .font(Theme.transcript(textSize))
                                 .lineSpacing(Theme.transcriptLineSpacing)
                                 .foregroundStyle(Theme.ink.opacity(0.45))
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -351,7 +354,7 @@ struct TranscriptList: View {
             if isEditing {
                 TextField("Line", text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(Theme.transcript)
+                    .font(Theme.transcript(textSize))
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .focused($fieldFocused)
                     .onSubmit { save() }
@@ -377,7 +380,7 @@ struct TranscriptList: View {
                             SpeakerLabelButton(name: name) { speakerItems(line, current: speaker, name: name, options: options) }
                         }
                     }
-                    .font(Theme.transcript)
+                    .font(Theme.transcript(textSize))
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -535,13 +538,14 @@ struct SpeakerLabelButton<Items: View>: View {
     let name: String
     @ViewBuilder let items: () -> Items
     @State private var hovering = false
+    @AppStorage(TextSize.key) private var textSize = TextSize.normal
 
     var body: some View {
         Menu {
             items()
         } label: {
             Text(name + ":")
-                .font(Theme.transcript)
+                .font(Theme.transcript(textSize))
                 .fontWeight(.semibold)
                 // See-through, so the name under it shows. On hover it draws
                 // itself over the shade (the shade would hide the one under it).

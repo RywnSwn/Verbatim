@@ -257,7 +257,10 @@ final class Transcriber {
         workTask = Task {
             while isModelReady, let id = queue.first, growing.isEmpty {
                 let finished = await transcribe(id)
-                if finished { queue.removeAll { $0 == id } }
+                if finished {
+                    queue.removeAll { $0 == id }
+                    fileDone(id)
+                }
             }
             await engine.unload() // free the memory until the next file
             while queue.isEmpty, SpeakerModel.shared.isReady, let id = speakerQueue.first, growing.isEmpty {
@@ -269,6 +272,15 @@ final class Transcriber {
             runQueue()
             AudioSquash.shared.run() // shrink the audio of files that are done
         }
+    }
+
+    /// A file finished (step 10): a banner if you're not looking, then a name.
+    private func fileDone(_ id: UUID) {
+        guard live.texts[id]?.pass?.finished == true, let info = RecorderModel.shared.info(id) else { return }
+        if info.importedFrom != nil {
+            Messages.shared.post(Messages.memoDone(info.title, lines: live.texts[id]?.lines.count ?? 0))
+        }
+        AutoName.shared.consider(id)
     }
 
     /// Goes over one file from where it was left. Returns true when it is done

@@ -48,6 +48,8 @@ struct BottomBar: View {
                 // window); the waveform gives up room instead, keeping the newest bars.
                 Text(RecorderModel.clock(model.elapsed))
                     .font(.system(size: 17, weight: .medium).monospacedDigit())
+                    .contentTransition(.numericText()) // digits roll, like a counter
+                    .animation(.snappy(duration: 0.3), value: Int(model.elapsed))
                     .foregroundStyle(paused ? .secondary : .primary)
                     .lineLimit(1)
                     .fixedSize()
@@ -83,6 +85,19 @@ struct BottomBar: View {
     }
 
     private var statusSpot: some View {
+        ZStack(alignment: .trailing) {
+            statusContent
+                .id(model.status?.id)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity)))
+        }
+        .clipped()
+        .animation(.snappy(duration: 0.3), value: model.status?.id)
+    }
+
+    /// New messages slide up into place and old ones slide away.
+    private var statusContent: some View {
         HStack(spacing: 6) {
             if let status = model.status {
                 Text(status.text)
@@ -111,7 +126,7 @@ struct BottomBar: View {
         return "Saved as you go, works offline"
     }
 
-    private static func linkTitle(_ action: RecorderModel.Status.Action) -> String {
+    static func linkTitle(_ action: RecorderModel.Status.Action) -> String {
         switch action {
         case .stopRecording: "Stop recording"
         case .resume: "Resume"

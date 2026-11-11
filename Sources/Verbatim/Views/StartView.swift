@@ -31,6 +31,8 @@ struct StartView: View {
                 }
                 .buttonStyle(.inkLarge)
 
+                GroupChooser()
+
                 Text("Or drop a Voice Memo here to transcribe it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -48,6 +50,39 @@ struct StartView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// "Save in: English 2026". Remembers the last pick, so the next class
+/// starts in the same group with one click.
+struct GroupChooser: View {
+    @Environment(RecorderModel.self) private var model
+    private var store: GroupStore { .shared }
+
+    var body: some View {
+        if !store.groups.isEmpty {
+            @Bindable var store = store
+            HStack(spacing: 6) {
+                Text("Save in")
+                    .foregroundStyle(.secondary)
+                Picker("Save in", selection: $store.lastUsedID) {
+                    ForEach(store.groups) { group in
+                        Label {
+                            Text(group.name)
+                        } icon: {
+                            Image(systemName: group.icon ?? "folder")
+                        }
+                        .tag(Optional(group.id))
+                    }
+                    Divider()
+                    Text("Recents (no group)").tag(UUID?.none)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            .font(.callout)
+        }
     }
 }
 

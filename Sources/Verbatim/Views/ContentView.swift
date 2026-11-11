@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(RecorderModel.self) private var model
     @Environment(Updater.self) private var updater
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var model = model
@@ -26,6 +27,13 @@ struct ContentView: View {
                     }
                 }
         }
+        .overlay {
+            if model.showCommandMenu {
+                CommandMenuView()
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: model.showCommandMenu)
+        .onAppear { MainWindow.open = { openWindow(id: "main") } }
     }
 }
 

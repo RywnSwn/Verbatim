@@ -1,98 +1,93 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
+/// Step 10: like the sidebar in Claude. Groups (one per class) with an icon
+/// and a + to record right in them, then Recents for everything not in a
+/// group. Right-click empty space for New Group; right-click a recording to
+/// move it, or drag it onto a group's name.
 struct SidebarView: View {
     @Environment(RecorderModel.self) private var model
     @State private var renaming: RecordingInfo?
     @State private var newTitle = ""
+    @State private var groupDraft = ""
+    @State private var iconFor: UUID?
+    @AppStorage("recentsCollapsed") private var recentsCollapsed = false
+
+    private var store: GroupStore { .shared }
 
     var body: some View {
         @Bindable var model = model
-        Group {
-            if model.recordings.isEmpty {
-                VStack(alignment: .leading) {
-                    Text("Your recordings will show up here.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(18)
-            } else {
-                List(selection: $model.selection) {
-                    ForEach(groups) { group in
-                        Section(group.title) {
-                            ForEach(group.items) { info in
-                                SidebarRow(info: info, isLive: info.id == model.currentID, phase: model.phase, elapsed: model.elapsed)
-                                    .tag(info.id)
-                                    .contextMenu {
-                                        Button("Rename…") {
-                                            newTitle = info.title
-                                            renaming = info
-                                        }
-                                        Button("Show in Finder") { model.showInFinder(info) }
-                                        Divider()
-                                        if info.id != model.currentID {
-                                            Button(info.hasAudio ? "Play Audio" : "Audio Deleted") { model.playAudio(info.id) }
-                                                .disabled(!info.hasAudio)
-                                        }
-                                        Button(SidebarView.deleteAudioTitle(info, blocker: model.audioDeleteBlocker(info.id))) {
-                                            model.deleteAudio(info.id)
-                                        }
-                                        .disabled(model.audioDeleteBlocker(info.id) != nil)
-                                        if info.hasAudio, info.id != model.currentID {
-                                            Toggle("Keep Audio", isOn: Binding(
-                                                get: { info.keepAudio == true },
-                                                set: { model.setKeepAudio(info.id, $0) }))
-                                        }
-                                        Divider()
-                                        Button("Delete") { model.delete(info.id) }
-                                            .keyboardShortcut(.delete, modifiers: .command)
-                                            .disabled(!model.canDelete(info.id))
-                                    }
-                            }
-                        }
+        List(selection: $model.selection) {
+            ForEach(store.groups) { group in
+                Section(isExpanded: expanded(group)) {
+                    let members = model.recordings.filter { $0.groupID == group.id }
+                    if members.isEmpty {
+                        Text(model.isBusy ? "Empty. Drag a recording here." : "Empty. Press + to record here, or drag a recording in.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .selectionDisabled()
                     }
-                }
-                .onDeleteCommand {
-                    if let id = model.selection { model.delete(id) }
+                    ForEach(members) { row($0) }
+                } header: {
+                    GroupHeader(group: group)
                 }
             }
+
+            Section(isExpanded: Binding(get: { !recentsCollapsed }, set: { recentsCollapsed = !$0 })) {
+                let recents = model.recordings.filter { store.group($0.groupID) == nil }
+                if model.recordings.isEmpty {
+                    Text("Your recordings will show up here.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .selectionDisabled()
+                }
+                ForEach(recents) { row($0) }
+            } header: {
+                RecentsHeader()
+            }
         }
+        .contextMenu(forSelectionType: UUID.self) { ids in
+            if let id = ids.first, ids.count == 1, let info = model.recordings.first(where: { $0.id == id }) {
+                recordingMenu(info)
+            } else if ids.isEmpty {
+                Button("New Group") { newGroup() }
+            }
+        }
+        .onDeleteCommand {
+            if let id = model.selection { model.delete(id) }
+        }
+        .animation(.snappy(duration: 0.25), value: store.groups)
         .safeAreaInset(edge: .top, spacing: 0) {
-            NewRecordingButton()
-                .padding(.horizontal, 10)
-                .padding(.top, 6)
-                .padding(.bottom, 4)
+            VStack(spacing: 1) {
+                NewRecordingButton()
+                SidebarAction(title: "Transcribe a Voice Memo", icon: "waveform.badge.plus", shortcut: "⌘O",
+                              help: "Pick a Voice Memo or other recording to turn into text. Or drop one anywhere.") {
+                    model.chooseFilesToImport()
+                }
+                RecentlyDeletedButton()
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+            .padding(.bottom, 4)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                Divider()
-                    .padding(.bottom, 6)
-                RecentlyDeletedButton()
-                HStack {
-                    Button {
-                        model.chooseFilesToImport()
-                    } label: {
-                        Label("Transcribe a file…", systemImage: "doc.badge.plus")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Pick a Voice Memo or other recording to turn into text (⌘O)")
-                    Spacer()
-                    SettingsLink {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 14))
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Settings: microphone and updates (⌘,)")
-                    .accessibilityLabel("Settings")
-                }
-                Text("Or drop a Voice Memo anywhere.")
+            HStack(alignment: .firstTextBaseline) {
+                Text("Right-click empty space for a new group.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                SettingsLink {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.borderless)
+                .help("Settings (⌘,)")
+                .accessibilityLabel("Settings")
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .padding(.vertical, 10)
         }
         .alert("Rename recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newTitle)
@@ -102,6 +97,88 @@ struct SidebarView: View {
             }
             Button("Cancel", role: .cancel) { renaming = nil }
         }
+        .alert("Name this group", isPresented: Binding(
+            get: { model.renameGroupRequest != nil },
+            set: { if !$0 { model.renameGroupRequest = nil } })
+        ) {
+            TextField("Like English 2026", text: $groupDraft)
+            Button("OK") {
+                if let id = model.renameGroupRequest { store.rename(id, to: groupDraft) }
+                model.renameGroupRequest = nil
+            }
+            Button("Cancel", role: .cancel) { model.renameGroupRequest = nil }
+        } message: {
+            Text("One group per class works well. Pick an icon by clicking the one next to its name.")
+        }
+        .onChange(of: model.renameGroupRequest) {
+            if let id = model.renameGroupRequest { groupDraft = store.group(id)?.name ?? "" }
+        }
+    }
+
+    private func expanded(_ group: RecordingGroup) -> Binding<Bool> {
+        Binding(
+            get: { !(store.group(group.id)?.collapsed ?? false) },
+            set: { open in store.update(group.id) { $0.collapsed = !open } }
+        )
+    }
+
+    private func newGroup() {
+        let group = store.add()
+        model.renameGroupRequest = group.id
+    }
+
+    private func row(_ info: RecordingInfo) -> some View {
+        SidebarRow(info: info, isLive: info.id == model.currentID, phase: model.phase, elapsed: model.elapsed)
+            .tag(info.id)
+            .draggable(info.id.uuidString)
+            .popover(isPresented: Binding(get: { iconFor == info.id }, set: { if !$0 { iconFor = nil } }),
+                     arrowEdge: .trailing) {
+                IconPicker(icon: info.icon, color: info.iconColor ?? .ink) { icon, color in
+                    model.setIcon(info.id, icon, color: color)
+                }
+            }
+    }
+
+    @ViewBuilder private func recordingMenu(_ info: RecordingInfo) -> some View {
+        Button("Rename…") {
+            newTitle = info.title
+            renaming = info
+        }
+        Button("Change Icon…") { iconFor = info.id }
+        Menu("Move to Group") {
+            ForEach(store.groups) { group in
+                Button(group.name) { model.moveRecording(info.id, to: group.id) }
+                    .disabled(info.groupID == group.id)
+            }
+            if !store.groups.isEmpty { Divider() }
+            Button("Recents (no group)") { model.moveRecording(info.id, to: nil) }
+                .disabled(store.group(info.groupID) == nil)
+            Divider()
+            Button("New Group…") {
+                let group = store.add()
+                model.moveRecording(info.id, to: group.id)
+                model.renameGroupRequest = group.id
+            }
+        }
+        Button("Show in Finder") { model.showInFinder(info) }
+        Divider()
+        if info.id != model.currentID {
+            Button(info.hasAudio ? "Play Audio" : "Audio Deleted") { model.playAudio(info.id) }
+                .disabled(!info.hasAudio)
+        }
+        Button(SidebarView.deleteAudioTitle(info, blocker: model.audioDeleteBlocker(info.id))) {
+            model.deleteAudio(info.id)
+        }
+        .disabled(model.audioDeleteBlocker(info.id) != nil)
+        if info.hasAudio, info.id != model.currentID {
+            Toggle("Keep Audio", isOn: Binding(
+                get: { info.keepAudio == true },
+                set: { model.setKeepAudio(info.id, $0) }))
+        }
+        Divider()
+        Button("Delete") { model.delete(info.id) }
+            .keyboardShortcut(.delete, modifiers: .command)
+            .disabled(!model.canDelete(info.id))
     }
 
     /// "Delete Audio Only (115 MB)", so it's clear what you get back,
@@ -112,29 +189,102 @@ struct SidebarView: View {
         guard let bytes = RecordingStore.audioSize(info.id) else { return "Delete Audio Only" }
         return "Delete Audio Only (\(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)))"
     }
+}
 
-    private var groups: [SidebarGroup] {
-        let cal = Calendar.current
-        let now = Date()
-        var today: [RecordingInfo] = [], week: [RecordingInfo] = [], earlier: [RecordingInfo] = []
-        for r in model.recordings {
-            if cal.isDateInToday(r.createdAt) {
-                today.append(r)
-            } else if let days = cal.dateComponents([.day], from: r.createdAt, to: now).day, days < 7 {
-                week.append(r)
-            } else {
-                earlier.append(r)
+/// A group's name in the sidebar: its icon (click to change), the name, and +
+/// to start a recording in it. Drop a recording on it to move it in.
+struct GroupHeader: View {
+    @Environment(RecorderModel.self) private var model
+    let group: RecordingGroup
+    @State private var picking = false
+    @State private var targeted = false
+
+    private var store: GroupStore { .shared }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button {
+                picking = true
+            } label: {
+                ItemIcon(name: group.icon, color: group.color, size: 12)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help("Change the icon")
+            .accessibilityLabel("Change icon for \(group.name)")
+            .popover(isPresented: $picking, arrowEdge: .trailing) {
+                IconPicker(icon: group.icon, color: group.color) { icon, color in
+                    store.update(group.id) {
+                        $0.icon = icon
+                        $0.color = color
+                    }
+                }
+            }
+
+            Text(group.name)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            Button {
+                Task { await model.start(in: group.id) }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .disabled(model.isBusy)
+            .help(model.isBusy ? "Stop the recording first" : "New recording in \(group.name)")
+            .accessibilityLabel("New recording in \(group.name)")
         }
-        return [SidebarGroup(title: "Today", items: today), SidebarGroup(title: "This week", items: week), SidebarGroup(title: "Earlier", items: earlier)]
-            .filter { !$0.items.isEmpty }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .background(targeted ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .dropDestination(for: String.self) { items, _ in
+            let ids = items.compactMap(UUID.init(uuidString:))
+            for id in ids { model.moveRecording(id, to: group.id) }
+            return !ids.isEmpty
+        } isTargeted: { targeted = $0 }
+        .contextMenu {
+            Button("New Recording Here") { Task { await model.start(in: group.id) } }
+                .disabled(model.isBusy)
+            Divider()
+            Button("Rename Group…") { model.renameGroupRequest = group.id }
+            Button("Change Icon…") { picking = true }
+            Divider()
+            Button("Move Up") { store.move(group.id, by: -1) }
+                .disabled(store.groups.first?.id == group.id)
+            Button("Move Down") { store.move(group.id, by: 1) }
+                .disabled(store.groups.last?.id == group.id)
+            Divider()
+            Button("Delete Group") { model.deleteGroup(group.id) }
+        }
     }
 }
 
-struct SidebarGroup: Identifiable {
-    let title: String
-    let items: [RecordingInfo]
-    var id: String { title }
+/// "Recents": recordings not in any group. Dropping one here takes it out of its group.
+struct RecentsHeader: View {
+    @Environment(RecorderModel.self) private var model
+    @State private var targeted = false
+
+    var body: some View {
+        Text("Recents")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 2)
+            .padding(.horizontal, 4)
+            .background(targeted ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .dropDestination(for: String.self) { items, _ in
+                let ids = items.compactMap(UUID.init(uuidString:))
+                for id in ids { model.moveRecording(id, to: nil) }
+                return !ids.isEmpty
+            } isTargeted: { targeted = $0 }
+    }
 }
 
 struct SidebarRow: View {
@@ -144,12 +294,20 @@ struct SidebarRow: View {
     let elapsed: TimeInterval
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(info.title)
-                .font(.body.weight(.medium))
-            Text(meta)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if let icon = info.icon {
+                ItemIcon(name: icon, color: info.iconColor ?? .ink, size: 11)
+                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(info.title)
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+                Text(meta)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
         .padding(.vertical, 2)
     }
@@ -159,12 +317,14 @@ struct SidebarRow: View {
             let len = RecorderModel.minutesText(elapsed)
             return phase == .paused ? "Paused, \(len)" : "Recording now, \(len)"
         }
-        let day = info.createdAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
-        let base = "\(day), \(RecorderModel.minutesText(info.duration))"
+        let day = RecorderModel.dayTitle(info.createdAt)
+        // Named after the day already: say the time instead of the day twice.
+        let when = info.title.contains(day) ? info.createdAt.formatted(date: .omitted, time: .shortened) : day
+        let base = "\(when), \(RecorderModel.minutesText(info.duration))"
         if !info.hasAudio { return base + ", no audio" }
         // Step 9: a warning a few days before old audio goes.
         if let left = AudioCleanup.daysLeft(info), left <= 3 {
-            return day + (left <= 1 ? ", audio deletes tomorrow" : ", audio deletes in \(left) days")
+            return when + (left <= 1 ? ", audio deletes tomorrow" : ", audio deletes in \(left) days")
         }
         return base
     }
@@ -175,52 +335,78 @@ struct SidebarRow: View {
 /// ask); while recording it jumps back to it.
 struct NewRecordingButton: View {
     @Environment(RecorderModel.self) private var model
+
+    var body: some View {
+        SidebarAction(
+            title: model.isBusy ? (model.phase == .paused ? "Paused, go to it" : "Recording now") : "New recording",
+            icon: model.isBusy ? "waveform" : "plus",
+            shortcut: model.isBusy ? nil : "⌘N",
+            help: model.isBusy ? "Go to the recording in progress" : "Open a new recording (⌘N)",
+            bold: true
+        ) {
+            model.showNewRecording()
+        }
+    }
+}
+
+/// One line at the top of the sidebar: icon, words, shortcut. Shaded on hover.
+struct SidebarAction: View {
+    let title: String
+    let icon: String
+    var shortcut: String?
+    var help: String
+    var bold = false
+    var selected = false
+    let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
-        Button {
-            model.showNewRecording()
-        } label: {
+        Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: model.isBusy ? "waveform" : "plus")
-                    .fontWeight(.semibold)
+                Image(systemName: icon)
+                    .fontWeight(bold ? .semibold : .regular)
                     .frame(width: 16)
-                Text(model.isBusy ? (model.phase == .paused ? "Paused, go to it" : "Recording now") : "New recording")
-                    .fontWeight(.medium)
+                Text(title)
+                    .fontWeight(bold || selected ? .medium : .regular)
+                    .lineLimit(1)
                 Spacer()
-                if !model.isBusy {
-                    Text("⌘N")
+                if let shortcut {
+                    Text(shortcut)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.vertical, 5)
             .contentShape(Rectangle())
-            .background(hovering ? Color.primary.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .background(
+                selected ? Color.primary.opacity(0.1) : hovering ? Color.primary.opacity(0.07) : .clear,
+                in: RoundedRectangle(cornerRadius: 6)
+            )
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(model.isBusy ? "Go to the recording in progress" : "Open a new recording (⌘N)")
+        .help(help)
     }
 }
 
-/// "Recently deleted (3)" at the bottom of the sidebar (step 9). Hidden when empty.
+/// "Recently deleted 3" at the top of the sidebar (step 9). Hidden when empty.
 struct RecentlyDeletedButton: View {
     @Environment(RecorderModel.self) private var model
     private var deleted: RecentlyDeleted { .shared }
 
     var body: some View {
         if !deleted.items.isEmpty {
-            Button {
+            SidebarAction(
+                title: "Recently deleted",
+                icon: "trash",
+                shortcut: "\(deleted.items.count)",
+                help: "Deleted recordings stay here for \(RecentlyDeleted.keepDays) days",
+                selected: model.showingDeleted
+            ) {
                 model.selection = nil
                 model.showingDeleted = true
-            } label: {
-                Label("Recently deleted (\(deleted.items.count))", systemImage: "trash")
-                    .fontWeight(model.showingDeleted ? .semibold : .regular)
             }
-            .buttonStyle(.borderless)
-            .help("Deleted recordings stay here for \(RecentlyDeleted.keepDays) days")
         }
     }
 }

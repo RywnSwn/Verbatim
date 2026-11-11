@@ -2,14 +2,22 @@ import AppKit
 import SwiftUI
 
 extension RecordingInfo {
-    /// "English, Mon 10 Nov"
+    /// "Anansi and the sky god, Mon 10 Nov". Just "Mon 10 Nov" when that's
+    /// already the name (step 10: new recordings are named after the day).
     var fullTitle: String {
-        "\(title), \(createdAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))"
+        let day = RecorderModel.dayTitle(createdAt)
+        return title.contains(day) ? title : "\(title), \(day)"
     }
 
     /// "Started 10:05"
     var startedText: String {
         "Started \(createdAt.formatted(date: .omitted, time: .shortened))"
+    }
+
+    /// "English 2026, started 10:05" in the window's title bar.
+    @MainActor var groupedStartedText: String {
+        guard let group = GroupStore.shared.group(groupID) else { return startedText }
+        return "\(group.name), started \(createdAt.formatted(date: .omitted, time: .shortened))"
     }
 }
 
@@ -50,7 +58,7 @@ struct RecordingNowView: View {
             }
         }
         .navigationTitle(info.fullTitle)
-        .navigationSubtitle(info.startedText)
+        .navigationSubtitle(info.groupedStartedText)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -63,6 +71,14 @@ struct RecordingNowView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 ExportMenu(hasLines: !(checked + lines).isEmpty)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    MiniWindow.shared.toggle()
+                } label: {
+                    Label("Mini window", systemImage: "pip")
+                }
+                .help("A small window that floats on top of other apps (⇧⌘M)")
             }
             ToolbarItem(placement: .primaryAction) {
                 CopyButton(id: info.id, hasLines: !(checked + lines).isEmpty)
@@ -216,7 +232,7 @@ struct PastRecordingView: View {
 
     private var subtitle: String {
         if let name = info.importedFrom { return "From \(name), \(RecorderModel.minutesText(info.duration))" }
-        return "\(info.startedText), \(RecorderModel.minutesText(info.duration))"
+        return "\(info.groupedStartedText), \(RecorderModel.minutesText(info.duration))"
     }
 
     @ViewBuilder private var emptyState: some View {
