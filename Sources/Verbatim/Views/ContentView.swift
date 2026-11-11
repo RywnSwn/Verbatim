@@ -4,17 +4,24 @@ struct ContentView: View {
     @Environment(RecorderModel.self) private var model
     @Environment(Updater.self) private var updater
     @Environment(\.openWindow) private var openWindow
+    /// Small window = small layout, like Claude (Ryan): below `compactWidth`
+    /// the sidebar hides itself so the main area gets the room. The toolbar
+    /// button (or ⌃⌘S) still opens it. Wide again, it comes back by itself.
+    @State private var columns: NavigationSplitViewVisibility = .all
+    @State private var hidForSpace = false
+    private static let compactWidth: CGFloat = 860
+    private static let roomyWidth: CGFloat = 940
 
     var body: some View {
         @Bindable var model = model
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             SidebarView()
                 // The sidebar keeps at least 230 pt; the main area gives way
                 // instead (Ryan saw it squeezed under the window's edge).
                 .navigationSplitViewColumnWidth(min: 230, ideal: 260, max: 340)
         } detail: {
             DetailView()
-                .frame(minWidth: 460)
+                .frame(minWidth: 360)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if let notice = model.recoveryNotice {
                         NoticeLine(text: notice) { model.recoveryNotice = nil }
@@ -37,6 +44,15 @@ struct ContentView: View {
         }
         .animation(.snappy(duration: 0.18), value: model.showCommandMenu)
         .onAppear { MainWindow.open = { openWindow(id: "main") } }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            if width < Self.compactWidth, columns != .detailOnly, !hidForSpace {
+                withAnimation(.snappy(duration: 0.25)) { columns = .detailOnly }
+                hidForSpace = true
+            } else if width >= Self.roomyWidth, hidForSpace {
+                withAnimation(.snappy(duration: 0.25)) { columns = .all }
+                hidForSpace = false
+            }
+        }
     }
 }
 

@@ -19,7 +19,7 @@ struct VerbatimApp: App {
                 .environment(transcriber)
                 .environment(live)
                 .environment(updater)
-                .frame(minWidth: 820, minHeight: 540)
+                .frame(minWidth: 620, minHeight: 500) // small windows get the compact layout
                 .tint(Theme.accent)
                 .task { updater.startAutomaticChecks() }
         }

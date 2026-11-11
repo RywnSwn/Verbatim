@@ -774,6 +774,9 @@ Mockup v3: https://claude.ai/artifact/2ii2Hd8QkNtZ6gtxUYHziJ (Ryan approved).
 - Text size ⌘+ / ⌘− / ⌘0 and a Settings slider (`TextSize`), transcript only.
 - Timer digits roll (`.contentTransition(.numericText())`), bottom bar
   messages slide in/out. Ideas from Ryan's library list, done natively.
+- Compact layout (Ryan, like Claude): window narrower than 860 pt hides the
+  sidebar by itself (`ContentView.columns`), back at 940 pt. Window min 620x500.
+  Start screen scrolls when short. Sidebar min 230, main area min 360.
 - Not done: "Download again" button for models (they already re-download by
   themselves); drag to reorder groups; Mac-wide notification tests.
 
