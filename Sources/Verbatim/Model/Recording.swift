@@ -35,6 +35,8 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     var audioDeletedAt: Date?
     /// Moments Ryan marked with ⌘D (seconds into the audio), step 7b.
     var markers: [Double]?
+    /// Right-click > Keep Audio: old-audio cleanup skips it (step 9).
+    var keepAudio: Bool?
 
     var duration: TimeInterval { Double(samples) / Double(sampleRate) }
     var isActive: Bool { state != .stopped }
@@ -74,6 +76,11 @@ enum RecordingStore {
         return FileManager.default.fileExists(atPath: m4a.path) ? m4a : wavURL(id)
     }
     static func infoURL(_ id: UUID) -> URL { folder(id).appending(path: "recording.json") }
+
+    /// When the recording's folder was made (when a file was imported).
+    static func addedDate(_ id: UUID) -> Date? {
+        (try? folder(id).resourceValues(forKeys: [.creationDateKey]))?.creationDate
+    }
 
     /// Size of the audio file in bytes, nil if it's gone.
     static func audioSize(_ id: UUID) -> Int64? {

@@ -40,7 +40,13 @@ struct SidebarView: View {
                                             model.deleteAudio(info.id)
                                         }
                                         .disabled(model.audioDeleteBlocker(info.id) != nil)
-                                        Button("Move to Trash") { model.delete(info.id) }
+                                        if info.hasAudio, info.id != model.currentID {
+                                            Toggle("Keep Audio", isOn: Binding(
+                                                get: { info.keepAudio == true },
+                                                set: { model.setKeepAudio(info.id, $0) }))
+                                        }
+                                        Divider()
+                                        Button("Delete") { model.delete(info.id) }
                                             .keyboardShortcut(.delete, modifiers: .command)
                                             .disabled(!model.canDelete(info.id))
                                     }
@@ -63,6 +69,7 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Divider()
                     .padding(.bottom, 6)
+                RecentlyDeletedButton()
                 HStack {
                     Button {
                         model.chooseFilesToImport()
@@ -154,7 +161,12 @@ struct SidebarRow: View {
         }
         let day = info.createdAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
         let base = "\(day), \(RecorderModel.minutesText(info.duration))"
-        return info.hasAudio ? base : base + ", no audio"
+        if !info.hasAudio { return base + ", no audio" }
+        // Step 9: a warning a few days before old audio goes.
+        if let left = AudioCleanup.daysLeft(info), left <= 3 {
+            return day + (left <= 1 ? ", audio deletes tomorrow" : ", audio deletes in \(left) days")
+        }
+        return base
     }
 }
 
@@ -190,5 +202,25 @@ struct NewRecordingButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(model.isBusy ? "Go to the recording in progress" : "Open a new recording (⌘N)")
+    }
+}
+
+/// "Recently deleted (3)" at the bottom of the sidebar (step 9). Hidden when empty.
+struct RecentlyDeletedButton: View {
+    @Environment(RecorderModel.self) private var model
+    private var deleted: RecentlyDeleted { .shared }
+
+    var body: some View {
+        if !deleted.items.isEmpty {
+            Button {
+                model.selection = nil
+                model.showingDeleted = true
+            } label: {
+                Label("Recently deleted (\(deleted.items.count))", systemImage: "trash")
+                    .fontWeight(model.showingDeleted ? .semibold : .regular)
+            }
+            .buttonStyle(.borderless)
+            .help("Deleted recordings stay here for \(RecentlyDeleted.keepDays) days")
+        }
     }
 }

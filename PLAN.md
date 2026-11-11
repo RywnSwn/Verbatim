@@ -15,7 +15,7 @@ testing, at Ryan's ask: ask him for the "Step 7 test list". Step 7b
 (markers) built the same day in the same chat (Ryan's ask): see "How markers
 work". Step 7c (voice memory) built in the same chat too: see "How voice
 memory works". 7b and 7c merged 2026-11-10 (RywnSwn/Verbatim#14, #15) before
-testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 (word list) merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask: ask him for the "Step 8 test list". Next: steps 9 + 10 in one chat (see "Ryan's feedback: the app feels empty"), mockup first.
+testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 (word list) merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask: ask him for the "Step 8 test list". Step 9 built in the same chat (Ryan's ask), see "How storage works". Next: step 10 (polish), mockup first.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -67,8 +67,9 @@ class depends on it.
        (~100 MB extra download, Ryan said yes), fix rules, Words screen.
        Merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask
        (see "How the word list works" and its test list).
-9. [ ] **Storage.** History sidebar, 7-day audio delete, Storage screen,
-       Recently deleted, Export everything.
+9. [~] **Storage.** History sidebar, 7-day audio delete, Storage screen,
+       Recently deleted, Export everything. Built 2026-11-11 on
+       `claude/step-9-storage` (see "How storage works").
 10. [ ] **Polish.** First-launch screen, menu bar dropdown, Settings, notifications,
         all the edge cases in `docs/spec.md` that aren't done yet.
 11. [x] **Updates.** In-app update button (own updater, not Sparkle).
@@ -705,3 +706,35 @@ Ask Mr. Yurt before recording class.
 5. Settings > Words: remove a word, click Undo. Add a fix by hand.
 6. Import a Voice Memo: how long does it take now?
 7. Does any normal word get wrongly turned into a name?
+
+## How storage works (step 9)
+- Recently deleted: Delete (was Move to Trash) moves `Recordings/<id>` to
+  `App Support/Verbatim/Deleted/<id>` plus `deleted.json` (date).
+  `Model/RecentlyDeleted.swift`. Kept 30 days, then removed for good on the
+  next load (launch, or opening the list). Sidebar bottom: "Recently deleted
+  (N)" (hidden when empty) opens `RecentlyDeletedView` in the main area: Put
+  Back, Delete Now (asks), Empty (asks), first words of each transcript.
+  Undo in the bottom bar for 10 s still works.
+- Old audio: `Model/AudioCleanup.swift`. Setting `audioKeepDays` (3, 7, 14,
+  30, 0 = forever; default 7). Counts from Stop (imports: from when they were
+  imported, the folder's date). Deleted for good, not the Mac Trash. Skips:
+  text not finished, playing, Keep Audio (right-click, `keepAudio`), anything
+  Delete Audio Only would refuse. Runs 30 s after launch, then hourly. Never
+  deletes in the 2 days after the update (`audioCleanupSince`), so Ryan sees
+  the warning first. Sidebar: "audio deletes in 2 days" when 3 or fewer left.
+- Settings > Storage: keep audio picker, space used (recordings, speech
+  models, Recently deleted), biggest recordings with Delete Audio, Export
+  Everything, Delete All Recordings (asks once, then Undo in the bottom bar;
+  the recording in progress stays).
+- Export Everything: zip via `ditto` with `Transcripts/*.md` (same format as
+  Export), `Data/Recordings/<id>/` json files, words.json, voices.json. No audio.
+
+## Step 9 test list for Ryan
+1. Right-click a recording > Delete: bottom bar says Recently deleted, Undo.
+2. Delete again, then click "Recently deleted (1)" at the bottom of the
+   sidebar: Put Back brings it back with its text.
+3. Settings > Storage: sizes show, biggest recordings list, Delete Audio works.
+4. Export Everything: open the zip, the transcripts read fine.
+5. Delete All Recordings, then Undo in the bottom bar.
+6. Right-click a recording: Keep Audio has a tick after clicking it.
+7. In 2 days: old recordings' audio goes, the sidebar warned first.

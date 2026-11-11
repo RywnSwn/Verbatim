@@ -16,7 +16,7 @@ struct BottomBar: View {
                 } else if let note = model.stoppedNote {
                     undoBar(note.text, undo: "Undo Stop") { model.undoStop() }
                 } else if let note = model.deletedNote {
-                    undoBar("Moved \(note.info.title) to the Trash.", undo: "Undo") { model.undoDelete() }
+                    undoBar("Moved \(note.info.title) to Recently deleted.", undo: "Undo") { model.undoDelete() }
                 } else if let status = model.status {
                     if let action = status.action {
                         undoBar(status.text, undo: Self.linkTitle(action)) { model.perform(action) }

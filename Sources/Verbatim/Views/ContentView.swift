@@ -35,7 +35,9 @@ struct DetailView: View {
 
     var body: some View {
         Group {
-            if let id = model.selection, let info = model.recordings.first(where: { $0.id == id }) {
+            if model.showingDeleted {
+                RecentlyDeletedView()
+            } else if let id = model.selection, let info = model.recordings.first(where: { $0.id == id }) {
                 if info.id == model.currentID {
                     RecordingNowView(info: info)
                 } else {
