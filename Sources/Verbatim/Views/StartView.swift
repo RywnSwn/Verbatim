@@ -5,7 +5,21 @@ import SwiftUI
 struct StartView: View {
     @Environment(RecorderModel.self) private var model
 
+    /// Scrolls when the window is short, centered when it fits. Without this
+    /// the screen was taller than a short window, which pushed the sidebar's
+    /// top and bottom past the window's edges (Ryan's screenshot).
     var body: some View {
+        GeometryReader { proxy in
+            ScrollView(.vertical) {
+                content
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 28) {
             VStack(spacing: 26) {
                 // Simple and warm, like Claude's start screen (Ryan, step 10):
@@ -49,8 +63,7 @@ struct StartView: View {
             .frame(maxWidth: 460, alignment: .leading) // shrinks with the window
         }
         .padding(.horizontal, 28)
-        .padding(.vertical, 40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 32)
     }
 }
 

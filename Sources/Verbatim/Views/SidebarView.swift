@@ -48,9 +48,10 @@ struct SidebarView: View {
                     if !group.collapsed {
                         let members = model.recordings.filter { $0.groupID == group.id }
                         if members.isEmpty {
-                            Text(model.isBusy ? "Empty. Drag a recording here." : "Empty. Press + to record here, or drag a recording in.")
+                            Text(model.isBusy ? "Empty. Drag a recording here." : "Empty. Press + or drag one here.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(2)
                                 .padding(.leading, 22)
                                 .selectionDisabled()
                                 .dropDestination(for: RecordingDrag.self) { items, _ in move(items, to: group.id) }
