@@ -15,7 +15,7 @@ testing, at Ryan's ask: ask him for the "Step 7 test list". Step 7b
 (markers) built the same day in the same chat (Ryan's ask): see "How markers
 work". Step 7c (voice memory) built in the same chat too: see "How voice
 memory works". 7b and 7c merged 2026-11-10 (RywnSwn/Verbatim#14, #15) before
-testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 (word list) merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask: ask him for the "Step 8 test list". Step 9 built in the same chat (Ryan's ask), see "How storage works". Next: step 10 (polish), mockup first.
+testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 (word list) merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask: ask him for the "Step 8 test list". Step 9 built in the same chat and merged before testing (RywnSwn/Verbatim#17), at Ryan's ask: ask him for the "Step 9 test list". Next: step 10 (polish), mockup first.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -67,9 +67,9 @@ class depends on it.
        (~100 MB extra download, Ryan said yes), fix rules, Words screen.
        Merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask
        (see "How the word list works" and its test list).
-9. [~] **Storage.** History sidebar, 7-day audio delete, Storage screen,
-       Recently deleted, Export everything. Built 2026-11-11 on
-       `claude/step-9-storage` (see "How storage works").
+9. [x] **Storage.** History sidebar, 7-day audio delete, Storage screen,
+       Recently deleted, Export everything. Merged 2026-11-11
+       (RywnSwn/Verbatim#17) before testing, at Ryan's ask (see "How storage works").
 10. [ ] **Polish.** First-launch screen, menu bar dropdown, Settings, notifications,
         all the edge cases in `docs/spec.md` that aren't done yet.
 11. [x] **Updates.** In-app update button (own updater, not Sparkle).
