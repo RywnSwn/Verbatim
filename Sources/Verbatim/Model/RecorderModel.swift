@@ -737,7 +737,7 @@ final class RecorderModel {
     }
 
     /// "Wed 12 Nov": a new recording's name until auto-naming or Ryan changes it.
-    static func dayTitle(_ date: Date) -> String {
+    nonisolated static func dayTitle(_ date: Date) -> String {
         date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
     }
 
