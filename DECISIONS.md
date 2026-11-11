@@ -220,3 +220,20 @@ accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
   reason for the 7-day rule, and the Trash would fill up. The sidebar warns 3
   days ahead, right-click Keep Audio saves one, and nothing goes in the 2 days
   after the update that added it.
+
+## Step 10 polish choices (2026-11-11)
+- Groups instead of Today/This week: Ryan wanted a Claude-like sidebar.
+  Old recordings stay in Recents (they were tests). No sidebar search box
+  (clutter); ⌘F in a transcript and ⌘K cover finding things.
+- Recording names: the day ("Wed 12 Nov"), then an on-device AI name.
+  Never "English" on everything.
+- Mini window is back (Ryan asked), as a small floating panel. The menu bar
+  dropdown stays too. Earlier he rated the old mini window low.
+- Messages get louder only as Verbatim gets harder to see, and never make
+  a sound (class). This keeps the 2026-11-09 "no popups" rule when the
+  window is in front.
+- Ryan's web library list (shadcn, Sonner, cmdk, NumberFlow...) can't run
+  in a Swift app; their ideas are done natively (⌘K, rolling digits,
+  sliding messages). Magic UI / Aceternity skipped: the "AI look".
+- Icon colors: a few soft, muted colors (Ryan), ink by default.
+- "Still recording?" after 5 min of quiet by default (Ryan).

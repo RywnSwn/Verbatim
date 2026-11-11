@@ -13,7 +13,7 @@ UX matters a lot to him. He hates apps that don't consider the user.
 ## Current state
 Steps 1, 2, 2b, 3, 4, 5, 5c, 6, 7, 7b, 7c, 8, 9 and 11 merged, plus the in-app player and
 audio shrink after Stop (5c, 6, 7, 7b, 7c, 8, 9 and 2b not fully tested by Ryan yet).
-Next is step 10 (polish), mockup first. See `PLAN.md` for build order and progress,
+Step 10 (polish) built on `claude/step-10-polish`, not tested yet. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).
