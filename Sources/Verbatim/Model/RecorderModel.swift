@@ -33,7 +33,17 @@ final class RecorderModel {
     private(set) var phase: Phase = .idle
     private(set) var recordings: [RecordingInfo] = []
     private(set) var currentID: UUID?
-    var selection: UUID?
+    var selection: UUID? {
+        didSet { if fixOffer?.recordingID != selection { fixOffer = nil } }
+    }
+    /// Step 8: after a word fix, the line under it asks to remember it.
+    struct FixOffer: Equatable {
+        var recordingID: UUID
+        var start: Double
+        var fix: PhraseFix
+    }
+
+    var fixOffer: FixOffer?
     private(set) var levels: [Float] = Array(repeating: 0, count: RecorderModel.barCount)
     private(set) var elapsed: TimeInterval = 0
     private(set) var status: Status?

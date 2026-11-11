@@ -201,3 +201,14 @@ accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
   Ryan already does it, and the bottom bar says it happened (with Undo).
 - Clips stay on the Mac (Settings > Voices to forget). Max 3 known voices
   per recording so one of the 4 slots is always free for others.
+
+## Word list: fixes land late instead of holding text back (2026-11-11, step 8)
+- FluidAudio's word spotter checks the text about every 15 s. Holding live
+  text back 15 s to wait for it would make live text useless in class, so
+  words show right away and a misheard name is swapped in when the spotter
+  reports it.
+- Fix rules are separate from the word list: the list helps Parakeet hear
+  names, rules catch anything it still writes wrong. Nothing is learned
+  without Ryan clicking Remember.
+- The spotter model sits in FluidAudio's own folder, not Verbatim's, because
+  FluidAudio 0.18.0 only reads its tokenizer from there.

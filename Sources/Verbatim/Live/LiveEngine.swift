@@ -15,6 +15,9 @@ struct LiveOutput: Sendable {
     var finals: [LivePiece] = []
     /// Words still being worked out (Apple's engine only). nil = leave as is.
     var volatile: String?
+    /// Names the word spotter fixed in words already given out (step 8),
+    /// about 15 s behind. Newest occurrence first gets it.
+    var fixes: [PhraseFix] = []
 }
 
 /// A live speech-to-text engine. Swappable: Parakeet is the main one, Apple's

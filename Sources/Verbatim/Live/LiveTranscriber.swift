@@ -94,6 +94,7 @@ final class LiveTranscriber {
         if UserDefaults.standard.bool(forKey: Self.preparedKey) {
             modelState = .ready
             SpeakerModel.shared.startIfNeeded()
+            WordModel.shared.startIfNeeded()
         } else {
             startDownload()
             // Until Parakeet is here, Apple's engine fills in. Get its model now,
@@ -232,7 +233,7 @@ final class LiveTranscriber {
     /// Ryan's edits from before "Transcribe again" are kept: words inside a
     /// line he deleted are dropped, and a line he edited goes back in as he
     /// wrote it instead of Parakeet's words for that bit.
-    func addPass(_ words: [LivePiece], offset: Double, to id: UUID, doneUpTo: Double?, finished: Bool) {
+    func addPass(_ words: [LivePiece], fixes: [PhraseFix] = [], offset: Double, to id: UUID, doneUpTo: Double?, finished: Bool) {
         var t = texts[id] ?? LiveText(pass: LiveText.FilePass())
         var pass = t.pass ?? LiveText.FilePass()
         var keep = pass.keep ?? []
@@ -249,6 +250,7 @@ final class LiveTranscriber {
             let extend = !(editing?.id == id && editing?.start == t.lines.last?.start)
             LineBuilder.add(word, to: &t.lines, extendLast: extend)
         }
+        fix(&t, id, spotted: fixes, newWords: !words.isEmpty)
         if finished {
             t.lines += keep
             keep = []
@@ -258,6 +260,43 @@ final class LiveTranscriber {
         if let doneUpTo { pass.doneUpTo = max(pass.doneUpTo, doneUpTo) }
         pass.finished = finished
         t.pass = pass
+        commit(t, id)
+    }
+
+    // MARK: - Fixes (step 8)
+
+    /// Name fixes from the word spotter, then Ryan's fix rules on the newest
+    /// lines. Never touches edited lines or the line being edited.
+    private func fix(_ t: inout LiveText, _ id: UUID, spotted: [PhraseFix], newWords: Bool) {
+        let skip = editing?.id == id ? editing?.start : nil
+        for f in spotted { Fixes.applySpotted(f, to: &t.lines, skip: skip) }
+        if newWords || !spotted.isEmpty {
+            Fixes.applyRules(WordList.shared.fixes, to: &t.lines, skip: skip)
+        }
+    }
+
+    /// Ryan said Remember: the rule fixes the rest of this transcript too.
+    /// Returns each changed line as it was and as it is now, for Undo.
+    func applyRule(_ rule: PhraseFix, to id: UUID) -> [(old: Transcript.Line, new: Transcript.Line)] {
+        guard var t = texts[id] else { return [] }
+        let skip = editing?.id == id ? editing?.start : nil
+        var changed: [(old: Transcript.Line, new: Transcript.Line)] = []
+        for i in t.lines.indices where !t.lines[i].isLocked && t.lines[i].start != skip {
+            if let fixed = Fixes.apply(rule, to: t.lines[i]) {
+                changed.append((old: t.lines[i], new: fixed))
+                t.lines[i] = fixed
+            }
+        }
+        if !changed.isEmpty { commit(t, id) }
+        return changed
+    }
+
+    /// Undo of `applyRule`: lines that are still exactly as it left them go back.
+    func undoRule(_ changed: [(old: Transcript.Line, new: Transcript.Line)], in id: UUID) {
+        guard var t = texts[id] else { return }
+        for c in changed {
+            if let i = t.lines.firstIndex(where: { $0 == c.new }) { t.lines[i] = c.old }
+        }
         commit(t, id)
     }
 
@@ -274,6 +313,7 @@ final class LiveTranscriber {
             let extend = !(editing?.id == id && editing?.start == t.lines.last?.start)
             LineBuilder.add(LivePiece(text: p.text, start: p.start + offset, end: p.end + offset), to: &t.lines, extendLast: extend)
         }
+        fix(&t, id, spotted: out.fixes, newWords: !out.finals.isEmpty)
         if !out.finals.isEmpty, t.engines.last != engine { t.engines.append(engine) }
         texts[id] = t
         if run == generation, let v = out.volatile { volatile = v }
@@ -425,7 +465,7 @@ actor LiveRunner {
     }
 
     private func deliver(_ out: LiveOutput, offset: Double, engine: String, id: UUID, run: Int) async {
-        guard !out.finals.isEmpty || out.volatile != nil else { return }
+        guard !out.finals.isEmpty || out.volatile != nil || !out.fixes.isEmpty else { return }
         var labelled = out
         if let speakerStart, !out.finals.isEmpty {
             labelled.finals = await speakers.label(out.finals, shift: offset - speakerStart, base: voiceBase)

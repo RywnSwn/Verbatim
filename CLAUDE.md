@@ -13,7 +13,7 @@ UX matters a lot to him. He hates apps that don't consider the user.
 ## Current state
 Steps 1, 2, 2b, 3, 4, 5, 5c, 6, 7, 7b, 7c and 11 merged, plus the in-app player and
 audio shrink after Stop (5c, 6, 7, 7b, 7c and 2b not fully tested by Ryan yet).
-Next is step 8 (word list). See `PLAN.md` for build order and progress,
+Step 8 (word list) built on `claude/step-8-word-list`, waiting for Ryan's test. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).

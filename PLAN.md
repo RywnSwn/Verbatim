@@ -15,7 +15,7 @@ testing, at Ryan's ask: ask him for the "Step 7 test list". Step 7b
 (markers) built the same day in the same chat (Ryan's ask): see "How markers
 work". Step 7c (voice memory) built in the same chat too: see "How voice
 memory works". 7b and 7c merged 2026-11-10 (RywnSwn/Verbatim#14, #15) before
-testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Next: step 8.
+testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 built 2026-11-11, see "How the word list works". Next after Ryan tests: step 9.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -63,8 +63,10 @@ class depends on it.
        Ryan names it, so next time "Mr. Yurt" is named by itself. Sortformer
        can enroll saved voice audio (`enrollSpeaker`); check FluidAudio's
        docs on how well it maps. Needs a "Voices" list to rename or forget.
-8. [ ] **Corrections memory.** Word list via Parakeet vocabulary boosting
+8. [~] **Corrections memory.** Word list via Parakeet vocabulary boosting
        (~100 MB extra download, Ryan said yes), fix rules, Words screen.
+       Built 2026-11-11 on `claude/step-8-word-list`, not tested by Ryan yet
+       (see "How the word list works").
 9. [ ] **Storage.** History sidebar, 7-day audio delete, Storage screen,
        Recently deleted, Export everything.
 10. [ ] **Polish.** First-launch screen, menu bar dropdown, Settings, notifications,
@@ -651,3 +653,55 @@ Ask Mr. Yurt before recording class.
    the name from the start, not "Speaker 1".
 4. Record a video with other people: does anyone wrongly get that name?
 5. Settings > Voices: untick it, record again: back to "Speaker 1".
+
+## How the word list works (step 8)
+- `Model/WordList.swift`: `WordList` (words + fix rules, saved in App
+  Support/Verbatim/words.json, starts with Anansi, Nyankupon, Kweku Tsin and
+  the fixes Father Nazi -> Anansi, group bonds -> Nyankupon), `Fixes` (the
+  text work), `WordModel` (the download).
+- Boosting: FluidAudio's `StreamingUnifiedAsrManager.configureVocabularyBoosting`
+  with the Parakeet CTC 110M word spotter (~100 MB, ~64 MB extra memory,
+  loaded with Parakeet only while the list has words). Set in
+  `ParakeetEngine.begin()`, so list changes count from the next recording or
+  after Pause. An empty list reloads Parakeet (FluidAudio can't switch it off).
+- The spotter's model MUST live in FluidAudio's own folder
+  (App Support/FluidAudio/Models/parakeet-ctc-110m-coreml): FluidAudio reads
+  its tokenizer only from there. Uninstaller trashes that folder too.
+- Download order: Parakeet, speaker model, then the word spotter (only if
+  the list has words). Retries every 30 s. Shown on the start screen and in
+  Settings > Words.
+- How fixes reach the text: the token stream is the raw text; the spotter
+  rescores about every 15 s and hands back "replace X with Y"
+  (`consumeVocabularyReplacements`). `LiveOutput.fixes` carries them, and
+  `Fixes.applySpotted` replaces the newest match in the last 40 lines. So a
+  misheard name shows for ~15 s, then fixes itself. Word times follow along.
+- Fix rules: applied to the newest 2 lines every time words arrive (live and
+  files), whole words, any case, punctuation kept, never on locked lines or
+  the line being edited. A rule whose result contains its own left side
+  ("Yurt" -> "Mr. Yurt") is not applied twice.
+- After editing a line: if 1 to 4 words changed (not a single short word
+  like "a", not only capitals), an inline line under it asks "Fix X to Y in
+  future transcripts too? Remember / Just this once" (`RecorderModel.fixOffer`).
+  Remember: saves the rule, fixes the rest of this transcript, adds the right
+  side to the word list if it has a capital letter; one Undo in the bottom bar
+  takes all of it back. The question goes away on the next edit or on
+  switching recordings.
+- Right-click a line > Add a word to word list... (name box, bottom bar confirms).
+- Settings > Words: both lists, add field under each (inline reason if a
+  word is too short, under 3 letters, or already there), minus button to
+  remove, Undo under the lists for 10 s.
+- Risks to check with Ryan: the spotter could swap a real word for a name
+  that sounds close; the ~15 s delay before a name fixes itself; files
+  transcribe slower with it (FluidAudio: ~26x real time, so ~2 to 3 min per hour).
+
+## Step 8 test list for Ryan
+1. After updating: start screen shows "Downloading the word list helper",
+   then nothing. Settings > Words says "Listening for these words".
+2. Read aloud something with Nyankupon, Anansi, Kweku Tsin (or play a class
+   video): do the names come out right? Some may fix themselves after ~15 s.
+3. Click a line, change one wrong word, press Enter: the line under it asks to
+   remember it. Click Remember: the bottom bar says what it did. Click Undo.
+4. Right-click a line > Add a word to word list..., add a name.
+5. Settings > Words: remove a word, click Undo. Add a fix by hand.
+6. Import a Voice Memo: how long does it take now?
+7. Does any normal word get wrongly turned into a name?

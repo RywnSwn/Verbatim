@@ -217,9 +217,11 @@ final class SpeakerModel {
                 task = nil
                 state = .ready
                 Transcriber.shared.speakerModelReady()
+                WordModel.shared.startIfNeeded() // the word spotter comes next
             } catch {
                 task = nil
                 state = .failed(fraction: fraction)
+                WordModel.shared.startIfNeeded() // don't hold it up
                 retryTask = Task {
                     try? await Task.sleep(for: .seconds(30))
                     guard !Task.isCancelled else { return }

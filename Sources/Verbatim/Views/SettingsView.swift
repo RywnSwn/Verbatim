@@ -1,13 +1,16 @@
 import AVFoundation
 import SwiftUI
 
-/// Settings: General (microphone and times), Voices (step 7c), Updates.
+/// Settings: General (microphone and times), Words (step 8), Voices (step 7c), Updates.
 /// The rest arrives in step 10.
 struct SettingsView: View {
     var body: some View {
         TabView {
             Tab("General", systemImage: "gearshape") {
                 GeneralSettings()
+            }
+            Tab("Words", systemImage: "character.book.closed") {
+                WordSettings()
             }
             Tab("Voices", systemImage: "person.wave.2") {
                 VoiceSettings()
@@ -190,5 +193,184 @@ struct VoiceSettings: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+}
+
+/// Settings > Words (step 8): names Parakeet listens for, and fixes for what
+/// it still gets wrong. Removing has Undo right here.
+struct WordSettings: View {
+    private var list: WordList { .shared }
+    @State private var newWord = ""
+    @State private var wordProblem: String?
+    @State private var fixFrom = ""
+    @State private var fixTo = ""
+    @State private var fixProblem: String?
+    @State private var undo: Removed?
+
+    private struct Removed: Equatable {
+        var text: String
+        var id = UUID()
+        var run: () -> Void
+        static func == (a: Removed, b: Removed) -> Bool { a.id == b.id }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Word list").font(.headline)
+            Text("Names and words Verbatim listens for, live and in files. When it hears something close, it writes your spelling. A misheard name can fix itself a few seconds after it shows up.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if list.words.isEmpty {
+                Text("No words yet. Add names that are hard to spell, like people and places from class.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            } else {
+                rows(list.words, id: \.self) { word in
+                    Text(word)
+                } remove: { word in
+                    guard let i = list.removeWord(word) else { return }
+                    offerUndo("Removed \(word).") { list.insertWord(word, at: i) }
+                }
+            }
+            HStack {
+                TextField("Add a name, like Kweku Tsin", text: $newWord)
+                    .onSubmit(addWord)
+                Button("Add", action: addWord)
+                    .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .onChange(of: newWord) { wordProblem = nil }
+            if let wordProblem { problem(wordProblem) }
+            WordModelNote(inSettings: true)
+
+            Divider().padding(.vertical, 8)
+
+            Text("Fixes").font(.headline)
+            Text("Whenever Verbatim writes the left side, it writes the right side instead. Whole words only, so other words are never broken. Lines you edited are left alone.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if list.fixes.isEmpty {
+                Text("No fixes yet. When you correct a word in a transcript, Verbatim asks if it should remember it.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            } else {
+                rows(list.fixes, id: \.id) { fix in
+                    HStack(spacing: 8) {
+                        Text(fix.from).foregroundStyle(.secondary)
+                        Image(systemName: "arrow.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .accessibilityLabel("to")
+                        Text(fix.to)
+                    }
+                } remove: { fix in
+                    guard let i = list.removeFix(fix) else { return }
+                    offerUndo("Removed the fix for \(fix.from).") { list.insertFix(fix, at: i) }
+                }
+            }
+            HStack {
+                TextField("Heard as", text: $fixFrom)
+                Image(systemName: "arrow.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                TextField("Write", text: $fixTo)
+                    .onSubmit(addFix)
+                Button("Add", action: addFix)
+                    .disabled(fixFrom.trimmingCharacters(in: .whitespaces).isEmpty
+                              || fixTo.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .onChange(of: fixFrom + "|" + fixTo) { fixProblem = nil }
+            if let fixProblem { problem(fixProblem) }
+
+            HStack(spacing: 8) {
+                if let undo {
+                    Text(undo.text).font(.callout)
+                    Button("Undo") {
+                        undo.run()
+                        self.undo = nil
+                    }
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+                }
+            }
+            .frame(height: 20)
+        }
+        .padding(24)
+    }
+
+    /// A plain list in a light tint, like Settings > Voices. Scrolls when long.
+    private func rows<Item, ID: Hashable, Label: View>(
+        _ items: [Item], id: KeyPath<Item, ID>,
+        @ViewBuilder label: @escaping (Item) -> Label,
+        remove: @escaping (Item) -> Void
+    ) -> some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                    HStack {
+                        label(item)
+                        Spacer()
+                        Button {
+                            remove(item)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                                .frame(width: 24, height: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .help("Remove")
+                        .accessibilityLabel("Remove")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    if i < items.count - 1 { Divider() }
+                }
+            }
+        }
+        .frame(maxHeight: 130)
+        .fixedSize(horizontal: false, vertical: items.count <= 4)
+        .background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func problem(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    private func addWord() {
+        switch list.addWord(newWord) {
+        case .added: newWord = ""
+        case .alreadyThere(let w): wordProblem = "\(w) is already in the list."
+        case .problem(let p): wordProblem = p
+        }
+    }
+
+    private func addFix() {
+        let fix = PhraseFix(from: WordList.clean(fixFrom), to: WordList.clean(fixTo))
+        if let p = WordList.problem(with: fix) {
+            fixProblem = p
+            return
+        }
+        if let old = list.addFix(fix) {
+            offerUndo("Changed the fix for \(fix.from).") {
+                list.removeFix(PhraseFix(from: fix.from, to: fix.to))
+                list.insertFix(old, at: list.fixes.count)
+            }
+        }
+        fixFrom = ""
+        fixTo = ""
+    }
+
+    private func offerUndo(_ text: String, run: @escaping () -> Void) {
+        let r = Removed(text: text, run: run)
+        undo = r
+        Task {
+            try? await Task.sleep(for: .seconds(10))
+            if undo == r { undo = nil }
+        }
     }
 }
