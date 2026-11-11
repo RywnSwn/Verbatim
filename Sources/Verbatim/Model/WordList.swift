@@ -206,7 +206,12 @@ enum Fixes {
             if var t = times {
                 let a = t[i], b = t[i + n - 1]
                 let m = new.count
-                let spread = (0..<m).map { k in m > 1 ? ((a + (b - a) * Double(k) / Double(m - 1)) * 100).rounded() / 100 : a }
+                let step: Double = m > 1 ? (b - a) / Double(m - 1) : 0
+                var spread: [Double] = []
+                for k in 0..<m {
+                    let time: Double = a + step * Double(k)
+                    spread.append((time * 100).rounded() / 100)
+                }
                 t.replaceSubrange(i..<i + n, with: spread)
                 times = t
             }
