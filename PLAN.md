@@ -15,7 +15,7 @@ testing, at Ryan's ask: ask him for the "Step 7 test list". Step 7b
 (markers) built the same day in the same chat (Ryan's ask): see "How markers
 work". Step 7c (voice memory) built in the same chat too: see "How voice
 memory works". 7b and 7c merged 2026-11-10 (RywnSwn/Verbatim#14, #15) before
-testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 built 2026-11-11, see "How the word list works". Next after Ryan tests: step 9.
+testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 (word list) merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask: ask him for the "Step 8 test list". Next: steps 9 + 10 in one chat (see "Ryan's feedback: the app feels empty"), mockup first.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -63,10 +63,10 @@ class depends on it.
        Ryan names it, so next time "Mr. Yurt" is named by itself. Sortformer
        can enroll saved voice audio (`enrollSpeaker`); check FluidAudio's
        docs on how well it maps. Needs a "Voices" list to rename or forget.
-8. [~] **Corrections memory.** Word list via Parakeet vocabulary boosting
+8. [x] **Corrections memory.** Word list via Parakeet vocabulary boosting
        (~100 MB extra download, Ryan said yes), fix rules, Words screen.
-       Built 2026-11-11 on `claude/step-8-word-list`, not tested by Ryan yet
-       (see "How the word list works").
+       Merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask
+       (see "How the word list works" and its test list).
 9. [ ] **Storage.** History sidebar, 7-day audio delete, Storage screen,
        Recently deleted, Export everything.
 10. [ ] **Polish.** First-launch screen, menu bar dropdown, Settings, notifications,
