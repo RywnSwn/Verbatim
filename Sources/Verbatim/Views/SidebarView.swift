@@ -5,7 +5,9 @@ import UniformTypeIdentifiers
 /// Step 10: like the sidebar in Claude. Groups (one per class) with an icon
 /// and a + to record right in them, then Recents for everything not in a
 /// group. Right-click empty space for New Group; right-click a recording to
-/// move it, or drag it onto a group's name.
+/// move it, or drag it onto a group (its name or any recording in it).
+/// Dragged out of Verbatim (to Claude, Finder, Notes) a recording becomes
+/// a Markdown file of its transcript.
 struct SidebarView: View {
     @Environment(RecorderModel.self) private var model
     @State private var renaming: RecordingInfo?
@@ -32,32 +34,53 @@ struct SidebarView: View {
             .selectionDisabled()
             .listRowInsets(EdgeInsets(top: 0, leading: 2, bottom: 0, trailing: 2))
 
+            // A line between the actions and the groups, like Claude's sidebar.
+            Divider()
+                .padding(.vertical, 6)
+                .selectionDisabled()
+                .listRowInsets(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
+
+            // Each group is a fold-down zone: bold name and arrow, its
+            // recordings indented under it. Not the list's own folding, which
+            // only shows an arrow on hover at the far side.
             ForEach(store.groups) { group in
-                Section(isExpanded: expanded(group)) {
-                    let members = model.recordings.filter { $0.groupID == group.id }
-                    if members.isEmpty {
-                        Text(model.isBusy ? "Empty. Drag a recording here." : "Empty. Press + to record here, or drag a recording in.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .selectionDisabled()
+                Section {
+                    if !group.collapsed {
+                        let members = model.recordings.filter { $0.groupID == group.id }
+                        if members.isEmpty {
+                            Text(model.isBusy ? "Empty. Drag a recording here." : "Empty. Press + to record here, or drag a recording in.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.leading, 22)
+                                .selectionDisabled()
+                                .dropDestination(for: RecordingDrag.self) { items, _ in move(items, to: group.id) }
+                        }
+                        ForEach(members) { info in
+                            row(info, indent: true)
+                                .dropDestination(for: RecordingDrag.self) { items, _ in move(items, to: group.id) }
+                        }
                     }
-                    ForEach(members) { row($0) }
                 } header: {
                     GroupHeader(group: group)
                 }
             }
 
-            Section(isExpanded: Binding(get: { !recentsCollapsed }, set: { recentsCollapsed = !$0 })) {
-                let recents = model.recordings.filter { store.group($0.groupID) == nil }
-                if model.recordings.isEmpty {
-                    Text("Your recordings will show up here.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .selectionDisabled()
+            Section {
+                if !recentsCollapsed {
+                    let recents = model.recordings.filter { store.group($0.groupID) == nil }
+                    if model.recordings.isEmpty {
+                        Text("Your recordings will show up here.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .selectionDisabled()
+                    }
+                    ForEach(recents) { info in
+                        row(info, indent: false)
+                            .dropDestination(for: RecordingDrag.self) { items, _ in move(items, to: nil) }
+                    }
                 }
-                ForEach(recents) { row($0) }
             } header: {
-                RecentsHeader()
+                RecentsHeader(collapsed: $recentsCollapsed)
             }
         }
         .contextMenu(forSelectionType: UUID.self) { ids in
@@ -115,11 +138,9 @@ struct SidebarView: View {
         }
     }
 
-    private func expanded(_ group: RecordingGroup) -> Binding<Bool> {
-        Binding(
-            get: { !(store.group(group.id)?.collapsed ?? false) },
-            set: { open in store.update(group.id) { $0.collapsed = !open } }
-        )
+    private func move(_ items: [RecordingDrag], to groupID: UUID?) -> Bool {
+        for item in items { model.moveRecording(item.id, to: groupID) }
+        return !items.isEmpty
     }
 
     private func newGroup() {
@@ -127,10 +148,14 @@ struct SidebarView: View {
         model.renameGroupRequest = group.id
     }
 
-    private func row(_ info: RecordingInfo) -> some View {
+    private func row(_ info: RecordingInfo, indent: Bool) -> some View {
         SidebarRow(info: info, isLive: info.id == model.currentID, phase: model.phase, elapsed: model.elapsed)
+            .padding(.leading, indent ? 22 : 0)
             .tag(info.id)
-            .draggable(info.id.uuidString)
+            .draggable(RecordingDrag(id: info.id)) {
+                Label(info.title, systemImage: "doc.text")
+                    .padding(6)
+            }
             .popover(isPresented: Binding(get: { iconFor == info.id }, set: { if !$0 { iconFor = nil } }),
                      arrowEdge: .trailing) {
                 IconPicker(icon: info.icon, color: info.iconColor ?? .ink) { icon, color in
@@ -221,10 +246,26 @@ struct GroupHeader: View {
                 }
             }
 
-            Text(group.name)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
+            Button {
+                withAnimation(.snappy(duration: 0.22)) {
+                    store.update(group.id) { $0.collapsed.toggle() }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Text(group.name)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(group.collapsed ? -90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(group.collapsed ? "Show recordings" : "Fold up")
+            .accessibilityLabel("\(group.name), \(group.collapsed ? "folded" : "open")")
 
             Spacer(minLength: 4)
 
@@ -244,10 +285,11 @@ struct GroupHeader: View {
         .padding(.vertical, 2)
         .padding(.horizontal, 4)
         .background(targeted ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
-        .dropDestination(for: String.self) { items, _ in
-            let ids = items.compactMap(UUID.init(uuidString:))
-            for id in ids { model.moveRecording(id, to: group.id) }
-            return !ids.isEmpty
+        .padding(.top, 8)
+        .dropDestination(for: RecordingDrag.self) { items, _ in
+            for item in items { model.moveRecording(item.id, to: group.id) }
+            if !items.isEmpty, group.collapsed { store.update(group.id) { $0.collapsed = false } }
+            return !items.isEmpty
         } isTargeted: { targeted = $0 }
         .contextMenu {
             Button("New Recording Here") { Task { await model.start(in: group.id) } }
@@ -266,24 +308,39 @@ struct GroupHeader: View {
     }
 }
 
-/// "Recents": recordings not in any group. Dropping one here takes it out of its group.
+/// "Recents": recordings not in any group, folds like a group. Dropping a
+/// recording here takes it out of its group.
 struct RecentsHeader: View {
     @Environment(RecorderModel.self) private var model
+    @Binding var collapsed: Bool
     @State private var targeted = false
 
     var body: some View {
-        Text("Recents")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 2)
-            .padding(.horizontal, 4)
-            .background(targeted ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
-            .dropDestination(for: String.self) { items, _ in
-                let ids = items.compactMap(UUID.init(uuidString:))
-                for id in ids { model.moveRecording(id, to: nil) }
-                return !ids.isEmpty
-            } isTargeted: { targeted = $0 }
+        Button {
+            withAnimation(.snappy(duration: 0.22)) { collapsed.toggle() }
+        } label: {
+            HStack(spacing: 5) {
+                Text("Recents")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(collapsed ? -90 : 0))
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .padding(.top, 8)
+        .background(targeted ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .dropDestination(for: RecordingDrag.self) { items, _ in
+            for item in items { model.moveRecording(item.id, to: nil) }
+            return !items.isEmpty
+        } isTargeted: { targeted = $0 }
+        .accessibilityLabel("Recents, \(collapsed ? "folded" : "open")")
     }
 }
 
@@ -409,4 +466,40 @@ struct RecentlyDeletedButton: View {
             }
         }
     }
+}
+
+/// What a dragged recording carries. Inside Verbatim: which recording, so it
+/// can move between groups. Dropped in another app (Claude, Finder, Notes):
+/// its transcript as a Markdown file, named like an export.
+struct RecordingDrag: Codable, Transferable {
+    let id: UUID
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .verbatimRecording)
+        FileRepresentation(exportedContentType: .markdownText) { item in
+            let url = try await MainActor.run { try item.writeTranscript() }
+            return SentTransferredFile(url)
+        }
+    }
+
+    /// Writes the transcript to a fresh temporary folder and returns the file.
+    @MainActor
+    private func writeTranscript() throws -> URL {
+        let model = RecorderModel.shared
+        guard let info = model.info(id) else { throw CocoaError(.fileNoSuchFile) }
+        let lines = model.shownLines(id).map(\.line)
+        let folder = FileManager.default.temporaryDirectory
+            .appending(path: "Verbatim drag \(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let name = RecorderModel.freeName(for: info, format: .markdown, in: folder)
+        let url = folder.appending(path: name)
+        try RecorderModel.text(lines, info: info, markdown: true).write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+}
+
+extension UTType {
+    /// Declared in Support/Info.plist (UTExportedTypeDeclarations).
+    static let verbatimRecording = UTType(exportedAs: "com.rywnswn.verbatim.recording")
+    static let markdownText = UTType(filenameExtension: "md", conformingTo: .plainText) ?? .plainText
 }
