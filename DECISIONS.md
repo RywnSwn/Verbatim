@@ -237,3 +237,6 @@ accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
   sliding messages). Magic UI / Aceternity skipped: the "AI look".
 - Icon colors: a few soft, muted colors (Ryan), ink by default.
 - "Still recording?" after 5 min of quiet by default (Ryan).
+- Start screen: "Hear it once. Keep every word." replaced by a greeting
+  ("Evening, Ryan") next to a small breathing waveform mark, like Claude's
+  start screen (Ryan). The waveform-to-words animation is gone.
