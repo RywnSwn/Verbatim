@@ -12,16 +12,25 @@ struct ContentView: View {
     private static let compactWidth: CGFloat = 860
     private static let roomyWidth: CGFloat = 940
 
+    private func fitSidebar(to width: CGFloat) {
+        if width < Self.compactWidth, columns != .detailOnly, !hidForSpace {
+            hidForSpace = true
+            columns = .detailOnly
+        } else if width >= Self.roomyWidth, hidForSpace {
+            hidForSpace = false
+            columns = .all
+        }
+    }
+
     var body: some View {
         @Bindable var model = model
         NavigationSplitView(columnVisibility: $columns) {
             SidebarView()
                 // The sidebar keeps at least 230 pt; the main area gives way
                 // instead (Ryan saw it squeezed under the window's edge).
-                .navigationSplitViewColumnWidth(min: 230, ideal: 260, max: 340)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
         } detail: {
             DetailView()
-                .frame(minWidth: 360)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if let notice = model.recoveryNotice {
                         NoticeLine(text: notice) { model.recoveryNotice = nil }
@@ -45,13 +54,10 @@ struct ContentView: View {
         .animation(.snappy(duration: 0.18), value: model.showCommandMenu)
         .onAppear { MainWindow.open = { openWindow(id: "main") } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-            if width < Self.compactWidth, columns != .detailOnly, !hidForSpace {
-                withAnimation(.snappy(duration: 0.25)) { columns = .detailOnly }
-                hidForSpace = true
-            } else if width >= Self.roomyWidth, hidForSpace {
-                withAnimation(.snappy(duration: 0.25)) { columns = .all }
-                hidForSpace = false
-            }
+            // Changed after this layout pass ends, never in the middle of it:
+            // showing or hiding the sidebar while the window is laying out can
+            // crash (Ryan's crash on 0.1.98).
+            Task { @MainActor in fitSidebar(to: width) }
         }
     }
 }
