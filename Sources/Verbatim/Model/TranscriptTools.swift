@@ -160,6 +160,85 @@ extension RecorderModel {
         }
     }
 
+    /// Settings > Storage > Export Everything (step 9): a zip with every
+    /// transcript as .md, the raw data files and settings. No audio.
+    func exportEverything() {
+        let panel = NSSavePanel()
+        panel.directoryURL = Self.lastExportFolder
+        let day = Date().formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
+        panel.nameFieldStringValue = "Verbatim Export \(day).zip"
+        panel.allowedContentTypes = [.zip]
+        panel.canCreateDirectories = true
+        panel.title = "Export Everything"
+        panel.prompt = "Export"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        // Text is made here (it needs the app's state); files and zip in the background.
+        let readable = recordings.map { info -> (name: String, text: String) in
+            let lines = shownLines(info.id).map(\.line)
+            let body = lines.isEmpty ? "(No text.)" : Self.text(lines, info: info, markdown: true)
+            return (Self.freeName(for: info, format: .markdown, in: URL(filePath: "/nonexistent")), body + "\n")
+        }
+        let ids = recordings.map(\.id)
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: "Verbatim", directoryHint: .isDirectory)
+        show("Exporting \(recordings.count) transcripts…")
+        Task {
+            let error = await Task.detached(priority: .userInitiated) { () -> String? in
+                let fm = FileManager.default
+                let temp = fm.temporaryDirectory.appending(path: "Verbatim-export-\(UUID().uuidString)", directoryHint: .isDirectory)
+                let top = temp.appending(path: url.deletingPathExtension().lastPathComponent, directoryHint: .isDirectory)
+                defer { try? fm.removeItem(at: temp) }
+                do {
+                    let texts = top.appending(path: "Transcripts", directoryHint: .isDirectory)
+                    try fm.createDirectory(at: texts, withIntermediateDirectories: true)
+                    var used: Set<String> = []
+                    for item in readable {
+                        var name = item.name
+                        var n = 2
+                        while used.contains(name.lowercased()) {
+                            name = item.name.replacingOccurrences(of: ".md", with: " (\(n)).md")
+                            n += 1
+                        }
+                        used.insert(name.lowercased())
+                        try item.text.write(to: texts.appending(path: name), atomically: true, encoding: .utf8)
+                    }
+                    // Raw data, so a future Verbatim could read it back.
+                    let data = top.appending(path: "Data/Recordings", directoryHint: .isDirectory)
+                    for id in ids {
+                        let to = data.appending(path: id.uuidString, directoryHint: .isDirectory)
+                        try fm.createDirectory(at: to, withIntermediateDirectories: true)
+                        for file in ["recording.json", "live.json", "transcript.json"] {
+                            let from = RecordingStore.folder(id).appending(path: file)
+                            if fm.fileExists(atPath: from.path) { try fm.copyItem(at: from, to: to.appending(path: file)) }
+                        }
+                    }
+                    for file in ["words.json", "Voices/voices.json"] {
+                        let from = support.appending(path: file)
+                        if fm.fileExists(atPath: from.path) {
+                            try fm.copyItem(at: from, to: top.appending(path: "Data").appending(path: (file as NSString).lastPathComponent))
+                        }
+                    }
+                    if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }
+                    let zip = Process()
+                    zip.executableURL = URL(filePath: "/usr/bin/ditto")
+                    zip.arguments = ["-c", "-k", "--keepParent", top.path, url.path]
+                    try zip.run()
+                    zip.waitUntilExit()
+                    return zip.terminationStatus == 0 ? nil : "the zip couldn't be made"
+                } catch {
+                    return error.localizedDescription
+                }
+            }.value
+            if let error {
+                show("Couldn't export: \(error). Try another folder.")
+            } else {
+                UserDefaults.standard.set(url.deletingLastPathComponent().path, forKey: Self.exportFolderKey)
+                showFile(url, text: "Saved \(url.lastPathComponent).")
+            }
+        }
+    }
+
     private static let exportFolderKey = "lastExportFolder"
 
     private static var lastExportFolder: URL {

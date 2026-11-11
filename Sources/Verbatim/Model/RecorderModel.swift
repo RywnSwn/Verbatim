@@ -34,7 +34,10 @@ final class RecorderModel {
     private(set) var recordings: [RecordingInfo] = []
     private(set) var currentID: UUID?
     var selection: UUID? {
-        didSet { if fixOffer?.recordingID != selection { fixOffer = nil } }
+        didSet {
+            if fixOffer?.recordingID != selection { fixOffer = nil }
+            if selection != nil { showingDeleted = false }
+        }
     }
     /// Step 8: after a word fix, the line under it asks to remember it.
     struct FixOffer: Equatable {
@@ -44,6 +47,8 @@ final class RecorderModel {
     }
 
     var fixOffer: FixOffer?
+    /// The main area shows Recently deleted (step 9).
+    var showingDeleted = false
     private(set) var levels: [Float] = Array(repeating: 0, count: RecorderModel.barCount)
     private(set) var elapsed: TimeInterval = 0
     private(set) var status: Status?
@@ -117,7 +122,10 @@ final class RecorderModel {
         LiveTranscriber.shared.start(with: recordings) // loads the texts Transcriber looks at
         Transcriber.shared.start(with: recordings)
         // After init: AudioSquash looks at RecorderModel.shared.
-        Task { @MainActor in AudioSquash.shared.run() }
+        Task { @MainActor in
+            AudioSquash.shared.run()
+            AudioCleanup.start()
+        }
     }
 
     // MARK: - Start / Pause / Stop
@@ -338,30 +346,24 @@ final class RecorderModel {
 
     func canDelete(_ id: UUID) -> Bool { id != currentID }
 
-    /// Moves the recording's folder to the Mac's Trash. Undo for 10 s, and it
-    /// stays in the Trash after that. In-app "Recently deleted" comes in step 9.
+    /// Moves the recording to Recently deleted (step 9): Undo for 10 s, Put
+    /// Back for 30 days.
     func delete(_ id: UUID) {
         guard canDelete(id), let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         let info = recordings[i]
-        var trashed: NSURL?
+        let moved: URL
         do {
-            try FileManager.default.trashItem(at: RecordingStore.folder(id), resultingItemURL: &trashed)
+            moved = try RecentlyDeleted.shared.add(info)
         } catch {
-            status = Status(text: "Couldn't move \(info.title) to the Trash: \(error.localizedDescription)")
+            status = Status(text: "Couldn't delete \(info.title): \(error.localizedDescription)")
             return
         }
-        recordings.remove(at: i)
-        Playback.shared.forget(id)
-        Transcriber.shared.forget(id)
-        LiveTranscriber.shared.forget(id)
-        if selection == id { selection = nil }
-        if stoppedNote?.recordingID == id { stoppedNote = nil }
-        guard let url = trashed as URL? else { return }
+        forgetRecording(id)
 
-        let note = DeletedNote(info: info, trashURL: url)
+        let note = DeletedNote(info: info, trashURL: moved)
         deletedNote = note
         if isBusy {
-            status = Status(text: "Moved \(info.title) to the Trash.", action: .undoDelete)
+            status = Status(text: "Moved \(info.title) to Recently deleted.", action: .undoDelete)
         }
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(10))
@@ -371,20 +373,77 @@ final class RecorderModel {
         }
     }
 
+    private func forgetRecording(_ id: UUID) {
+        recordings.removeAll { $0.id == id }
+        Playback.shared.forget(id)
+        Transcriber.shared.forget(id)
+        LiveTranscriber.shared.forget(id)
+        if selection == id { selection = nil }
+        if stoppedNote?.recordingID == id { stoppedNote = nil }
+    }
+
     func undoDelete() {
         guard let note = deletedNote else { return }
         deletedNote = nil
         if status?.action == .undoDelete { status = nil }
+        putBack(note.info.id)
+    }
+
+    /// Recently deleted > Put Back (and Undo).
+    func putBack(_ id: UUID) {
         do {
-            try FileManager.default.moveItem(at: note.trashURL, to: RecordingStore.folder(note.info.id))
+            try RecentlyDeleted.shared.restore(id)
         } catch {
-            status = Status(text: "Couldn't bring it back. It's still in the Trash.")
+            status = Status(text: "Couldn't put it back: \(error.localizedDescription)")
             return
         }
         reload()
-        Transcriber.shared.reload(note.info.id)
-        LiveTranscriber.shared.reload(note.info.id)
-        selection = note.info.id
+        Transcriber.shared.reload(id)
+        LiveTranscriber.shared.reload(id)
+        showingDeleted = false
+        selection = id
+    }
+
+    /// Settings > Storage > Delete All Recordings. Everything but the one
+    /// recording now goes to Recently deleted, with one Undo.
+    func deleteAll() {
+        var moved: [UUID] = []
+        for info in recordings where canDelete(info.id) {
+            if (try? RecentlyDeleted.shared.add(info)) != nil {
+                forgetRecording(info.id)
+                moved.append(info.id)
+            }
+        }
+        guard !moved.isEmpty else { return }
+        let text = moved.count == 1 ? "Moved 1 recording to Recently deleted." : "Moved \(moved.count) recordings to Recently deleted."
+        offerLineUndo(text) { [weak self] in
+            for id in moved { try? RecentlyDeleted.shared.restore(id) }
+            self?.reload()
+            for id in moved {
+                Transcriber.shared.reload(id)
+                LiveTranscriber.shared.reload(id)
+            }
+        }
+    }
+
+    /// Right-click > Keep Audio: the old-audio cleanup leaves it alone.
+    func setKeepAudio(_ id: UUID, _ keep: Bool) {
+        guard let i = recordings.firstIndex(where: { $0.id == id }) else { return }
+        recordings[i].keepAudio = keep ? true : nil
+        try? RecordingStore.save(recordings[i])
+        flash(keep ? "\(recordings[i].title) keeps its audio." : "\(recordings[i].title)'s audio is deleted after \(AudioCleanup.days) days like the others.")
+    }
+
+    /// Old-audio cleanup: the audio files go for good, the text stays.
+    func removeAudioForGood(_ id: UUID) -> Bool {
+        guard let i = recordings.firstIndex(where: { $0.id == id }) else { return false }
+        Playback.shared.forget(id)
+        for url in [RecordingStore.wavURL(id), RecordingStore.m4aURL(id)] where FileManager.default.fileExists(atPath: url.path) {
+            do { try FileManager.default.removeItem(at: url) } catch { return false }
+        }
+        recordings[i].audioDeletedAt = Date()
+        try? RecordingStore.save(recordings[i])
+        return true
     }
 
     // MARK: - Audio (play in the app, delete audio only)

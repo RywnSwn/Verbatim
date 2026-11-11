@@ -200,11 +200,11 @@ struct PastRecordingView: View {
                         model.deleteAudio(info.id)
                     }
                     .disabled(model.audioDeleteBlocker(info.id) != nil)
-                    Button("Move to Trash") { model.delete(info.id) }
+                    Button("Delete") { model.delete(info.id) }
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
                 }
-                .help("Show in Finder, Transcribe again, Find speakers again, Delete audio only, Move to Trash")
+                .help("Show in Finder, Transcribe again, Find speakers again, Delete audio only, Delete")
             }
             ToolbarItem(placement: .primaryAction) {
                 CopyButton(id: info.id, hasLines: !(checked + liveLines).isEmpty)

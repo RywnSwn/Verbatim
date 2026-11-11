@@ -1,7 +1,7 @@
 import AVFoundation
 import SwiftUI
 
-/// Settings: General (microphone and times), Words (step 8), Voices (step 7c), Updates.
+/// Settings: General, Words (step 8), Voices (step 7c), Storage (step 9), Updates.
 /// The rest arrives in step 10.
 struct SettingsView: View {
     var body: some View {
@@ -14,6 +14,9 @@ struct SettingsView: View {
             }
             Tab("Voices", systemImage: "person.wave.2") {
                 VoiceSettings()
+            }
+            Tab("Storage", systemImage: "internaldrive") {
+                StorageSettings()
             }
             Tab("Updates", systemImage: "arrow.down.circle") {
                 UpdateSettings()
