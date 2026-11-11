@@ -16,6 +16,8 @@ struct StartView: View {
                         .accessibilityHidden(true)
                     Text(Greeting.text())
                         .font(.system(size: 46, weight: .regular, design: .serif))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6) // a narrow window shrinks it, never squeezes the sidebar
                 }
                 .padding(.bottom, 6)
 
@@ -44,9 +46,10 @@ struct StartView: View {
                     LiveModelStatusLine()
                 }
             }
-            .frame(width: 460, alignment: .leading)
+            .frame(maxWidth: 460, alignment: .leading) // shrinks with the window
         }
-        .padding(40)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

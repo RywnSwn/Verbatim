@@ -9,9 +9,12 @@ struct ContentView: View {
         @Bindable var model = model
         NavigationSplitView {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
+                // The sidebar keeps at least 230 pt; the main area gives way
+                // instead (Ryan saw it squeezed under the window's edge).
+                .navigationSplitViewColumnWidth(min: 230, ideal: 260, max: 340)
         } detail: {
             DetailView()
+                .frame(minWidth: 460)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if let notice = model.recoveryNotice {
                         NoticeLine(text: notice) { model.recoveryNotice = nil }
