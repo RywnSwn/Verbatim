@@ -80,6 +80,10 @@ struct VerbatimApp: App {
                 }
                 .disabled(!model.hasShownLines)
             }
+            CommandGroup(replacing: .help) {
+                Button("Copy Layout Details") { LayoutDetails.copy() }
+                    .keyboardShortcut("l", modifiers: [.control, .command])
+            }
             CommandMenu("Recording") {
                 Button(model.isBusy ? "Stop Recording" : "Start Recording") {
                     model.toggleRecording()

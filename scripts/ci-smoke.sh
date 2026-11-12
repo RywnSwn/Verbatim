@@ -116,6 +116,12 @@ for size in "1000 400" "1000 540" "1000 600" "940 400"; do
   end tell' | head -40
 done
 
+# The app's own layout report (Help > Copy Layout Details), to compare with Ryan's.
+resize 1000 560
+osascript -e 'tell application "System Events" to keystroke "l" using {control down, command down}' || true
+sleep 2
+echo "----- layout details -----"; grep -A200 "^Verbatim " "$OUT/app.log" | head -150
+
 # A window that comes back shorter than the app's minimum (a frame saved by an
 # older build, or macOS tiling). Ryan's window was like this: about 490 tall.
 osascript -e 'tell application "System Events" to keystroke "q" using {command down}' || true
