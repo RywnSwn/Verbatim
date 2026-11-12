@@ -116,6 +116,23 @@ for size in "1000 400" "1000 540" "1000 600" "940 400"; do
   end tell' | head -40
 done
 
+# A window that comes back shorter than the app's minimum (a frame saved by an
+# older build, or macOS tiling). Ryan's window was like this: about 490 tall.
+osascript -e 'tell application "System Events" to keystroke "q" using {command down}' || true
+sleep 3
+kill "$APP_PID" 2>/dev/null || true
+echo "----- saved window frames -----"
+defaults read com.rywnswn.verbatim | grep "NSWindow Frame" || echo "none saved"
+defaults read com.rywnswn.verbatim | grep "NSWindow Frame" | sed -E 's/^ *"([^"]+)" = "([^"]+)";/\1|\2/' | while IFS='|' read -r key value; do
+  set -- $value
+  defaults write com.rywnswn.verbatim "$key" "20 250 1000 470 $5 $6 $7 $8 "
+done
+defaults read com.rywnswn.verbatim | grep "NSWindow Frame" || true
+launch
+check "relaunch with a short saved frame"
+osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose unix id is '"$APP_PID"')' || true
+shot "restored-short"
+
 kill "$APP_PID" 2>/dev/null || true
 echo "----- app.log (tail) -----"; tail -20 "$OUT/app.log"
 exit "$FAILED"
