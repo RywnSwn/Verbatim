@@ -37,35 +37,15 @@ resize() {
   sleep 2
 }
 
-toggle_sidebar() {
-  # Click the real sidebar button in the toolbar, like Ryan does.
-  osascript -e 'tell application "System Events" to tell (first process whose unix id is '"$APP_PID"')
-    set found to "no sidebar button found"
-    repeat with e in (entire contents of window 1)
-      try
-        if class of e is button then
-          set d to ""
-          try
-            set d to d & (description of e as text)
-          end try
-          try
-            set d to d & " " & (title of e as text)
-          end try
-          try
-            set d to d & " " & (help of e as text)
-          end try
-          if d contains "idebar" then
-            set found to "clicked: " & d
-            click e
-            exit repeat
-          end if
-        end if
-      end try
-    end repeat
-    return found
-  end tell' || echo "toggle failed"
-  sleep 3
+# The sidebar button is not exposed to accessibility, so click where it is.
+# Window sits at {20, 40}. Sidebar hidden: button at x 143. Shown: just inside
+# the sidebar's right edge (224 for a 220 pt sidebar, 264 for 260 pt).
+click_at() {
+  osascript -e 'tell application "System Events" to click at {'"$1"', '"$2"'}' > /dev/null || echo "click failed"
+  sleep 1
 }
+show_sidebar() { click_at 143 65; sleep 2; }
+hide_sidebar() { click_at 224 65; click_at 264 65; sleep 2; }
 
 check() {
   if ! alive; then
@@ -83,17 +63,25 @@ launch
 check "at launch"
 osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose unix id is '"$APP_PID"')' || echo "no accessibility access"
 
-for size in "1200 780" "900 600" "700 520" "700 420"; do
+# Wide: sidebar starts shown.
+for size in "1200 780" "900 600"; do
   set -- $size
   tag="$1x$2"
-  resize "$1" "$2";      check "resize to $tag";            shot "$tag"
-  toggle_sidebar;        check "sidebar toggle 1 at $tag";  shot "$tag-toggled"
-  toggle_sidebar;        check "sidebar toggle 2 at $tag";  shot "$tag-toggled-back"
+  resize "$1" "$2";  check "resize to $tag";         shot "$tag"
+  hide_sidebar;      check "hide sidebar at $tag";   shot "$tag-hidden"
+  show_sidebar;      check "show sidebar at $tag";   shot "$tag-shown"
 done
 
-# Narrow with the sidebar forced open, then grow again.
-resize 700 520; toggle_sidebar; check "open sidebar when narrow"; shot "narrow-sidebar-open"
-resize 1200 780; check "grow again"; shot "grown-again"
+# Narrow: the sidebar hides itself; open it by hand like Ryan did.
+for size in "800 600" "700 520" "700 420"; do
+  set -- $size
+  tag="$1x$2"
+  resize "$1" "$2";  check "resize to $tag";         shot "$tag"
+  show_sidebar;      check "show sidebar at $tag";   shot "$tag-shown"
+  hide_sidebar;      check "hide sidebar at $tag";   shot "$tag-hidden"
+  show_sidebar;      check "show sidebar again at $tag"
+  resize 1200 780;   check "grow with sidebar open from $tag"; shot "$tag-grown"
+done
 
 kill "$APP_PID" 2>/dev/null || true
 echo "----- app.log (tail) -----"; tail -20 "$OUT/app.log"
