@@ -94,7 +94,10 @@ struct TranscriptList: View {
         return rows
     }
 
-    var body: some View {
+    /// The scrolling list itself. Split from `body` (which adds saving, notes,
+    /// search and the alerts) because the Swift compiler gives up on one very
+    /// long chain. Keep it in two parts.
+    @ViewBuilder private var scroller: some View {
         let labels = Speakers.labeler(info.id)
         let options = labels.options(live)
         let marked = Markers.markedStarts(checked + live, info.markers)
@@ -171,6 +174,10 @@ struct TranscriptList: View {
         .onChange(of: volatile) {
             if followsLive { position.scrollTo(edge: .bottom) }
         }
+    }
+
+    var body: some View {
+        scroller
         .onChange(of: fieldFocused) {
             // Clicking somewhere else saves, like a text field in Notes.
             if !fieldFocused, editing != nil { save() }
@@ -183,16 +190,11 @@ struct TranscriptList: View {
             if !noteFocused, notingLine != nil { saveNote() }
         }
         .onChange(of: model.noteRequest, initial: true) { _, request in
-            // ⇧⌘N or the Note button: type a note on the line being said now.
-            guard let request, request.id == info.id else { return }
-            model.noteRequest = nil
-            let source: LineSource = live.contains { $0.start == request.start } ? .live : .checked
-            guard let line = (checked + live).first(where: { $0.start == request.start }) else { return }
-            beginNote(line, Notes.byLine(checked + live, info.notes)[line.start] ?? "")
-            position.scrollTo(id: TranscriptRow.id(source, line.start), anchor: .center)
+            takeNoteRequest(request)
         }
         .onScrollPhaseChange { _, phase in
-            if phase == .interacting || phase == .tracking || phase == .decelerating { lastUserScroll = Date() }
+            let byHand: [ScrollPhase] = [.interacting, .tracking, .decelerating]
+            if byHand.contains(phase) { lastUserScroll = Date() }
         }
         .onChange(of: playingRowID) { _, id in
             // Follow the audio, unless you scrolled in the last 8 seconds or are editing/searching.
@@ -502,6 +504,18 @@ struct TranscriptList: View {
         }
         .padding(.leading, 70)
         .padding(.top, -8)
+    }
+
+    /// ⇧⌘N or the Note button: type a note on the line being said now.
+    private func takeNoteRequest(_ request: RecorderModel.NoteRequest?) {
+        guard let request, request.id == info.id else { return }
+        model.noteRequest = nil
+        let all = checked + live
+        guard let line = all.first(where: { $0.start == request.start }) else { return }
+        let isLiveLine = live.contains { $0.start == request.start }
+        let note = Notes.byLine(all, info.notes)[line.start]
+        beginNote(line, note ?? "")
+        position.scrollTo(id: TranscriptRow.id(isLiveLine ? .live : .checked, line.start), anchor: .center)
     }
 
     private func beginNote(_ line: Transcript.Line, _ text: String) {
