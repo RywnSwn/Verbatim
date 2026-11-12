@@ -1,0 +1,267 @@
+<title>Verbatim Line Notes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: short notes, then a fake Verbatim window with a live transcript you can add notes to, then what changes. */
+:root {
+  --page: #EEEBE4; --paper: #FCFBF8; --ink: #1F1D1A; --muted: #69645C; --line: #E6E2DA;
+  --accent: #24427A; --shadow: rgba(31, 29, 26, 0.22); --menu: #FFFFFF; --note: #6B5A2E;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+    --accent: #8FA9DD; --shadow: rgba(0, 0, 0, 0.55); --menu: #2D2C29; --note: #D6C08A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+  --accent: #8FA9DD; --shadow: rgba(0, 0, 0, 0.55); --menu: #2D2C29; --note: #D6C08A;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--page); color: var(--ink); font-family: var(--sans); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px; -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; padding: 0; text-align: left; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.page { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1 { font-family: var(--serif); font-weight: 500; font-size: 32px; margin: 0; line-height: 1.1; }
+h2 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0; }
+p { margin: 0; line-height: 1.5; }
+.lead { color: var(--muted); max-width: 62ch; }
+.intro, .sec { display: flex; flex-direction: column; gap: 12px; }
+.try { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 20px; line-height: 1.45; max-width: 66ch; }
+kbd { font-family: var(--sans); font-size: 12px; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+/* Fake Verbatim window: just the transcript side. */
+.win { position: relative; background: var(--paper); border-radius: 14px; box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 25%, transparent), 0 14px 40px var(--shadow); display: flex; flex-direction: column; height: 520px; overflow: hidden; }
+.bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.bar b { font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 7px; font-size: 12.5px; color: var(--ink); }
+.tb:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.tb svg, .nt svg, .menu svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.scroll { flex: 1; overflow-y: auto; padding: 20px 20px 24px; }
+.head { padding-left: 62px; margin-bottom: 16px; }
+.head .t { font-family: var(--serif); font-size: 26px; }
+.head .m { font-size: 12.5px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.rows { display: flex; flex-direction: column; gap: 12px; }
+.row { display: grid; grid-template-columns: 48px 1fr; column-gap: 14px; row-gap: 4px; }
+.time { font-size: 12.5px; color: var(--muted); text-align: right; padding-top: 3px; font-variant-numeric: tabular-nums; }
+.txt { font-family: var(--serif); font-size: 16px; line-height: 1.5; border-radius: 6px; padding: 0 4px; margin: 0 -4px; cursor: text; overflow-wrap: anywhere; min-width: 0; }
+.txt:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.txt b { font-weight: 600; }
+/* The note: under its line, in the text column, smaller, sans, a pencil in front. */
+.nt { grid-column: 2; display: flex; align-items: flex-start; gap: 7px; font-size: 13px; line-height: 1.4; color: var(--note); padding: 3px 6px; margin-left: -6px; border-radius: 6px; width: fit-content; max-width: 100%; }
+.nt svg { margin-top: 2px; }
+.nt:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.nt span { min-width: 0; overflow-wrap: anywhere; }
+.ne { grid-column: 2; display: flex; flex-direction: column; gap: 4px; }
+.ne .f { display: flex; align-items: flex-start; gap: 7px; color: var(--note); }
+.ne .f svg { margin-top: 4px; width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.ne textarea { flex: 1; min-width: 0; font: inherit; font-size: 13px; line-height: 1.4; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--accent); padding: 1px 0 3px; resize: none; outline: none; }
+.ne small { font-size: 11px; color: var(--muted); padding-left: 20px; }
+
+.foot { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-top: 1px solid var(--line); font-size: 12.5px; min-height: 40px; }
+.foot .clock { font-weight: 500; font-variant-numeric: tabular-nums; }
+.foot .msg { margin-left: auto; display: flex; gap: 10px; align-items: baseline; text-align: right; }
+.link { color: var(--accent); font-weight: 500; }
+.link:hover { text-decoration: underline; }
+
+.menu { position: absolute; z-index: 5; min-width: 200px; background: var(--menu); border-radius: 9px; padding: 5px; box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 22%, transparent), 0 10px 30px var(--shadow); font-size: 13px; display: flex; flex-direction: column; }
+.menu button { display: flex; align-items: center; gap: 8px; padding: 5px 9px; border-radius: 5px; }
+.menu button:hover { background: var(--accent); color: var(--menu); }
+.menu button .k { margin-left: auto; opacity: .6; font-size: 12px; }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+.menu .dim { opacity: .45; pointer-events: none; }
+
+.copybox { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.55; background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 10px; padding: 12px 14px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px 28px; margin: 0; padding: 0; list-style: none; }
+.notes li { line-height: 1.45; min-width: 0; }
+.notes b { font-weight: 600; display: block; margin-bottom: 2px; }
+.notes span { color: var(--muted); }
+</style>
+
+<div class="page">
+  <div class="intro">
+    <h1>Notes on lines</h1>
+    <p class="lead">A mockup you can click. It is not the real app yet. For the things the mic can't hear, like "Mr. Yurt wrote the essay question on the board". The words are made up and keep arriving, like in class.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Try it</h2>
+    <ol class="try">
+      <li>Right-click a line (or press and hold on a phone) and pick <b>Add note</b>. Type something, press Enter.</li>
+      <li>Press the <b>Note</b> button at the top, or <kbd>⇧⌘N</kbd>. That puts a note on the line being said right now, for when you're in a hurry.</li>
+      <li>Click a note to change it. Clear the text and press Enter to delete it. Every change has Undo at the bottom.</li>
+      <li>Scroll down the page to see how notes look when you copy the transcript for Claude.</li>
+    </ol>
+  </div>
+
+  <div class="win" id="win">
+    <div class="bar">
+      <b>Anansi and the sky god</b>
+      <button type="button" class="tb" id="flagBtn" title="Mark this moment (⌘D)"><svg viewBox="0 0 16 16"><path d="M4 14V2.5M4 3h8l-2 3 2 3H4"/></svg>Marker</button>
+      <button type="button" class="tb" id="noteBtn" title="Note on what's being said now (⇧⌘N)"><svg viewBox="0 0 16 16"><path d="M11 2.5l2.5 2.5L6 12.5l-3.2.7.7-3.2z"/></svg>Note</button>
+    </div>
+    <div class="scroll" id="scroll">
+      <div class="head"><div class="t">Anansi and the sky god</div><div class="m" id="meta"></div></div>
+      <div class="rows" id="rows"></div>
+    </div>
+    <div class="foot"><span class="clock" id="clock"></span><span style="color:var(--muted)">Recording</span><span class="msg" id="msg"></span></div>
+  </div>
+
+  <div class="sec">
+    <h2>What Claude gets when you copy</h2>
+    <p class="lead">Notes go along in Copy, Export and the Claude connector, right under the line they belong to. This box updates as you add notes above.</p>
+    <pre class="copybox" id="copybox"></pre>
+  </div>
+
+  <div class="sec">
+    <h2>How it works</h2>
+    <ul class="notes">
+      <li><b>Where a note sits</b><span>Right under its line, a bit smaller, with a pencil in front and a warmer color, so it never looks like something that was said.</span></li>
+      <li><b>Three ways to add one</b><span>Right-click a line and pick Add note. The Note button in the toolbar. Or ⇧⌘N, which notes the line being said right now.</span></li>
+      <li><b>Typing while words arrive</b><span>The transcript stops scrolling while you type, and your line and note stay put. New lines keep getting added below.</span></li>
+      <li><b>Change or delete</b><span>Click a note to edit it. Empty it and press Enter to delete, or right-click the line and pick Delete note. Undo for a few seconds at the bottom.</span></li>
+      <li><b>One note per line</b><span>Simple on purpose. If you want to add more to a line that has a note, you just edit the note.</span></li>
+      <li><b>Counted at the top</b><span>The header says how many notes the class has, next to the markers.</span></li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function () {
+  var PEN = '<svg viewBox="0 0 16 16"><path d="M11 2.5l2.5 2.5L6 12.5l-3.2.7.7-3.2z"/></svg>';
+  var SCRIPT = ("He names the price, which is four things nobody has ever caught. The first is the python, the second is the leopard, then the hornets, and last the fairy nobody can see. " +
+    "Now why does a small spider think he can do what kings could not? Talk to the person next to you for one minute. " +
+    "Okay, eyes up here. I am putting the essay question on the board, copy it down exactly. " +
+    "Kweku Tsin is his son, and he shows up later in the story. Keep that name in your notes. ").split(" ").filter(Boolean);
+  var s = {
+    secs: 724, wi: 0, nextId: 5, editing: null, msg: null, timer: 0, menu: null,
+    lines: [
+      { id: 1, t: 601, who: "Mr. Yurt", text: "Okay, books open to page forty one please.", note: "" },
+      { id: 2, t: 634, who: "Mr. Yurt", text: "Today we carry on with Anansi and the sky god from last week.", note: "On the board: Anansi = spider, trickster. Nyankupon = sky god." },
+      { id: 3, t: 671, who: "Speaker 2", text: "Is this going to be on the quiz?", note: "" },
+      { id: 4, t: 689, who: "Mr. Yurt", text: "So Anansi goes to the sky god and asks to buy his stories. Nyankupon laughs at him, because kings have tried and failed.", note: "" }
+    ]
+  };
+  var rows = document.getElementById("rows"), scroll = document.getElementById("scroll"), win = document.getElementById("win");
+  function clock(t) { var h = 10, m = 5 + Math.floor(t / 60); return h + ":" + (m < 10 ? "0" : "") + m; }
+  function timer(t) { var m = Math.floor(t / 60), x = t % 60; return (m < 10 ? "0" : "") + m + ":" + (x < 10 ? "0" : "") + x; }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function esc(x) { return x.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+  function say(text, undo) {
+    clearTimeout(s.timer); s.msg = { text: text, undo: undo };
+    s.timer = setTimeout(function () { s.msg = null; drawFoot(); }, 7000); drawFoot();
+  }
+  function drawFoot() {
+    document.getElementById("clock").textContent = timer(s.secs);
+    var n = s.lines.filter(function (l) { return l.note; }).length;
+    document.getElementById("meta").textContent = "Started 10:05, " + Math.floor(s.secs / 60) + " min so far. 1 marker" + (n ? ", " + n + " note" + (n === 1 ? "" : "s") : "") + ".";
+    var m = document.getElementById("msg"); m.replaceChildren();
+    if (s.msg) {
+      m.append(el("span", "", esc(s.msg.text)));
+      if (s.msg.undo) { var u = s.msg.undo, b = el("button", "link", "Undo"); b.type = "button"; b.onclick = function () { s.msg = null; u(); draw(); }; m.append(b); }
+    }
+    document.getElementById("copybox").textContent = s.lines.slice(-5).map(function (l) {
+      return "[" + clock(l.t) + "] " + l.who + ": " + l.text + (l.note ? "\n        (Note: " + l.note + ")" : "");
+    }).join("\n");
+  }
+  function draw() {
+    var atBottom = scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 40;
+    s.lines.forEach(function (l, i) {
+      var r = rows.children[i];
+      if (!r) {
+        r = el("div", "row"); r.dataset.id = l.id;
+        r.append(el("div", "time", clock(l.t)), el("div", "txt"));
+        r.children[1].oncontextmenu = function (e) { e.preventDefault(); openMenu(l, e); };
+        var hold; r.children[1].ontouchstart = function (e) { hold = setTimeout(function () { openMenu(l, e.touches[0]); }, 500); };
+        r.children[1].ontouchend = r.children[1].ontouchmove = function () { clearTimeout(hold); };
+        rows.append(r);
+      }
+      var html = "<b>" + esc(l.who) + ":</b> " + esc(l.text);
+      if (r.children[1].dataset.h !== html) { r.children[1].dataset.h = html; r.children[1].innerHTML = html; }
+      var want = s.editing === l.id ? "edit" : (l.note ? "note:" + l.note : "none");
+      if (r.dataset.n !== want) {
+        r.dataset.n = want;
+        while (r.children.length > 2) r.lastChild.remove();
+        if (want === "edit") r.append(editor(l));
+        else if (l.note) {
+          var b = el("button", "nt", PEN + "<span>" + esc(l.note) + "</span>"); b.type = "button"; b.title = "Click to change this note";
+          b.onclick = function () { start(l); }; r.append(b);
+        }
+      }
+    });
+    drawFoot();
+    if (atBottom && s.editing == null) scroll.scrollTop = scroll.scrollHeight;
+  }
+  function editor(l) {
+    var wrap = el("div", "ne"), f = el("div", "f", PEN), ta = el("textarea");
+    ta.id = "note-edit"; ta.rows = 1; ta.value = l.note; ta.placeholder = "What the mic can't hear, like what's on the board"; ta.setAttribute("aria-label", "Note for this line");
+    var fit = function () { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+    ta.oninput = fit;
+    ta.onkeydown = function (e) {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finish(l, true); }
+      if (e.key === "Escape") { e.preventDefault(); finish(l, false); }
+    };
+    ta.onblur = function () { if (s.editing === l.id) finish(l, true); };
+    f.append(ta); wrap.append(f, el("small", "", "Enter saves. Esc cancels. Empty deletes the note."));
+    setTimeout(function () { fit(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
+    return wrap;
+  }
+  function start(l) {
+    closeMenu();
+    if (s.editing != null && s.editing !== l.id) { var cur = s.lines.find(function (x) { return x.id === s.editing; }); if (cur) finish(cur, true); }
+    s.editing = l.id; draw();
+    var r = rows.querySelector('[data-id="' + l.id + '"]'); if (r) r.scrollIntoView({ block: "nearest" });
+  }
+  function finish(l, save) {
+    var ta = document.getElementById("note-edit"); s.editing = null;
+    if (save && ta) {
+      var old = l.note, now = ta.value.trim();
+      if (now !== old) {
+        l.note = now;
+        say(!now ? "Note deleted." : old ? "Note changed." : "Note added at " + clock(l.t) + ".", function () { l.note = old; });
+      }
+    }
+    draw();
+  }
+  function openMenu(l, at) {
+    closeMenu();
+    var m = el("div", "menu"), box = win.getBoundingClientRect();
+    function item(label, fn, key, dim) {
+      var b = el("button", dim ? "dim" : "", esc(label) + (key ? '<span class="k">' + key + "</span>" : "")); b.type = "button";
+      b.onclick = function () { closeMenu(); if (fn) fn(); }; m.append(b);
+    }
+    item("Copy this line", null, "", true); item("Edit line", null, "", true); m.append(el("hr"));
+    item(l.note ? "Edit note" : "Add note", function () { start(l); });
+    if (l.note) item("Delete note", function () { var old = l.note; l.note = ""; say("Note deleted.", function () { l.note = old; }); draw(); });
+    item("Add marker here", null, "", true); m.append(el("hr")); item("Delete line", null, "", true);
+    win.append(m);
+    var x = Math.min(at.clientX - box.left, box.width - m.offsetWidth - 8), y = Math.min(at.clientY - box.top, box.height - m.offsetHeight - 8);
+    m.style.left = Math.max(8, x) + "px"; m.style.top = Math.max(8, y) + "px"; s.menu = m;
+  }
+  function closeMenu() { if (s.menu) { s.menu.remove(); s.menu = null; } }
+  function noteNow() { start(s.lines[s.lines.length - 1]); }
+  function addWord() {
+    var w = SCRIPT[s.wi % SCRIPT.length]; s.wi++;
+    var last = s.lines[s.lines.length - 1];
+    if (/[.?!]$/.test(last.text) && last.text.length >= 60) {
+      s.lines.push({ id: s.nextId++, t: s.secs, who: /minute\.$|quiz\?$/.test(last.text) ? "Speaker 2" : "Mr. Yurt", text: w, note: "" });
+      if (s.lines.length > 40) { s.lines.shift(); rows.firstChild.remove(); }
+    } else last.text += " " + w;
+  }
+  document.getElementById("noteBtn").onclick = noteNow;
+  document.getElementById("flagBtn").onclick = function () { say("Marker added at " + clock(s.secs) + ".", function () {}); };
+  document.addEventListener("keydown", function (e) { if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "n") { e.preventDefault(); noteNow(); } });
+  document.addEventListener("pointerdown", function (e) { if (s.menu && !s.menu.contains(e.target)) closeMenu(); });
+  setInterval(function () { s.secs++; drawFoot(); }, 1000);
+  setInterval(function () { addWord(); draw(); }, 520);
+  draw(); scroll.scrollTop = scroll.scrollHeight;
+})();
+</script>
