@@ -56,6 +56,9 @@ struct ContentView: View {
                 .toolbar(removing: .sidebarToggle)
                 // The sidebar keeps at least 230 pt; the main area gives way
                 // instead (Ryan saw it squeezed under the window's edge).
+                // See the note on the detail column: never let the list's own
+                // height decide how tall the window's content is.
+                .frame(minHeight: 0, idealHeight: 300, maxHeight: .infinity)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
         } detail: {
             DetailView()
@@ -82,6 +85,14 @@ struct ContentView: View {
                         BottomBar()
                     }
                 }
+                // NavigationSplitView makes itself as tall as this column
+                // *wants* to be (title bar + content + bottom bar), not as tall
+                // as the window. On Ryan's Mac that was 692 pt in a 552 pt
+                // window, so the sidebar's top and bottom were outside it
+                // (0.1.115 layout details). Saying "I want little, I take what
+                // I'm given" makes the split view follow the window.
+                .frame(minWidth: 0, idealWidth: 400, maxWidth: .infinity,
+                       minHeight: 0, idealHeight: 300, maxHeight: .infinity)
         }
         .overlay {
             if model.showCommandMenu {
