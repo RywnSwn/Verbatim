@@ -251,3 +251,11 @@ bridge to it; a web view costs extra memory on an 8 GB Mac; Ryan turned
 Tauri down before for the web view feel. Plan: fix the redraw bugs, get
 Ryan's glitch list, do step 10. Look at this again only if glitches remain
 that SwiftUI itself causes.
+
+## Design pass (2026-11-12)
+Ryan approved the mockup (`docs/design/DesignPass.html`) and asked that
+both row styles be a setting, not a pick: Settings > Look has Glass/Solid
+and Soft boxes/Paper cards (soft is the default). Settings moved from top
+tabs to pages down the left (System Settings style), with new Look and
+Shortcuts pages, since General had grown too long. Sidebar left `List` so
+we control the row look; arrow keys, Delete and menus were rebuilt.

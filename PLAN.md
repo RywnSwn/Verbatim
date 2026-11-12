@@ -86,7 +86,8 @@ use the ux-planner skill; nothing built yet):
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
-Design pass mockup (2026-11-12, approved by Ryan, nothing built yet):
+Design pass mockup (2026-11-12, approved by Ryan, BUILT on branch
+`claude/design-pass`, not tested by Ryan yet, see "How the design pass works"):
 https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
 `docs/design/DesignPass.html`. What it shows:
 - Rows: each recording on its own borderless box, 3 pt apart. Two styles,
@@ -498,6 +499,52 @@ Ask Mr. Yurt before recording class.
   Pillow) was rejected by Ryan. Next time show a few options first; to
   add one, put `AppIcon.icns` in `Support/`, copy it in
   `scripts/build-app.sh`, and set `CFBundleIconFile` in Info.plist.
+
+## How the design pass works (2026-11-12)
+- Sidebar (`Views/SidebarView.swift`) is a ScrollView + VStack, not `List`:
+  List always paints its own selection highlight over our boxes. So we do
+  click (onTapGesture), arrow keys (`onKeyPress`, `visibleIDs`), Delete
+  (`onDeleteCommand`), right-click (row `.contextMenu`, empty space menu on
+  the ScrollView) ourselves.
+- Rows: `SidebarRow` draws the box from `RowLook` (soft: ink 4.5/8.5/15%,
+  cards: `Theme.card` + shadow, open card ink with paper text).
+- Drag: `.onDrag` (sets `SidebarDrag.shared.id`, the row shows as an empty
+  outline) + `LiftedRow` as the drag picture. macOS never says when a drag
+  is cancelled, so `SidebarDrag` watches `NSEvent.pressedMouseButtons` and
+  ends when the button is let go. Each group and Recents is one
+  `SidebarDropDelegate` zone: proposes `.move` (no green plus), lights up
+  (`DropHighlight`, "Move here"), folded group opens after 0.65 s, drop
+  moves and offers Undo via `offerLineUndo`. Delegate methods are
+  nonisolated + `MainActor.assumeIsolated` (works either way the SDK marks
+  DropDelegate).
+- Glass/solid: `SidebarLook`, solid = `Theme.sidebarSolid` behind the
+  scroll view. Reduce transparency forces solid (the CI Mac has it on, so
+  smoke screenshots always show solid; glass only on Ryan's Mac).
+- Settings (`Views/SettingsView.swift`): NavigationSplitView with
+  `SettingsPage` list, every page a `.formStyle(.grouped)` Form, first
+  section header is `PageHeader` (lede + first group name). Two-Text
+  labels give the grey explanation under a row. New pages: Look
+  (`LookSettings`, tiles `LookTile`), Shortcuts (`ShortcutSettings`).
+  Storage has `SpaceBar`.
+- Smoke test also opens Settings (General, Look, Transcription) and
+  relaunches with solid + cards.
+- Known small thing: Transcription shows the word list helper download
+  twice (inside the speech model line and its own row). Was like that
+  before.
+
+## Design pass test list for Ryan
+1. Recordings each sit on a light box. Pointer over one: darker. The open
+   one: darkest, name bolder.
+2. Settings (⌘,) > Look: Solid, then Glass. Paper cards, then Soft boxes.
+   The sidebar changes right away.
+3. Drag a recording onto another group: it lifts, a gap stays, the group
+   lights up and says "Move here", no green plus. Drop: "Moved to ... Undo"
+   at the bottom. Click Undo.
+4. Drag, then press Esc or let go somewhere empty: it goes back.
+5. Hold a drag over a folded group for a moment: it opens.
+6. Click a recording, then ↑ / ↓ keys move through the list. Right-click
+   still has Rename, Move to Group, Delete.
+7. Look through every Settings page. Anything cut off or odd?
 
 ## How transcript tools work (step 6)
 - `Model/TranscriptTools.swift`: `shownLines(id)` = checked lines + live

@@ -13,8 +13,8 @@ UX matters a lot to him. He hates apps that don't consider the user.
 ## Current state
 Steps 1 to 11 merged, plus the in-app player and audio shrink after Stop
 (5c, 6, 7, 7b, 7c, 8, 9, 10 and 2b not fully tested by Ryan yet).
-Next: a design pass Ryan asked for (sidebar look, drag, Settings), mockup
-first. See `PLAN.md` for build order and progress,
+Design pass (sidebar boxes, drag, glass or solid, Settings pages) built on
+`claude/design-pass`, waiting for Ryan's test. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).
