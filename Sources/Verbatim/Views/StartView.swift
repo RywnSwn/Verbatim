@@ -6,6 +6,15 @@ struct StartView: View {
     @Environment(RecorderModel.self) private var model
 
     var body: some View {
+        // Fits: centered. Window too short: it scrolls instead of being cut off.
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView { content.frame(maxWidth: .infinity) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var content: some View {
         VStack(spacing: 28) {
             VStack(spacing: 26) {
                 VStack(spacing: 0) {
@@ -20,7 +29,7 @@ struct StartView: View {
                 .minimumScaleFactor(0.6)
 
                 WaveToWords()
-                    .frame(maxWidth: 620)
+                    .frame(minWidth: 300, maxWidth: 620)
                     .frame(height: 40)
                     .accessibilityHidden(true)
 
@@ -47,10 +56,9 @@ struct StartView: View {
                     LiveModelStatusLine()
                 }
             }
-            .frame(maxWidth: 460, alignment: .leading)
+            .frame(minWidth: 300, maxWidth: 460, alignment: .leading)
         }
         .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

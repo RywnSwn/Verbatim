@@ -34,7 +34,12 @@ struct DetailView: View {
     @Environment(RecorderModel.self) private var model
 
     var body: some View {
-        Group {
+        // GeometryReader: the main area takes the space the window gives it and
+        // never asks for more. Without it, a screen that wants to be taller
+        // than the window stretches the whole window content, and the top
+        // and bottom of the sidebar end up outside the window.
+        GeometryReader { _ in
+          Group {
             if model.showingDeleted {
                 RecentlyDeletedView()
             } else if let id = model.selection, let info = model.recordings.first(where: { $0.id == id }) {
@@ -48,8 +53,9 @@ struct DetailView: View {
             } else {
                 StartView()
             }
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: model.selection) {
             model.searchText = ""
             // Audio belongs to the transcript on screen; don't keep playing behind another one.

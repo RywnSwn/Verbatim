@@ -39,6 +39,14 @@ window. Rule from now on: a view that reads `elapsed`, `levels` or
 has not said exactly which glitches he sees: ask him for a list (what he
 did, what he saw) and make that the start of step 10. Tauri: see
 `DECISIONS.md`, not decided by Ryan yet.
+Same day, second fix: the first test build (v0.1.100) made the sidebar
+look empty. Ryan's clue: before, the top and bottom of the sidebar were
+outside the window until he resized it. Cause: a main-area screen that
+wants more height than the window stretches the whole split view, and the
+sidebar is centered in that taller space. Making the start screen's widths
+flexible made its wanted height huge. Fix: `DetailView` sits in a
+`GeometryReader` (never asks for more than the window gives) and the start
+screen scrolls when the window is too short. Keep that `GeometryReader`.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
