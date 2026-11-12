@@ -39,9 +39,9 @@ searched all lines). Rule from now on: a view that reads `elapsed`,
 `DetailView` now sits in a `GeometryReader`, so a main-area screen that
 wants more height than the window can't stretch the split view and push
 the sidebar's top and bottom outside the window (Ryan saw that). Keep it.
-Mistake to avoid: this chat first branched from `main` (old design) and
-Ryan got a test build without step 10. Step 10 is NOT on `main` yet:
-check `git branch -r` before starting. Not tested by Ryan yet. Ask him for
+Mistake to avoid: this chat first branched from `main` when step 10 was
+still on its own branch, and Ryan got a test build with the old design.
+Check `git branch -r` for unmerged work before starting. Not tested by Ryan yet. Ask him for
 a glitch list (what he did, what he saw). Tauri: see `DECISIONS.md`, not
 decided by Ryan yet.
 Same day: 0.1.102 crashed for Ryan when he clicked the sidebar button
@@ -70,13 +70,15 @@ maxHeight: .infinity)` in `ContentView` (keep these). The smoke test now
 fails if the split view's height differs from the window's. Help > Copy
 Layout Details (⌃⌘L, `Views/LayoutDetails.swift`) stays: ask Ryan for it
 whenever something is in the wrong place. His menu bar hides Help behind
-the notch, so tell him the shortcut. Ryan has not confirmed 0.1.117 yet.
+the notch, so tell him the shortcut. Ryan confirmed it ("finally") and asked to merge: step 10 and these fixes
+are on `main` since 2026-11-12 (RywnSwn/Verbatim#19 into #18 into main).
 
 Ryan's asks on 2026-11-12 for the NEXT chat (design pass, mockup first,
 use the ux-planner skill; nothing built yet):
 1. Sidebar can be opaque: a Settings choice, glass or solid.
-2. Recordings in the sidebar get an outline. Not clear yet whether every
-   row is a thin rounded card or only the selected one: ask him.
+2. Recordings in the sidebar are hard to tell apart. Ryan (asked, same
+   day): "a little light boxing" on each row, a light tint when the pointer
+   hovers a row, and the recording whose transcript is open is highlighted.
 3. Dragging a recording should feel like holding it: the row lifts and
    follows the pointer, a move, no green plus badge (the plus is macOS
    saying "copy").
