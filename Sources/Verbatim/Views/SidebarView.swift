@@ -5,96 +5,74 @@ import UniformTypeIdentifiers
 /// Step 10: like the sidebar in Claude. Groups (one per class) with an icon
 /// and a + to record right in them, then Recents for everything not in a
 /// group. Right-click empty space for New Group; right-click a recording to
-/// move it, or drag it onto a group (its name or any recording in it).
-/// Dragged out of Verbatim (to Claude, Finder, Notes) a recording becomes
-/// a Markdown file of its transcript.
+/// move it, or drag it onto a group. Dragged out of Verbatim (to Claude,
+/// Finder, Notes) a recording becomes a Markdown file of its transcript.
+///
+/// Design pass (2026-11-12): our own scrolling list instead of `List`, because
+/// `List` always paints its own selection highlight over the rows. Each
+/// recording sits on its own box (Settings > Look: soft boxes or paper
+/// cards), darker under the pointer, clearly marked when open. Dragging
+/// lifts the row, leaves a gap where it was, lights up the group under the
+/// pointer, and shows "Moved to X. Undo" after the drop. Arrow keys, Delete
+/// and right-click work like before.
 struct SidebarView: View {
     @Environment(RecorderModel.self) private var model
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @AppStorage(SidebarLook.key) private var sidebarLook: SidebarLook = .glass
+    @AppStorage(RowLook.key) private var rowLook: RowLook = .soft
+    @AppStorage("recentsCollapsed") private var recentsCollapsed = false
     @State private var renaming: RecordingInfo?
     @State private var newTitle = ""
     @State private var groupDraft = ""
     @State private var iconFor: UUID?
-    @AppStorage("recentsCollapsed") private var recentsCollapsed = false
+    @FocusState private var focused: Bool
 
     private var store: GroupStore { .shared }
+    private var drag: SidebarDrag { .shared }
+    private var solid: Bool { sidebarLook == .solid || reduceTransparency }
 
     var body: some View {
-        @Bindable var model = model
-        List(selection: $model.selection) {
-            // Inside the list (not a top inset), so they sit below the window's
-            // buttons instead of under them (Ryan saw them overlap on macOS 26).
-            Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                // Inside the scroll area (not a top inset), so they sit below
+                // the window's buttons instead of under them.
                 NewRecordingButton()
                 SidebarAction(title: "Add a Voice Memo", icon: "waveform.badge.plus", shortcut: "⌘O",
                               help: "Pick a Voice Memo or other recording to turn into text. Or drop one anywhere.") {
                     model.chooseFilesToImport()
                 }
                 RecentlyDeletedButton()
-            }
-            .selectionDisabled()
-            .listRowInsets(EdgeInsets(top: 0, leading: 2, bottom: 0, trailing: 2))
 
-            // A line between the actions and the groups, like Claude's sidebar.
-            Divider()
-                .padding(.vertical, 6)
-                .selectionDisabled()
-                .listRowInsets(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
+                Divider()
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
 
-            // Each group is a fold-down zone: bold name and arrow, its
-            // recordings indented under it. Not the list's own folding, which
-            // only shows an arrow on hover at the far side.
-            ForEach(store.groups) { group in
-                Section {
-                    if !group.collapsed {
-                        let members = model.recordings.filter { $0.groupID == group.id }
-                        if members.isEmpty {
-                            Text(model.isBusy ? "Empty. Drag a recording here." : "Empty. Press + or drag one here.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .padding(.leading, 22)
-                                .selectionDisabled()
-                                .dropDestination(for: RecordingDrag.self) { items, _ in move(items, to: group.id) }
-                        }
-                        ForEach(members) { info in
-                            row(info, indent: true)
-                                .dropDestination(for: RecordingDrag.self) { items, _ in move(items, to: group.id) }
-                        }
-                    }
-                } header: {
-                    GroupHeader(group: group)
+                ForEach(store.groups) { group in
+                    groupSection(group)
                 }
+                recentsSection
             }
-
-            Section {
-                if !recentsCollapsed {
-                    let recents = model.recordings.filter { store.group($0.groupID) == nil }
-                    if model.recordings.isEmpty {
-                        Text("Your recordings will show up here.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .selectionDisabled()
-                    }
-                    ForEach(recents) { info in
-                        row(info, indent: false)
-                            .dropDestination(for: RecordingDrag.self) { items, _ in move(items, to: nil) }
-                    }
-                }
-            } header: {
-                RecentsHeader(collapsed: $recentsCollapsed)
-            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(.snappy(duration: 0.25), value: store.groups)
+            .animation(.snappy(duration: 0.25), value: model.recordings.map(\.groupID))
         }
-        .contextMenu(forSelectionType: UUID.self) { ids in
-            if let id = ids.first, ids.count == 1, let info = model.recordings.first(where: { $0.id == id }) {
-                recordingMenu(info)
-            } else if ids.isEmpty {
-                Button("New Group") { newGroup() }
-            }
+        // Right-click on empty space. Rows and group names have their own menus.
+        .contextMenu {
+            Button("New Group") { newGroup() }
         }
+        .focusable()
+        .focused($focused)
+        .focusEffectDisabled()
+        .onKeyPress(.upArrow) { step(-1) }
+        .onKeyPress(.downArrow) { step(1) }
         .onDeleteCommand {
-            if let id = model.selection { model.delete(id) }
+            if let id = model.selection, model.canDelete(id) { model.delete(id) }
         }
-        .animation(.snappy(duration: 0.25), value: store.groups)
+        .background {
+            if solid { Theme.sidebarSolid.ignoresSafeArea() }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Right-click empty space for a new group.")
@@ -113,7 +91,7 @@ struct SidebarView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             // Solid, so recordings scrolling past don't show through the text.
-            .background(.bar)
+            .background(solid ? AnyShapeStyle(Theme.sidebarSolid) : AnyShapeStyle(.bar))
         }
         .alert("Rename recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newTitle)
@@ -141,23 +119,76 @@ struct SidebarView: View {
         }
     }
 
-    private func move(_ items: [RecordingDrag], to groupID: UUID?) -> Bool {
-        for item in items { model.moveRecording(item.id, to: groupID) }
-        return !items.isEmpty
+    /// A group: bold name with its icon and +, then its recordings indented.
+    /// The whole block is the drop zone, and lights up while a recording
+    /// from somewhere else is held over it.
+    private func groupSection(_ group: RecordingGroup) -> some View {
+        let spot = SidebarSpot.group(group.id)
+        let members = model.recordings.filter { $0.groupID == group.id }
+        return VStack(alignment: .leading, spacing: 3) {
+            GroupHeader(group: group, isTarget: drag.target == spot)
+            if !group.collapsed {
+                if members.isEmpty {
+                    Text(model.isBusy ? "Empty. Drag a recording here." : "Empty. Press + or drag one here.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.leading, 26)
+                        .padding(.bottom, 4)
+                }
+                ForEach(members) { info in
+                    row(info)
+                        .padding(.leading, 14)
+                }
+            }
+        }
+        .padding(3)
+        .background { DropHighlight(on: drag.target == spot) }
+        .onDrop(of: [.verbatimRecording], delegate: SidebarDropDelegate(spot: spot, model: model, drag: drag))
     }
 
-    private func newGroup() {
-        let group = store.add()
-        model.renameGroupRequest = group.id
+    private var recentsSection: some View {
+        let recents = model.recordings.filter { store.group($0.groupID) == nil }
+        return VStack(alignment: .leading, spacing: 3) {
+            RecentsHeader(collapsed: $recentsCollapsed, isTarget: drag.target == .recents)
+            if !recentsCollapsed {
+                if model.recordings.isEmpty {
+                    Text("Your recordings will show up here.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 8)
+                }
+                ForEach(recents) { info in
+                    row(info)
+                }
+            }
+        }
+        .padding(3)
+        .background { DropHighlight(on: drag.target == .recents) }
+        .onDrop(of: [.verbatimRecording], delegate: SidebarDropDelegate(spot: .recents, model: model, drag: drag))
     }
 
-    private func row(_ info: RecordingInfo, indent: Bool) -> some View {
-        SidebarRow(info: info, isLive: info.id == model.currentID)
-            .padding(.leading, indent ? 22 : 0)
-            .tag(info.id)
-            .draggable(RecordingDrag(id: info.id)) {
-                Label(info.title, systemImage: "doc.text")
-                    .padding(6)
+    private func row(_ info: RecordingInfo) -> some View {
+        SidebarRow(info: info,
+                   isLive: info.id == model.currentID,
+                   isOpen: info.id == model.selection && !model.showingDeleted,
+                   isHeld: drag.id == info.id,
+                   look: rowLook)
+            .onTapGesture {
+                model.selection = info.id
+                focused = true
+            }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { model.selection = info.id }
+            .contextMenu { recordingMenu(info) }
+            .onDrag {
+                drag.began(info.id)
+                let provider = NSItemProvider()
+                provider.register(RecordingDrag(id: info.id))
+                provider.suggestedName = info.title
+                return provider
+            } preview: {
+                LiftedRow(title: info.title, meta: info.id == model.currentID ? "Recording now" : SidebarRow.meta(info))
             }
             .popover(isPresented: Binding(get: { iconFor == info.id }, set: { if !$0 { iconFor = nil } }),
                      arrowEdge: .trailing) {
@@ -165,6 +196,35 @@ struct SidebarView: View {
                     model.setIcon(info.id, icon, color: color)
                 }
             }
+    }
+
+    /// The recordings you can see, top to bottom, for the arrow keys.
+    private var visibleIDs: [UUID] {
+        var ids: [UUID] = []
+        for group in store.groups where !group.collapsed {
+            ids += model.recordings.filter { $0.groupID == group.id }.map(\.id)
+        }
+        if !recentsCollapsed {
+            ids += model.recordings.filter { store.group($0.groupID) == nil }.map(\.id)
+        }
+        return ids
+    }
+
+    private func step(_ by: Int) -> KeyPress.Result {
+        let ids = visibleIDs
+        guard !ids.isEmpty else { return .ignored }
+        guard let current = model.selection, let i = ids.firstIndex(of: current) else {
+            model.selection = by > 0 ? ids.first : ids.last
+            return .handled
+        }
+        let next = i + by
+        if ids.indices.contains(next) { model.selection = ids[next] }
+        return .handled
+    }
+
+    private func newGroup() {
+        let group = store.add()
+        model.renameGroupRequest = group.id
     }
 
     @ViewBuilder private func recordingMenu(_ info: RecordingInfo) -> some View {
@@ -219,13 +279,151 @@ struct SidebarView: View {
     }
 }
 
+/// Where a held recording can land: a group, or Recents (no group).
+enum SidebarSpot: Hashable {
+    case group(UUID)
+    case recents
+
+    var groupID: UUID? {
+        if case .group(let id) = self { return id }
+        return nil
+    }
+}
+
+/// The recording being dragged, and the place it's over. One for the app.
+@MainActor
+@Observable
+final class SidebarDrag {
+    static let shared = SidebarDrag()
+
+    /// The row being held: it shows as a gap while this is set.
+    private(set) var id: UUID?
+    /// The group (or Recents) lit up under the pointer.
+    var target: SidebarSpot?
+    /// Kept after the drag ends, for a drop that arrives late.
+    private(set) var lastID: UUID?
+    private var watch: Task<Void, Never>?
+    private var spring: Task<Void, Never>?
+
+    /// Called when a row starts being dragged. macOS doesn't tell SwiftUI
+    /// when a drag is cancelled or dropped outside Verbatim, so this
+    /// watches the mouse button and ends the drag when it's let go.
+    func began(_ id: UUID) {
+        lastID = id
+        // Not in the middle of macOS starting the drag.
+        Task { @MainActor in
+            self.id = id
+            self.watch?.cancel()
+            self.watch = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    if NSEvent.pressedMouseButtons & 1 == 0 {
+                        self?.end()
+                        return
+                    }
+                }
+            }
+        }
+    }
+
+    func end() {
+        watch?.cancel()
+        spring?.cancel()
+        id = nil
+        target = nil
+    }
+
+    /// Resting on a folded group for a moment opens it, like Finder.
+    func springLoad(_ groupID: UUID) {
+        spring?.cancel()
+        spring = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(650))
+            guard !Task.isCancelled, let self, self.target == .group(groupID) else { return }
+            withAnimation(.snappy(duration: 0.22)) {
+                GroupStore.shared.update(groupID) { $0.collapsed = false }
+            }
+        }
+    }
+
+    func stopSpring() { spring?.cancel() }
+}
+
+/// A group (or Recents) as a drop zone. Proposes "move", so macOS shows no
+/// green plus inside Verbatim (the plus means "copy").
+struct SidebarDropDelegate: DropDelegate {
+    let spot: SidebarSpot
+    let model: RecorderModel
+    let drag: SidebarDrag
+
+    /// The held recording isn't already here.
+    private var isNewPlace: Bool {
+        guard let id = drag.id ?? drag.lastID, let info = model.info(id) else { return false }
+        return GroupStore.shared.group(info.groupID)?.id != spot.groupID
+    }
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.verbatimRecording])
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard isNewPlace else { return }
+        drag.target = spot
+        if let id = spot.groupID, GroupStore.shared.group(id)?.collapsed == true {
+            drag.springLoad(id)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        if isNewPlace, drag.target != spot { drag.target = spot }
+        return DropProposal(operation: isNewPlace ? .move : .forbidden)
+    }
+
+    func dropExited(info: DropInfo) {
+        if drag.target == spot {
+            drag.target = nil
+            drag.stopSpring()
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer { drag.end() }
+        guard isNewPlace, let id = drag.id ?? drag.lastID, let rec = model.info(id) else { return false }
+        let before = GroupStore.shared.group(rec.groupID)?.id
+        withAnimation(.snappy(duration: 0.25)) {
+            model.moveRecording(id, to: spot.groupID)
+            if let g = spot.groupID { GroupStore.shared.update(g) { $0.collapsed = false } }
+        }
+        let place = spot.groupID.flatMap { GroupStore.shared.group($0)?.name } ?? "Recents"
+        model.offerLineUndo("Moved \(rec.title) to \(place).") { [model] in
+            withAnimation(.snappy(duration: 0.25)) { model.moveRecording(id, to: before) }
+        }
+        return true
+    }
+}
+
+/// The tint and outline on a group while a recording is held over it.
+struct DropHighlight: View {
+    let on: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Theme.accent.opacity(on ? 0.14 : 0))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Theme.accent.opacity(on ? 0.55 : 0), lineWidth: 1.5)
+            }
+            .animation(.easeOut(duration: 0.12), value: on)
+    }
+}
+
 /// A group's name in the sidebar: its icon (click to change), the name, and +
-/// to start a recording in it. Drop a recording on it to move it in.
+/// to start a recording in it. While a recording is held over the group,
+/// the + gives way to "Move here".
 struct GroupHeader: View {
     @Environment(RecorderModel.self) private var model
     let group: RecordingGroup
+    var isTarget = false
     @State private var picking = false
-    @State private var targeted = false
 
     private var store: GroupStore { .shared }
 
@@ -272,28 +470,27 @@ struct GroupHeader: View {
 
             Spacer(minLength: 4)
 
-            Button {
-                Task { await model.start(in: group.id) }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 20, height: 20)
-                    .contentShape(Rectangle())
+            if isTarget {
+                MoveHereLabel()
+            } else {
+                Button {
+                    Task { await model.start(in: group.id) }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .disabled(model.isBusy)
+                .help(model.isBusy ? "Stop the recording first" : "New recording in \(group.name)")
+                .accessibilityLabel("New recording in \(group.name)")
             }
-            .buttonStyle(.borderless)
-            .disabled(model.isBusy)
-            .help(model.isBusy ? "Stop the recording first" : "New recording in \(group.name)")
-            .accessibilityLabel("New recording in \(group.name)")
         }
+        .frame(minHeight: 22)
         .padding(.vertical, 2)
         .padding(.horizontal, 4)
-        .background(targeted ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
-        .padding(.top, 8)
-        .dropDestination(for: RecordingDrag.self) { items, _ in
-            for item in items { model.moveRecording(item.id, to: group.id) }
-            if !items.isEmpty, group.collapsed { store.update(group.id) { $0.collapsed = false } }
-            return !items.isEmpty
-        } isTargeted: { targeted = $0 }
+        .padding(.top, 5)
         .contextMenu {
             Button("New Recording Here") { Task { await model.start(in: group.id) } }
                 .disabled(model.isBusy)
@@ -314,9 +511,8 @@ struct GroupHeader: View {
 /// "Recents": recordings not in any group, folds like a group. Dropping a
 /// recording here takes it out of its group.
 struct RecentsHeader: View {
-    @Environment(RecorderModel.self) private var model
     @Binding var collapsed: Bool
-    @State private var targeted = false
+    var isTarget = false
 
     var body: some View {
         Button {
@@ -331,18 +527,15 @@ struct RecentsHeader: View {
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(collapsed ? -90 : 0))
                 Spacer()
+                if isTarget { MoveHereLabel() }
             }
+            .frame(minHeight: 22)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .padding(.vertical, 2)
         .padding(.horizontal, 4)
-        .padding(.top, 8)
-        .background(targeted ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
-        .dropDestination(for: RecordingDrag.self) { items, _ in
-            for item in items { model.moveRecording(item.id, to: nil) }
-            return !items.isEmpty
-        } isTargeted: { targeted = $0 }
+        .padding(.top, 5)
         .accessibilityLabel("Recents, \(collapsed ? "folded" : "open")")
     }
 }
@@ -358,32 +551,93 @@ struct LiveRowMeta: View {
     }
 }
 
+/// Shown in a group's header while a recording is held over it.
+struct MoveHereLabel: View {
+    var body: some View {
+        Text("Move here")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Theme.accent)
+            .padding(.trailing, 4)
+    }
+}
+
+/// One recording in the sidebar, on its own box (design pass). The box gets
+/// darker under the pointer and is clearly marked when the recording is open.
+/// While it's being dragged it shows as an empty outline: the gap it left.
 struct SidebarRow: View {
     let info: RecordingInfo
     let isLive: Bool
+    let isOpen: Bool
+    var isHeld = false
+    let look: RowLook
+    @State private var hovering = false
+
+    /// Paper cards: the open card is filled with ink, so its text is paper.
+    private var inverted: Bool { look == .cards && isOpen && !isHeld }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if let icon = info.icon {
-                ItemIcon(name: icon, color: info.iconColor ?? .ink, size: 11)
+            if isLive {
+                Image(systemName: "waveform")
+                    .font(.system(size: 11, weight: .semibold))
+                    .symbolEffect(.variableColor.iterative, options: .repeating)
                     .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+                    .accessibilityHidden(true)
+            } else if let icon = info.icon {
+                Group {
+                    if inverted {
+                        // On the ink card the icon's own color would vanish.
+                        Image(systemName: icon)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.paper)
+                            .frame(width: 17, height: 17)
+                    } else {
+                        ItemIcon(name: icon, color: info.iconColor ?? .ink, size: 11)
+                    }
+                }
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(info.title)
-                    .font(.body.weight(.medium))
+                    .font(.body.weight(isOpen && look == .soft ? .semibold : .medium))
                     .lineLimit(1)
                 Group {
-                    if isLive { LiveRowMeta() } else { Text(meta) }
+                    if isLive { LiveRowMeta() } else { Text(Self.meta(info)) }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             }
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .foregroundStyle(inverted ? Theme.paper : Theme.ink)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .opacity(isHeld ? 0 : 1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background { box }
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: hovering)
     }
 
-    private var meta: String {
+    @ViewBuilder private var box: some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        if isHeld {
+            shape.strokeBorder(Theme.ink.opacity(0.13), lineWidth: 1.5)
+        } else {
+            switch look {
+            case .soft:
+                shape.fill(Theme.ink.opacity(isOpen ? 0.15 : hovering ? 0.085 : 0.045))
+            case .cards:
+                shape.fill(isOpen ? Theme.ink : Theme.card)
+                    .shadow(color: .black.opacity(hovering ? 0.14 : 0.09),
+                            radius: hovering ? 3 : 1, y: hovering ? 1.5 : 0.5)
+            }
+        }
+    }
+
+    static func meta(_ info: RecordingInfo) -> String {
         let day = RecorderModel.dayTitle(info.createdAt)
         // Named after the day already: say the time instead of the day twice.
         let when = info.title.contains(day) ? info.createdAt.formatted(date: .omitted, time: .shortened) : day
@@ -394,6 +648,35 @@ struct SidebarRow: View {
             return when + (left <= 1 ? ", audio deletes tomorrow" : ", audio deletes in \(left) days")
         }
         return base
+    }
+}
+
+/// The picture that follows the pointer while a recording is dragged: the
+/// row as a card, lifted (a bit bigger, tilted, with a shadow). Padding
+/// leaves room for the shadow. No environment: macOS draws it on its own.
+struct LiftedRow: View {
+    let title: String
+    let meta: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.body.weight(.medium))
+                .lineLimit(1)
+            Text(meta)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .foregroundStyle(Theme.ink)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(width: 220, alignment: .leading)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .shadow(color: .black.opacity(0.22), radius: 10, y: 6)
+        .scaleEffect(1.04)
+        .rotationEffect(.degrees(-1.6))
+        .padding(18)
     }
 }
 
