@@ -1,4 +1,5 @@
 import FluidAudio
+import CoreML
 import Foundation
 import Observation
 
@@ -24,10 +25,18 @@ actor SpeakerEngine {
 
     var isLoaded: Bool { diarizer != nil }
 
+    /// CPU and Neural Engine, never the graphics chip. FluidAudio's default
+    /// for this model is "all", so it could run on the GPU, which also draws
+    /// the window: Ryan saw the timer, waveform and text lag while recording
+    /// and catch up on Pause (2026-11-12). Parakeet and the word spotter
+    /// already stay off the GPU.
+    static let computeUnits: MLComputeUnits = .cpuAndNeuralEngine
+
     /// Downloads the model (picks up where it stopped), loads it once so macOS
     /// optimises it for this Mac, then frees the memory.
     static func downloadAndPrepare(progress: @escaping @Sendable (_ fraction: Double, _ preparing: Bool) -> Void) async throws {
-        let models = try await SortformerModels.loadFromHuggingFace(config: config, cacheDirectory: base) { p in
+        let models = try await SortformerModels.loadFromHuggingFace(config: config, cacheDirectory: base,
+                                                                   computeUnits: computeUnits) { p in
             switch p.phase {
             case .compiling: progress(1, true)
             default: progress(p.fractionCompleted, false)
@@ -43,7 +52,8 @@ actor SpeakerEngine {
     /// needs the internet.
     func load() async throws {
         guard diarizer == nil else { return }
-        let models = try await SortformerModels.loadFromHuggingFace(config: Self.config, cacheDirectory: Self.base)
+        let models = try await SortformerModels.loadFromHuggingFace(config: Self.config, cacheDirectory: Self.base,
+                                                                   computeUnits: Self.computeUnits)
         let d = SortformerDiarizer(config: Self.config)
         d.initialize(models: models)
         diarizer = d

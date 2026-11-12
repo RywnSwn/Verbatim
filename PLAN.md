@@ -532,6 +532,14 @@ Ask Mr. Yurt before recording class.
   twice (inside the speech model line and its own row). Was like that
   before.
 
+- Lag fix (same day, Ryan: "transcription at the start super laggy",
+  timer, waveform and text lag, all catch up on Pause): the speaker model
+  (Sortformer) used FluidAudio's default compute units `.all`, so it could
+  run on the GPU, which also draws the window. Now `.cpuAndNeuralEngine`
+  (`SpeakerEngine.computeUnits`), like Parakeet and the word spotter. Not
+  confirmed by Ryan yet. If it still lags: ask which version, whether it's
+  only the first minute, and try with Speaker labels' model missing.
+
 ## Design pass test list for Ryan
 1. Recordings each sit on a light box. Pointer over one: darker. The open
    one: darkest, name bolder.
