@@ -69,7 +69,8 @@ seed() {
   cat > "$base/groups.json" <<JSON
 {"formatVersion":1,"groups":[
  {"id":"$g1","name":"English 2026","icon":"book.closed","color":"blue","collapsed":false},
- {"id":"$g2","name":"World Studies 2026","icon":"globe.asia.australia","color":"green","collapsed":false}]}
+ {"id":"$g2","name":"World Studies 2026","icon":"globe.asia.australia","color":"green","collapsed":false},
+ {"id":"33333333-3333-4333-8333-333333333333","name":"Math","icon":"x.squareroot","color":"green","collapsed":true}]}
 JSON
   local i
   for i in 1 2 3 4 5 6 7 8 9; do
@@ -86,9 +87,17 @@ JSON
 }
 
 seed
+osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' || true
 launch
 check "at launch"
 osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose unix id is '"$APP_PID"')' || echo "no accessibility access"
+
+# Wide but short, like Ryan's window (about 1000 x 495): the sidebar's top
+# and bottom must stay inside the window.
+for size in "1000 500" "1000 540" "1000 600" "940 500" "1020 700"; do
+  set -- $size
+  resize "$1" "$2";  check "resize to $1x$2";  shot "short-$1x$2"
+done
 
 # Wide: sidebar starts shown.
 for size in "1200 780" "900 600"; do
@@ -118,7 +127,7 @@ while [ "$w" -le 870 ]; do
   show_sidebar; check "sweep show sidebar at $w"
   if [ $((w % 40)) -eq 0 ]; then shot "sweep-$w-shown"; fi
   hide_sidebar; check "sweep hide sidebar at $w"
-  w=$((w + 10))
+  w=$((w + 30))
 done
 
 # A recording open in the main area (click the first row), then the sidebar button.
