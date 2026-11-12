@@ -100,30 +100,65 @@ final class HitchMeter: @unchecked Sendable {
         if (try? process.run()) != nil { samplesTaken += 1 }
     }
 
-    /// The useful parts of the newest sample: what the main thread was in,
-    /// and the functions at the top of the list for all threads.
+    /// The useful parts of the newest sample: the whole main thread, then for
+    /// every thread that is inside Verbatim, FluidAudio or CoreML the deepest
+    /// frames (what it is waiting in), then the busiest functions overall.
     private func sampleText() -> String {
-        guard samplesTaken > 0 else { return "STALL SAMPLE: none taken (no stall over 1.5 s while recording since launch)" }
         guard let text = try? String(contentsOf: Self.sampleFile, encoding: .utf8) else {
-            return "STALL SAMPLE: \(samplesTaken) taken, but the file isn't there (yet). Wait 5 seconds and copy again."
+            return samplesTaken == 0
+                ? "STALL SAMPLE: none taken (no stall over 1.5 s while recording)"
+                : "STALL SAMPLE: \(samplesTaken) taken, but the file isn't there (yet). Wait 10 seconds and copy again."
         }
+        let made = (try? FileManager.default.attributesOfItem(atPath: Self.sampleFile.path)[.modificationDate] as? Date) ?? nil
+        let when = made.map { $0.formatted(date: .abbreviated, time: .standard) } ?? "?"
         let lines = text.components(separatedBy: "\n")
-        var out = ["STALL SAMPLE (\(samplesTaken) taken since launch, newest shown)"]
-        if let start = lines.firstIndex(where: { $0.contains("com.apple.main-thread") }) {
-            out.append("main thread:")
-            for line in lines[(start + 1)...].prefix(170) {
+        var out = ["STALL SAMPLE (written \(when); \(samplesTaken) taken since launch)"]
+
+        // Threads in the call graph: a header line ("  2468 Thread_123  DispatchQueue_1: ..."), then its frames.
+        let graphStart = (lines.firstIndex { $0.hasPrefix("Call graph:") } ?? -1) + 1
+        let graphEnd = lines.firstIndex { $0.hasPrefix("Total number in stack") || $0.hasPrefix("Sort by top of stack") } ?? lines.count
+        var threads: [(header: String, frames: [String])] = []
+        if graphStart > 0, graphStart < graphEnd {
+            for line in lines[graphStart..<graphEnd] {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard trimmed.hasPrefix("+") else { break }
-                out.append("  " + String(trimmed.prefix(150)))
+                guard !trimmed.isEmpty else { continue }
+                if trimmed.first?.isNumber == true, trimmed.contains("Thread_") {
+                    threads.append((trimmed, []))
+                } else if !threads.isEmpty {
+                    threads[threads.count - 1].frames.append(Self.clean(trimmed))
+                }
             }
         }
+        if threads.isEmpty { out.append("(no threads found in the file; send the file itself: \(Self.sampleFile.path))") }
+        for (i, thread) in threads.enumerated() {
+            if i == 0 {
+                out.append("FIRST THREAD (main): \(thread.header.prefix(120))")
+                out += thread.frames.prefix(260).map { "  " + $0 }
+            } else if thread.frames.contains(where: { $0.contains("Verbatim") || $0.contains("FluidAudio") || $0.contains("CoreML") || $0.contains("Espresso") }) {
+                out.append("THREAD: \(thread.header.prefix(120))")
+                out += thread.frames.suffix(14).map { "  " + $0 }
+            }
+            if out.count > 520 { break }
+        }
+        out.append("other threads: \(threads.count)")
         if let top = lines.firstIndex(where: { $0.hasPrefix("Sort by top of stack") }) {
             out.append("busiest, all threads:")
-            for line in lines[(top + 1)...].prefix(30) where !line.trimmingCharacters(in: .whitespaces).isEmpty {
-                out.append("  " + String(line.trimmingCharacters(in: .whitespaces).prefix(150)))
+            for line in lines[(top + 1)...].prefix(12) where !line.trimmingCharacters(in: .whitespaces).isEmpty {
+                out.append("  " + String(line.trimmingCharacters(in: .whitespaces).prefix(110)))
             }
         }
         return out.joined(separator: "\n")
+    }
+
+    /// "+   ! 2468 foo(bar)  (in Verbatim) + 123  [0x1023]" becomes "2468 foo(bar) (in Verbatim)".
+    private static func clean(_ frame: String) -> String {
+        var text = Substring(frame).drop { "+!:| ".contains($0) }
+        if let address = text.range(of: "  [0x") { text = text[..<address.lowerBound] }
+        var out = String(text)
+        if let offset = out.range(of: #"\) \+ \d+$"#, options: .regularExpression) {
+            out = String(out[..<offset.lowerBound]) + ")"
+        }
+        return String(out.replacingOccurrences(of: "  ", with: " ").prefix(150))
     }
 
     /// The numbers since the last report, then starts counting afresh.
