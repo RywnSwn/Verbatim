@@ -59,6 +59,31 @@ check() {
   fi
 }
 
+# Fake recordings and groups, so the sidebar has real rows like Ryan's.
+seed() {
+  local base="$HOME/Library/Application Support/Verbatim"
+  local g1="11111111-1111-4111-8111-111111111111" g2="22222222-2222-4222-8222-222222222222"
+  mkdir -p "$base/Recordings"
+  cat > "$base/groups.json" <<JSON
+{"formatVersion":1,"groups":[
+ {"id":"$g1","name":"English 2026","icon":"book.closed","color":"blue","collapsed":false},
+ {"id":"$g2","name":"World Studies 2026","icon":"globe.asia.australia","color":"green","collapsed":false}]}
+JSON
+  local i
+  for i in 1 2 3 4 5 6 7 8 9; do
+    local id="aaaaaaaa-aaaa-4aaa-8aaa-00000000000$i" group="null"
+    [ "$i" -le 3 ] && group="\"$g1\""
+    [ "$i" -ge 4 ] && [ "$i" -le 5 ] && group="\"$g2\""
+    mkdir -p "$base/Recordings/$id"
+    cat > "$base/Recordings/$id/recording.json" <<JSON
+{"formatVersion":1,"id":"$id","title":"Anansi and the sky god, part $i","createdAt":"2026-11-0${i}T03:05:00Z",
+ "endedAt":"2026-11-0${i}T03:52:00Z","state":"stopped","sampleRate":16000,"samples":45120000,"events":[],
+ "audioDeletedAt":"2026-11-0${i}T04:00:00Z","groupID":$group}
+JSON
+  done
+}
+
+seed
 launch
 check "at launch"
 osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose unix id is '"$APP_PID"')' || echo "no accessibility access"
@@ -82,6 +107,14 @@ for size in "800 600" "700 520" "700 420"; do
   show_sidebar;      check "show sidebar again at $tag"
   resize 1200 780;   check "grow with sidebar open from $tag"; shot "$tag-grown"
 done
+
+# A recording open in the main area (click the first row), then the sidebar button.
+resize 1000 700; show_sidebar
+click_at 110 190; sleep 2;  check "open a recording";               shot "recording-open"
+hide_sidebar;               check "hide sidebar with recording";    shot "recording-sidebar-hidden"
+show_sidebar;               check "show sidebar with recording";    shot "recording-sidebar-shown"
+resize 700 520;             check "narrow with recording";          shot "recording-narrow"
+show_sidebar;               check "show sidebar, narrow recording"; shot "recording-narrow-shown"
 
 kill "$APP_PID" 2>/dev/null || true
 echo "----- app.log (tail) -----"; tail -20 "$OUT/app.log"
