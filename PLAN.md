@@ -258,6 +258,24 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
   control right). Look holds sidebar (glass/solid), recordings (soft
   boxes/paper cards), text size, times, times in copies.
 
+## Merged to main (2026-11-12, late)
+`claude/claude-connector` (lag fixes, mini window, design pass, connector,
+gear menu, notes, diagnostics) and `claude/mini-window-crash` are in main.
+- 0.1.150 crashed opening the mini window while idle: the old
+  "VerbatimMiniWindow" autosaved frame (pre-redesign size) plus
+  `sizingOptions = [.preferredContentSize]` made AppKit and SwiftUI resize
+  the window in a loop (stack overflow in layout). Fix in 0.1.153: the mini
+  window sizes itself after layout (`MiniWindow.contentResized`), content is
+  `.fixedSize` vertically, only the top-left spot is saved
+  (`MiniWindowTopLeft`), the old key is removed. Smoke test seeds the old
+  key. Ryan tested 0.1.153: good.
+- Still open: does recording still freeze on 0.1.150+? (one Canvas
+  waveform, no rolling digits). Ryan has not said yet.
+- Connector works only in the Claude desktop app on Ryan's Mac. Ryan
+  mostly uses cloud Claude, where it can't reach his Mac. Idea offered, not
+  decided: save transcripts to a repo so cloud Claude can read them.
+- `claude/mini-crash-repro` is a throwaway branch: delete on GitHub.
+
 ## State of Ryan's three asks (2026-11-12, evening)
 All on branch `claude/claude-connector` (it holds the lag fix, the mini
 window, the design pass, the connector and the gear menu). Not in `main`,
