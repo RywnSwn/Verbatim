@@ -122,6 +122,16 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
    Everything stays on the Mac. Note DECISIONS.md "no AI chat inside the
    app": this is Verbatim as a tool for Claude, not chat in Verbatim.
 
+3. **Sidebar gear button** (small, do it first in the next chat): it shows
+   in the blue app tint (`SettingsLink` with `.borderless` in
+   `SidebarView`'s bottom bar). Ryan wants a better color (ink or
+   secondary, like the other sidebar icons). And clicking it should pop UP
+   a menu like Claude's account menu (his screenshot: Settings ⌘,, Usage,
+   Language, Get help, Send feedback, ...), so things are one click away.
+   No accounts in Verbatim, so pick what fits, for example: Settings ⌘,,
+   Shortcuts, Check for Updates, What's new, Get help / Send feedback
+   (opens GitHub issues), Copy Layout Details ⌃⌘L. Mockup first.
+
 ## Build order (one milestone per chat)
 
 Order is chosen so Ryan can test real accuracy at home early, before any
