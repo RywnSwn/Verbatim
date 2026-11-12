@@ -7,7 +7,7 @@ import SwiftUI
 /// General, Look (new), Transcription (step 10), Words (step 8), Voices
 /// (step 7c), Storage (step 9), Updates, Shortcuts (new).
 struct SettingsView: View {
-    @State private var page: SettingsPage? = .general
+    @Bindable private var nav = SettingsNav.shared
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage(SidebarLook.key) private var sidebarLook: SidebarLook = .glass
 
@@ -15,7 +15,7 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsPage.allCases, selection: $page) { p in
+            List(SettingsPage.allCases, selection: $nav.page) { p in
                 Label(p.title, systemImage: p.icon)
                     .tag(p)
             }
@@ -27,7 +27,7 @@ struct SettingsView: View {
             .navigationSplitViewColumnWidth(190)
         } detail: {
             Group {
-                switch page ?? .general {
+                switch nav.page ?? .general {
                 case .general: GeneralSettings()
                 case .look: LookSettings()
                 case .transcription: TranscriptionSettings()
@@ -40,7 +40,7 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle((page ?? .general).title)
+            .navigationTitle((nav.page ?? .general).title)
         }
         .frame(width: 740, height: 560)
     }
@@ -82,6 +82,16 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
 /// The top of a settings page: what the page is for, then the first group's
 /// name. Used as the first section's header, so it scrolls with the page.
+/// Which Settings page is showing. Shared, so the sidebar's gear menu can
+/// open Settings on a page (Shortcuts, Claude, Updates).
+@MainActor
+@Observable
+final class SettingsNav {
+    static let shared = SettingsNav()
+    var page: SettingsPage? = .general
+    private init() {}
+}
+
 struct PageHeader: View {
     let lede: String
     var first: String?

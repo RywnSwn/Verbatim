@@ -74,19 +74,13 @@ struct SidebarView: View {
             if solid { Theme.sidebarSolid.ignoresSafeArea() }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center) {
                 Text("Right-click empty space for a new group.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                SettingsLink {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 14))
-                }
-                .buttonStyle(.borderless)
-                .help("Settings (⌘,)")
-                .accessibilityLabel("Settings")
+                GearMenu()
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -807,4 +801,50 @@ extension UTType {
     /// Declared in Support/Info.plist (UTExportedTypeDeclarations).
     static let verbatimRecording = UTType(exportedAs: "com.rywnswn.verbatim.recording")
     static let markdownText = UTType(filenameExtension: "md", conformingTo: .plainText) ?? .plainText
+}
+
+/// The gear at the bottom of the sidebar (Ryan's ask): grey like the other
+/// sidebar icons instead of app blue, and it opens a menu so the useful
+/// things are one click away, like the account menu in Claude.
+struct GearMenu: View {
+    @Environment(\.openSettings) private var openSettings
+    @State private var hovering = false
+
+    var body: some View {
+        Menu {
+            Button { open(.general) } label: { Label("Settings…", systemImage: "gearshape") }
+            Button { open(.shortcuts) } label: { Label("Keyboard Shortcuts", systemImage: "keyboard") }
+            Button { open(.claude) } label: { Label("Connect to Claude", systemImage: "bubble.left.and.text.bubble.right") }
+            Divider()
+            Button {
+                open(.updates)
+                Task { await Updater.shared.check(userInitiated: true) }
+            } label: { Label("Check for Updates", systemImage: "arrow.down.circle") }
+            Button {
+                if let url = URL(string: "https://github.com/RywnSwn/Verbatim/issues") { NSWorkspace.shared.open(url) }
+            } label: { Label("Get Help or Send Feedback", systemImage: "questionmark.circle") }
+            Button { LayoutDetails.copy() } label: { Label("Copy Details for Claude", systemImage: "doc.on.clipboard") }
+            Divider()
+            Text("Verbatim \(AppInfo.version)")
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 14))
+                .foregroundStyle(hovering ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(.secondary))
+                .frame(width: 26, height: 24)
+                .background(Theme.ink.opacity(hovering ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hovering = $0 }
+        .help("Settings and more")
+        .accessibilityLabel("Settings and more")
+    }
+
+    private func open(_ page: SettingsPage) {
+        SettingsNav.shared.page = page
+        openSettings()
+    }
 }
