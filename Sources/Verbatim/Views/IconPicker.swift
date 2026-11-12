@@ -271,8 +271,15 @@ struct IconPicker: View {
             .frame(height: 170)
 
             Divider()
-            HStack(spacing: 10) {
-                Text("Color").font(.caption).foregroundStyle(.secondary)
+            // Colors on their own line, buttons on the next: all in one row
+            // squeezed the words onto two lines each (Ryan saw "Col / or").
+            HStack(spacing: 8) {
+                Text("Color")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.trailing, 4)
                 ForEach(IconColor.allCases) { c in
                     Button {
                         pick(icon, c)
@@ -293,15 +300,19 @@ struct IconPicker: View {
                     .accessibilityLabel(c.label)
                     .accessibilityAddTraits(c == color ? .isSelected : [])
                 }
+                Spacer(minLength: 0)
+            }
+            HStack {
+                Button("Remove Icon") { pick(nil, color) }
+                    .disabled(icon == nil)
+                    .help("Show no icon next to the name")
                 Spacer()
-                Button("No icon") { pick(nil, color) }
-                    .buttonStyle(.link)
                 Button("Done") { dismiss() }
-                    .buttonStyle(.link)
-                    .fontWeight(.medium)
+                    .buttonStyle(.ink)
                     .keyboardShortcut(.defaultAction)
             }
-            .font(.callout)
+            .lineLimit(1)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
         .frame(width: 330)
