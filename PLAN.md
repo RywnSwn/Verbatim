@@ -128,6 +128,17 @@ chat. Put back to `.all` (FluidAudio's default). Not confirmed by Ryan yet.
 (`LiveFeed.behind`): audio waiting for the models. If that grows while
 recording, the models are too slow (not the drawing). If lag is still
 there, get that paste before changing anything else.
+What the lag really is (Ryan, 2026-11-12, on 0.1.141): "it's just stopped
+basically; I pause it, the words appear and the timer updates". His ⌃⌘L
+paste: while recording 47 checks all fast, then one check that took 151 s
+and only came back after Pause (it was counted under "not recording", fixed
+now). So a few seconds into a recording the MAIN THREAD stops running its
+queue (timer, bars and text all arrive through it) until capture stops.
+Not the header, not typing. Cause still unknown. From 0.1.146 the meter
+runs `/usr/bin/sample` on Verbatim when the main thread has been stuck
+1.5 s during a recording and ⌃⌘L pastes the main thread's stack ("STALL
+SAMPLE") plus the longest gap between audio buffers ("MIC"). NEXT STEP:
+get that paste from Ryan and read the stack. Do not guess again.
 Lag numbers: `Model/HitchMeter.swift` checks ten times a second how long
 the main thread takes to answer. ⌃⌘L (Copy Layout Details) now ends with
 "MAIN THREAD ... while recording: N checks, N slower than 0.1 s, worst

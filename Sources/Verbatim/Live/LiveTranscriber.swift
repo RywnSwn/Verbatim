@@ -19,6 +19,10 @@ final class LiveFeed: @unchecked Sendable {
     private var given: Int64 = 0
     private var done: Int64 = 0
     private var worstBehind: Int64 = 0
+    /// When the last bit of audio came in, and the longest wait between two
+    /// (should be far under a second; long = the mic side stalled).
+    private var lastAt: UInt64 = 0
+    private var worstGap: UInt64 = 0
 
     func open() -> AsyncStream<LiveInput> {
         let (stream, c) = AsyncStream<LiveInput>.makeStream()
@@ -27,6 +31,7 @@ final class LiveFeed: @unchecked Sendable {
             continuation = c
             given = 0
             done = 0
+            lastAt = 0
         }
         return stream
     }
@@ -37,6 +42,9 @@ final class LiveFeed: @unchecked Sendable {
         lock.withLock {
             guard let continuation else { return }
             if case .samples(let s) = input {
+                let now = DispatchTime.now().uptimeNanoseconds
+                if lastAt != 0 { worstGap = max(worstGap, now - lastAt) }
+                lastAt = now
                 given += Int64(s.count)
                 worstBehind = max(worstBehind, given - done)
             }
@@ -47,6 +55,17 @@ final class LiveFeed: @unchecked Sendable {
     /// The engines finished this many samples.
     func finished(_ samples: Int) {
         lock.withLock { done += Int64(samples) }
+    }
+
+    /// Pause and Stop: the wait until the next audio isn't a stall.
+    func micPaused() { lock.withLock { lastAt = 0 } }
+
+    func worstGapSeconds() -> Double {
+        lock.withLock {
+            let out = Double(worstGap) / 1e9
+            worstGap = 0
+            return out
+        }
     }
 
     /// Seconds of audio waiting right now, and the most since the last call.
@@ -158,6 +177,7 @@ final class LiveTranscriber {
 
     /// The mic stopped (Pause or sleep): finish the last words.
     func micStopped() {
+        feed.micPaused()
         feed.yield(.flush)
     }
 
