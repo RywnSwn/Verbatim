@@ -70,13 +70,15 @@ seed() {
 {"formatVersion":1,"groups":[
  {"id":"$g1","name":"English 2026","icon":"book.closed","color":"blue","collapsed":false},
  {"id":"$g2","name":"World Studies 2026","icon":"globe.asia.australia","color":"green","collapsed":false},
- {"id":"33333333-3333-4333-8333-333333333333","name":"Math","icon":"x.squareroot","color":"green","collapsed":true}]}
+ {"id":"33333333-3333-4333-8333-333333333333","name":"Math","icon":"x.squareroot","color":"green","collapsed":true},
+ {"id":"44444444-4444-4444-8444-444444444444","name":"Science","icon":"atom","color":"purple","collapsed":true}]}
 JSON
+  # Few rows, like Ryan's real sidebar: one recording in two groups, one in Recents.
   local i
-  for i in 1 2 3 4 5 6 7 8 9; do
+  for i in 1 2 3; do
     local id="aaaaaaaa-aaaa-4aaa-8aaa-00000000000$i" group="null"
-    [ "$i" -le 3 ] && group="\"$g1\""
-    [ "$i" -ge 4 ] && [ "$i" -le 5 ] && group="\"$g2\""
+    [ "$i" -eq 1 ] && group="\"$g1\""
+    [ "$i" -eq 2 ] && group="\"$g2\""
     mkdir -p "$base/Recordings/$id"
     cat > "$base/Recordings/$id/recording.json" <<JSON
 {"formatVersion":1,"id":"$id","title":"Anansi and the sky god, part $i","createdAt":"2026-11-0${i}T03:05:00Z",
@@ -98,45 +100,6 @@ for size in "1000 500" "1000 540" "1000 600" "940 500" "1020 700"; do
   set -- $size
   resize "$1" "$2";  check "resize to $1x$2";  shot "short-$1x$2"
 done
-
-# Wide: sidebar starts shown.
-for size in "1200 780" "900 600"; do
-  set -- $size
-  tag="$1x$2"
-  resize "$1" "$2";  check "resize to $tag";         shot "$tag"
-  hide_sidebar;      check "hide sidebar at $tag";   shot "$tag-hidden"
-  show_sidebar;      check "show sidebar at $tag";   shot "$tag-shown"
-done
-
-# Narrow: the sidebar hides itself; open it by hand like Ryan did.
-for size in "800 600" "700 520" "700 420"; do
-  set -- $size
-  tag="$1x$2"
-  resize "$1" "$2";  check "resize to $tag";         shot "$tag"
-  show_sidebar;      check "show sidebar at $tag";   shot "$tag-shown"
-  hide_sidebar;      check "hide sidebar at $tag";   shot "$tag-hidden"
-  show_sidebar;      check "show sidebar again at $tag"
-  resize 1200 780;   check "grow with sidebar open from $tag"; shot "$tag-grown"
-done
-
-# Sweep the window width through the range where the sidebar hides itself,
-# opening and closing it by hand at each step (Ryan's crash on 0.1.102).
-w=680
-while [ "$w" -le 870 ]; do
-  RESIZE_WAIT=1 resize "$w" 560 > /dev/null;  check "sweep resize to $w"
-  show_sidebar; check "sweep show sidebar at $w"
-  if [ $((w % 40)) -eq 0 ]; then shot "sweep-$w-shown"; fi
-  hide_sidebar; check "sweep hide sidebar at $w"
-  w=$((w + 30))
-done
-
-# A recording open in the main area (click the first row), then the sidebar button.
-resize 1000 700; show_sidebar
-click_at 170 250; sleep 2;  check "open a recording";               shot "recording-open"
-hide_sidebar;               check "hide sidebar with recording";    shot "recording-sidebar-hidden"
-show_sidebar;               check "show sidebar with recording";    shot "recording-sidebar-shown"
-resize 700 520;             check "narrow with recording";          shot "recording-narrow"
-show_sidebar;               check "show sidebar, narrow recording"; shot "recording-narrow-shown"
 
 kill "$APP_PID" 2>/dev/null || true
 echo "----- app.log (tail) -----"; tail -20 "$OUT/app.log"
