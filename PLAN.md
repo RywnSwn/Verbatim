@@ -86,6 +86,25 @@ use the ux-planner skill; nothing built yet):
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
+Design pass mockup (2026-11-12, waiting for Ryan's review, nothing built):
+https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
+`docs/design/DesignPass.html`. What it shows:
+- Rows: each recording on its own borderless box, 3 pt apart. Ryan picks
+  A "Soft boxes" (ink tint 4.5%, hover 8.5%, open 15% + bolder name) or
+  B "Paper cards" (white cards with a faint shadow, open card turns ink).
+- Glass or Solid sidebar: new choice in Settings > Look. Reduce
+  transparency on = always solid.
+- Drag: row lifts (scale 1.05, tilt 1.6 degrees, shadow), gap stays where
+  it was, the group under the pointer tints and says "Move here", a folded
+  group opens after 0.65 s, Esc puts it back, drop shows "Moved to X. Undo"
+  in the bottom bar. Plan for the build: a DropDelegate that proposes
+  `.move` (no green plus inside Verbatim), drag preview drawn like the
+  lifted row. Out of the app it stays a Markdown file (copy, plus is right).
+- Settings: pages down the left (General, Look new, Transcription, Words,
+  Voices, Storage, Updates, Shortcuts new) instead of top tabs. Each page:
+  title + one line, then filled groups of rows (label and help left,
+  control right). Look holds sidebar, text size, times, times in copies.
+
 ## Build order (one milestone per chat)
 
 Order is chosen so Ryan can test real accuracy at home early, before any

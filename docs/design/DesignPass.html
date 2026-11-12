@@ -1,0 +1,707 @@
+<title>Verbatim Design Pass</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: page of notes, each followed by a fake Mac desktop holding a live window. */
+:root {
+  --page: #EEEBE4;
+  --paper: #FCFBF8;
+  --ink: #1F1D1A;
+  --muted: #69645C;
+  --line: #E6E2DA;
+  --accent: #24427A;
+  --danger: #A5503F;
+  --side-solid: #F1EEE7;
+  --card: #FFFFFF;
+  --glass: rgba(252, 251, 248, 0.52);
+  --shadow: rgba(31, 29, 26, 0.18);
+  --blue: #3F64A8; --green: #4E7A52; --amber: #A97A22; --purple: #6E5A9C; --red: #A5503F;
+  --wall:
+    radial-gradient(circle at 12% 18%, #8DB6E0 0, transparent 42%),
+    radial-gradient(circle at 78% 82%, #EFAE93 0, transparent 48%),
+    radial-gradient(circle at 88% 12%, #A9D3A0 0, transparent 38%),
+    radial-gradient(circle at 40% 95%, #C8B6E6 0, transparent 40%),
+    linear-gradient(135deg, #D7E3EF, #F0E2D3);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+    --accent: #8FA9DD; --danger: #D99282; --side-solid: #252421; --card: #2D2C29;
+    --glass: rgba(29, 28, 26, 0.48); --shadow: rgba(0, 0, 0, 0.5);
+    --blue: #8FA9DD; --green: #8DB892; --amber: #D6B060; --purple: #B3A2D9; --red: #D99282;
+    --wall:
+      radial-gradient(circle at 12% 18%, #27466E 0, transparent 42%),
+      radial-gradient(circle at 78% 82%, #6B3524 0, transparent 48%),
+      radial-gradient(circle at 88% 12%, #2E5530 0, transparent 38%),
+      radial-gradient(circle at 40% 95%, #47336E 0, transparent 40%),
+      linear-gradient(135deg, #141A24, #221A15);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+  --accent: #8FA9DD; --danger: #D99282; --side-solid: #252421; --card: #2D2C29;
+  --glass: rgba(29, 28, 26, 0.48); --shadow: rgba(0, 0, 0, 0.5);
+  --blue: #8FA9DD; --green: #8DB892; --amber: #D6B060; --purple: #B3A2D9; --red: #D99282;
+  --wall:
+    radial-gradient(circle at 12% 18%, #27466E 0, transparent 42%),
+    radial-gradient(circle at 78% 82%, #6B3524 0, transparent 48%),
+    radial-gradient(circle at 88% 12%, #2E5530 0, transparent 38%),
+    radial-gradient(circle at 40% 95%, #47336E 0, transparent 40%),
+    linear-gradient(135deg, #141A24, #221A15);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--page); color: var(--ink); font-family: var(--sans); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.page { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+.intro { display: flex; flex-direction: column; gap: 10px; max-width: 62ch; }
+.intro h1 { font-family: var(--serif); font-weight: 500; font-size: 34px; margin: 0; line-height: 1.1; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); line-height: 1.5; }
+
+.strip { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.strip .opt { display: flex; align-items: center; gap: 10px; }
+.strip .opt > span { font-size: 12px; color: var(--muted); }
+.seg { display: inline-flex; background: color-mix(in srgb, var(--ink) 7%, transparent); border-radius: 8px; padding: 2px; }
+.seg button { border: 0; background: transparent; padding: 4px 11px; border-radius: 6px; font-size: 12.5px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--paper); box-shadow: 0 1px 2px var(--shadow); font-weight: 500; }
+
+.sec { display: flex; flex-direction: column; gap: 16px; }
+.sec h2 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 32px; margin: 0; padding: 0; list-style: none; }
+.notes li { line-height: 1.45; min-width: 0; }
+.notes b { font-weight: 600; display: block; margin-bottom: 2px; }
+.notes span { color: var(--muted); }
+.try { font-size: 13px; color: var(--muted); }
+.try kbd { font-family: var(--sans); font-size: 12px; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+
+/* Fake desktop */
+.scroller { overflow-x: auto; border-radius: 14px; }
+.stage { position: relative; background: var(--wall); padding: 28px; width: max-content; border-radius: 14px; }
+.win { position: relative; display: grid; border-radius: 14px; overflow: hidden; background: var(--paper); box-shadow: 0 0 0 0.5px rgba(0,0,0,.25), 0 22px 60px var(--shadow); }
+.app { width: 1000px; height: 660px; grid-template-columns: 268px 1fr; }
+.prefs { width: 780px; height: 540px; grid-template-columns: 210px 1fr; }
+
+/* Sidebar panel: inset like macOS 26. Glass = blurred desktop behind it. */
+.panel { position: relative; margin: 8px 0 8px 8px; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; isolation: isolate; box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 14%, transparent); }
+.panel::before { content: ""; position: absolute; z-index: -2; left: calc(-1 * var(--ox)); top: calc(-1 * var(--oy)); width: var(--sw); height: var(--sh); background: var(--wall); filter: blur(26px) saturate(1.5); }
+.panel::after { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--glass); }
+body[data-sidebar="solid"] .panel::before { display: none; }
+body[data-sidebar="solid"] .panel::after { background: var(--side-solid); }
+.app .panel { --ox: 36px; --oy: 36px; --sw: 1056px; --sh: 716px; }
+.prefs .panel { --ox: 36px; --oy: 36px; --sw: 836px; --sh: 596px; }
+
+.lights { display: flex; gap: 8px; padding: 12px 12px 6px; flex-shrink: 0; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: #FF5F57; display: block; }
+.lights i:nth-child(2) { background: #FEBC2E; } .lights i:nth-child(3) { background: #28C840; }
+
+.list { user-select: none; -webkit-user-select: none; flex: 1; overflow-y: auto; padding: 4px 8px 12px; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
+.act { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 6px 8px; border-radius: 7px; cursor: default; font-size: 13px; text-align: left; }
+.act:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.act svg { width: 16px; height: 16px; flex-shrink: 0; }
+.act .k { margin-left: auto; font-size: 11px; color: var(--muted); }
+.act.bold { font-weight: 500; }
+.sep { height: 1px; background: color-mix(in srgb, var(--ink) 12%, transparent); margin: 8px 8px; flex-shrink: 0; }
+
+.grp { border-radius: 10px; padding: 2px 0 4px; transition: background-color .12s; }
+.grp.target { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); }
+.gh { display: flex; align-items: center; gap: 6px; padding: 8px 6px 5px 8px; font-size: 13px; }
+.gh .ico { width: 15px; height: 15px; flex-shrink: 0; }
+.gh .name { border: 0; background: transparent; padding: 0; display: flex; align-items: center; gap: 5px; font-weight: 600; cursor: default; min-width: 0; }
+.gh .name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chev { width: 9px; height: 9px; color: var(--muted); transition: transform .18s; flex-shrink: 0; }
+.closed .chev { transform: rotate(-90deg); }
+.gh .plus { margin-left: auto; border: 0; background: transparent; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: var(--muted); cursor: default; flex-shrink: 0; }
+.gh .plus:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+.gh .here { margin-left: auto; font-size: 11px; font-weight: 500; color: var(--accent); white-space: nowrap; }
+.gbody { display: flex; flex-direction: column; gap: 3px; padding-left: 12px; }
+.grp.recents .gbody { padding-left: 0; }
+.empty { font-size: 11.5px; color: var(--muted); padding: 4px 8px 6px; }
+
+/* Rows: the two styles Ryan picks between */
+.row { display: flex; flex-direction: column; gap: 2px; padding: 7px 10px 8px; border-radius: 8px; cursor: default; user-select: none; -webkit-user-select: none; transition: background-color .1s, box-shadow .12s; touch-action: none; }
+.row .t { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.row .t span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .m { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .m.warn { color: var(--amber); }
+
+body:not([data-rows="cards"]) .row { background: color-mix(in srgb, var(--ink) 4.5%, transparent); }
+body:not([data-rows="cards"]) .row:hover { background: color-mix(in srgb, var(--ink) 8.5%, transparent); }
+body:not([data-rows="cards"]) .row.open { background: color-mix(in srgb, var(--ink) 15%, transparent); }
+body:not([data-rows="cards"]) .row.open .t { font-weight: 600; }
+
+body[data-rows="cards"] .row { background: var(--card); box-shadow: 0 0.5px 1px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.05); }
+body[data-rows="cards"] .row:hover { box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 3px 8px rgba(0,0,0,.08); }
+body[data-rows="cards"] .row.open { background: var(--ink); color: var(--paper); }
+body[data-rows="cards"] .row.open .m { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+
+.row.slot { background: transparent !important; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 13%, transparent) !important; }
+.row.slot > * { visibility: hidden; }
+
+/* The row you are holding */
+.lifted { position: fixed; z-index: 1000; pointer-events: none; margin: 0; transform-origin: 30% 50%;
+  transition: transform .16s cubic-bezier(.2,.9,.3,1.2), box-shadow .16s, opacity .16s; }
+body .lifted.row { background: var(--card) !important; color: var(--ink) !important; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+body .lifted.row .m { color: var(--muted) !important; }
+.lifted.up { transform: scale(1.05) rotate(-1.6deg); box-shadow: 0 14px 30px var(--shadow), 0 3px 8px rgba(0,0,0,.12) !important; }
+.lifted.landing { transition: left .22s cubic-bezier(.2,.8,.2,1), top .22s cubic-bezier(.2,.8,.2,1), transform .22s, box-shadow .22s; }
+.lifted .badge { display: none; position: absolute; right: -8px; top: -10px; font-size: 10.5px; font-weight: 500; padding: 3px 7px; border-radius: 99px; background: var(--ink); color: var(--paper); white-space: nowrap; }
+.lifted.out .badge { display: block; }
+
+.wave { display: inline-flex; gap: 1.5px; align-items: center; height: 12px; flex-shrink: 0; }
+.wave i { width: 2px; border-radius: 1px; background: currentColor; height: 4px; animation: bar 1s ease-in-out infinite; }
+.wave i:nth-child(2) { animation-delay: .15s; } .wave i:nth-child(3) { animation-delay: .3s; } .wave i:nth-child(4) { animation-delay: .45s; }
+@keyframes bar { 0%,100% { height: 3px; } 50% { height: 11px; } }
+
+.foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-size: 11px; color: var(--muted); border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); flex-shrink: 0; }
+.foot svg { margin-left: auto; width: 15px; height: 15px; flex-shrink: 0; }
+
+/* Main area */
+.main { display: flex; flex-direction: column; min-width: 0; }
+.tb { height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 16px 0 18px; }
+.tb .ttl { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.tb .ttl b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb .ttl span { font-size: 11px; color: var(--muted); }
+.tb .copy { margin-left: auto; border: 0; background: var(--ink); color: var(--paper); border-radius: 99px; padding: 5px 14px; font-size: 13px; font-weight: 500; }
+.tr { flex: 1; overflow: hidden; padding: 18px 44px 10px 30px; display: flex; flex-direction: column; gap: 14px; font-family: var(--serif); font-size: 17px; line-height: 1.5; }
+.ln { display: grid; grid-template-columns: 56px 1fr; gap: 10px; }
+.ln time { font-family: var(--sans); font-size: 12px; color: var(--muted); padding-top: 4px; font-variant-numeric: tabular-nums; }
+.ln b { font-weight: 600; }
+.bb { height: 46px; flex-shrink: 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 16px; font-size: 12.5px; }
+.bb .tm { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; font-weight: 500; }
+.bb .mid { display: flex; gap: 8px; }
+.bb .mid button { border: 0; border-radius: 99px; padding: 4px 12px; font-size: 12.5px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.bb .st { justify-self: end; color: var(--muted); display: flex; gap: 8px; align-items: center; overflow: hidden; }
+.bb .st.news { color: var(--ink); animation: slide .22s cubic-bezier(.2,.8,.2,1); }
+.bb .st a { color: var(--accent); cursor: pointer; font-weight: 500; text-decoration: none; }
+.bb .st a:hover { text-decoration: underline; }
+@keyframes slide { from { transform: translateY(8px); opacity: 0; } }
+
+/* Settings window */
+.nav { flex: 1; padding: 6px 8px; display: flex; flex-direction: column; gap: 1px; overflow-y: auto; }
+.nav button { display: flex; align-items: center; gap: 9px; border: 0; background: transparent; padding: 6px 8px; border-radius: 7px; font-size: 13px; text-align: left; cursor: default; }
+.nav button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.nav button[aria-current="page"] { background: color-mix(in srgb, var(--ink) 14%, transparent); font-weight: 500; }
+.nav .ni { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: color-mix(in srgb, var(--ink) 9%, transparent); flex-shrink: 0; }
+.nav .ni svg { width: 14px; height: 14px; }
+.nav .new { margin-left: auto; font-size: 10px; font-weight: 600; color: var(--accent); }
+.pbody { overflow-y: auto; padding: 22px 28px 28px; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+.ph h3 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+.ph p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; max-width: 58ch; }
+.grpbox { display: flex; flex-direction: column; gap: 6px; }
+.grpbox > h4 { margin: 0 0 0 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.box { background: color-mix(in srgb, var(--ink) 4%, transparent); border-radius: 10px; display: flex; flex-direction: column; }
+.sr { display: flex; align-items: center; gap: 16px; padding: 10px 14px; min-height: 44px; }
+.sr + .sr { border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+.sr .sl { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.sr .lab { font-size: 13px; }
+.sr .help { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.sr .sc { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.sr.top { align-items: flex-start; }
+select { font: inherit; font-size: 12.5px; padding: 3px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); background: var(--paper); color: var(--ink); max-width: 210px; }
+.sw { width: 34px; height: 20px; border-radius: 99px; border: 0; padding: 0; position: relative; background: color-mix(in srgb, var(--ink) 20%, transparent); cursor: default; transition: background-color .15s; flex-shrink: 0; }
+.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+.sw[aria-checked="true"] { background: var(--accent); }
+.sw[aria-checked="true"]::after { transform: translateX(14px); }
+.btn { border: 0; border-radius: 6px; padding: 4px 11px; font-size: 12.5px; background: var(--paper); box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 25%, transparent), 0 1px 1.5px rgba(0,0,0,.08); cursor: default; white-space: nowrap; }
+.btn:active { background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
+.btn.danger { color: var(--danger); }
+.ok { color: var(--green); font-weight: 600; width: 16px; text-align: center; }
+
+.tiles { display: flex; gap: 14px; padding: 14px; }
+.tile { border: 0; background: transparent; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 12px; cursor: default; }
+.tile .pv { width: 112px; height: 70px; border-radius: 8px; position: relative; overflow: hidden; background: var(--paper); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent); }
+.tile .pv::before { content: ""; position: absolute; inset: 0; background: var(--wall); }
+.tile .pv .s { position: absolute; left: 5px; top: 5px; bottom: 5px; width: 38px; border-radius: 5px; display: flex; flex-direction: column; gap: 3px; padding: 6px 5px; }
+.tile .pv .m2 { position: absolute; left: 47px; right: 0; top: 0; bottom: 0; background: var(--paper); }
+.tile .pv .s i { height: 6px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 14%, transparent); display: block; }
+.tile.glass .pv .s { background: var(--glass); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--ink) 15%, transparent); }
+.tile.solid .pv .s { background: var(--side-solid); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--ink) 15%, transparent); }
+.tile[aria-checked="true"] .pv { box-shadow: 0 0 0 2.5px var(--accent); }
+.tile[aria-checked="true"] { font-weight: 600; }
+
+.size { display: flex; align-items: center; gap: 8px; }
+.size input { width: 150px; accent-color: var(--accent); }
+.sample { font-family: var(--serif); line-height: 1.45; padding: 0 14px 14px; }
+.sample b { font-weight: 600; }
+
+.wl { display: flex; align-items: center; padding: 7px 14px; font-size: 13px; gap: 10px; }
+.wl + .wl { border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+.wl .x { margin-left: auto; border: 0; background: transparent; color: var(--muted); width: 22px; height: 22px; border-radius: 6px; cursor: default; opacity: .55; }
+.wl:hover .x, .wl .x:focus-visible { opacity: 1; }
+.wl .x:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+.wl .arrow { color: var(--muted); }
+.addrow { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+.addrow input { flex: 1; font: inherit; font-size: 12.5px; padding: 4px 8px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); background: var(--paper); color: var(--ink); min-width: 0; }
+.undo { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.undo a { color: var(--accent); cursor: pointer; font-weight: 500; }
+
+.usage { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.usage .bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.usage .bar i { display: block; height: 100%; }
+.usage .bar i:nth-child(1) { background: var(--ink); }
+.usage .bar i:nth-child(2) { background: color-mix(in srgb, var(--ink) 45%, transparent); }
+.usage .bar i:nth-child(3) { background: color-mix(in srgb, var(--ink) 22%, transparent); }
+.usage .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 11.5px; color: var(--muted); }
+.usage .legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; background: var(--ink); }
+.usage .legend span:nth-child(2)::before { background: color-mix(in srgb, var(--ink) 45%, transparent); }
+.usage .legend span:nth-child(3)::before { background: color-mix(in srgb, var(--ink) 22%, transparent); }
+.usage .total { font-size: 15px; font-weight: 600; }
+
+.keys { display: grid; grid-template-columns: 1fr auto; }
+.keys > div { padding: 8px 14px; font-size: 13px; }
+.keys > div:nth-child(n+3) { border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+.keys kbd { font-family: var(--sans); font-size: 12px; padding: 1px 6px; border-radius: 5px; background: var(--paper); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--ink) 25%, transparent), 0 1px 0 color-mix(in srgb, var(--ink) 20%, transparent); margin-left: 3px; }
+
+.later { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 32px; margin: 0; padding: 0; list-style: none; color: var(--muted); line-height: 1.45; }
+.later li { min-width: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lifted, .lifted.landing, .chev, .wave i, .bb .st.news { transition: none !important; animation: none !important; }
+  .lifted.up { transform: none; }
+}
+</style>
+
+<div class="page">
+  <header class="intro">
+    <h1>Verbatim design pass</h1>
+    <p>A mockup of the sidebar and Settings, made from your four asks. Everything here is clickable. Nothing is built in the real app yet, so tell me what to change first.</p>
+  </header>
+
+  <div class="strip" role="group" aria-label="Mockup controls">
+    <div class="opt"><span>Mac in</span>
+      <div class="seg" id="segTheme"><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+    <div class="opt"><span>Sidebar</span>
+      <div class="seg" id="segSide"><button data-v="glass">Glass</button><button data-v="solid">Solid</button></div></div>
+    <div class="opt"><span>Row style, pick one</span>
+      <div class="seg" id="segRows"><button data-v="soft">A. Soft boxes</button><button data-v="cards">B. Paper cards</button></div></div>
+  </div>
+
+  <section class="sec">
+    <h2>The sidebar</h2>
+    <ul class="notes">
+      <li><b>Each recording gets its own box</b><span>Light fill, no border lines. A small gap between boxes so they never blur together.</span></li>
+      <li><b>Pointer over a row</b><span>The box gets a bit darker, so you know what you're about to click.</span></li>
+      <li><b>The one that's open</b><span>Style A: a darker box and bolder name. Style B: the card turns ink, like the Copy all button.</span></li>
+      <li><b>Dragging feels like holding it</b><span>It lifts, tilts a little and follows the pointer. A gap stays where it was. No green plus.</span></li>
+    </ul>
+    <p class="try">Try it: drag "Anansi and the sky god, part 3" onto Math. Hover a folded group (Science) for a moment and it opens. Press <kbd>Esc</kbd> mid-drag to put it back. Drag it outside the window to see what happens there.</p>
+    <div class="scroller">
+      <div class="stage">
+        <div class="win app" id="appWin">
+          <aside class="panel">
+            <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="list" id="list"></div>
+            <div class="foot">Right-click empty space for a new group.
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-label="Settings"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
+            </div>
+          </aside>
+          <div class="main" id="main"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Settings</h2>
+    <ul class="notes">
+      <li><b>Pages down the side</b><span>Like System Settings. Eight pages fit easily, where six tabs across the top were already crowded.</span></li>
+      <li><b>New Look page</b><span>Glass or solid sidebar, text size, and how times show. General had grown too long.</span></li>
+      <li><b>Every row works the same way</b><span>Name and a short explanation on the left, the switch or menu on the right.</span></li>
+      <li><b>Shortcuts get their own page</b><span>Easier to find, and they stop pushing everything else down.</span></li>
+    </ul>
+    <p class="try">Try it: pick Solid on the Look page and watch the sidebar change in both windows. Remove a word on the Words page, then Undo.</p>
+    <div class="scroller">
+      <div class="stage">
+        <div class="win prefs">
+          <aside class="panel">
+            <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <nav class="nav" id="nav" aria-label="Settings pages"></nav>
+          </aside>
+          <div class="pbody" id="pbody"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Only your Mac will show</h2>
+    <ul class="later">
+      <li>How the glass really looks over your own desktop picture. It changes with whatever is behind the window.</li>
+      <li>The drag picture is drawn by macOS. I can style the row it shows and remove the green plus, but the exact lift and tilt may be a little different.</li>
+      <li>Dropped into Finder or Claude, a recording still becomes a text file. There macOS shows the green plus, and that's correct, since it's a copy.</li>
+      <li>If Reduce transparency is on in your Mac's Accessibility settings, the sidebar stays solid even when Glass is picked.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const ICONS = {
+    book: '<path d="M5 4.5h9a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3z"/><path d="M5 16.5a3 3 0 0 1 3-3h9"/>',
+    globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 2.5 14.4 0 17M12 3.5c-2.5 2.6-2.5 14.4 0 17"/>',
+    sqrt: '<path d="M3 13h3l3 7 5-15h7"/>',
+    flask: '<path d="M9.5 3.5h5M10.5 3.5v6L5 19a1 1 0 0 0 .9 1.5h12.2A1 1 0 0 0 19 19l-5.5-9.5v-6"/><path d="M7.5 15h9"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    memo: '<path d="M4 12h1M7.5 8v8M11 5v14M14.5 9v6M18 11v2"/><path d="M19 4v5M16.5 6.5h5"/>',
+    chev: '<path d="M2 3.5l3.5 3.5L9 3.5"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+    eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+    mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+    words: '<path d="M4 6h16M4 12h10M4 18h7"/>',
+    voices: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c.5-3.5 3-5.5 6-5.5s5.5 2 6 5.5M17 7.5c1.2 1.2 1.2 3.8 0 5M19.5 5c2.5 2.6 2.5 8.4 0 10"/>',
+    disk: '<ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/>',
+    update: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
+    keys: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+  };
+  const svg = (k, cls = '', sw = 1.7) => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
+  const chev = `<svg class="chev" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.chev}</svg>`;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  const groups = [
+    { id: 'eng', name: 'English 2026', icon: 'book', color: 'blue', open: true },
+    { id: 'ws', name: 'World Studies 2026', icon: 'globe', color: 'green', open: true },
+    { id: 'math', name: 'Math', icon: 'sqrt', color: 'amber', open: true },
+    { id: 'sci', name: 'Science', icon: 'flask', color: 'purple', open: false },
+  ];
+  const recs = [
+    { id: 'r1', title: 'Thu 12 Nov', meta: 'Recording now, 12 min', live: true, group: 'eng', who: 'Mr. Yurt, started 10:05' },
+    { id: 'r2', title: 'Kweku Tsin and the pot', meta: 'Mon 9 Nov, 52 min', group: 'eng', who: 'Mr. Yurt, Mon 9 Nov' },
+    { id: 'r3', title: 'Anansi and the sky god, part 1', meta: 'Sun 1 Nov, 47 min', group: 'eng', who: 'Mr. Yurt, Sun 1 Nov' },
+    { id: 'r4', title: 'Trade routes across the Sahara', meta: 'Tue 10 Nov, audio deletes in 3 days', warn: true, group: 'ws', who: 'Tue 10 Nov' },
+    { id: 'r5', title: 'Anansi and the sky god, part 3', meta: 'Tue 3 Nov, 47 min', group: null, who: 'Mr. Yurt, Tue 3 Nov' },
+    { id: 'r6', title: 'Mic test', meta: 'Fri 30 Oct, 2 min, no audio', group: null, who: 'Fri 30 Oct' },
+  ];
+  const S = { sel: 'r2', drag: null, press: null, msg: null, msgTimer: 0, page: 'look' };
+  const list = document.getElementById('list');
+  const main = document.getElementById('main');
+  const appWin = document.getElementById('appWin');
+  const groupName = id => id ? groups.find(g => g.id === id).name : 'Recents';
+
+  /* ---------- Sidebar ---------- */
+  function rowHTML(r) {
+    const cls = ['row'];
+    if (r.id === S.sel) cls.push('open');
+    if (S.drag && S.drag.id === r.id) cls.push('slot');
+    const wave = r.live ? '<span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>' : '';
+    return `<div class="${cls.join(' ')}" data-id="${r.id}" tabindex="0" role="button" aria-pressed="${r.id === S.sel}">
+      <div class="t">${wave}<span>${esc(r.title)}</span></div>
+      <div class="m${r.warn ? ' warn' : ''}">${esc(r.meta)}</div></div>`;
+  }
+  function renderSidebar() {
+    const target = S.drag && S.drag.target;
+    let h = `<button class="act bold">${svg('plus')}New recording<span class="k">⌘N</span></button>
+      <button class="act">${svg('memo')}Add a Voice Memo<span class="k">⌘O</span></button><div class="sep"></div>`;
+    for (const g of groups) {
+      const members = recs.filter(r => r.group === g.id);
+      const isT = target === g.id;
+      h += `<section class="grp${g.open ? '' : ' closed'}${isT ? ' target' : ''}" data-drop="${g.id}">
+        <div class="gh"><span style="color:var(--${g.color})">${svg(g.icon, 'ico', 1.8)}</span>
+          <button class="name" data-toggle="${g.id}" aria-expanded="${g.open}"><span>${esc(g.name)}</span>${chev}</button>
+          ${isT ? '<span class="here">Move here</span>' : `<button class="plus" data-plus="${g.id}" aria-label="New recording in ${esc(g.name)}">${svg('plus', '', 2)}</button>`}
+        </div>`;
+      if (g.open) {
+        h += '<div class="gbody">' + (members.length ? members.map(rowHTML).join('') : '<div class="empty">Empty. Press + or drag one here.</div>') + '</div>';
+      }
+      h += '</section>';
+    }
+    const recents = recs.filter(r => !r.group);
+    const isT = target === 'none';
+    h += `<section class="grp recents${isT ? ' target' : ''}" data-drop="none">
+      <div class="gh"><button class="name" aria-expanded="true"><span>Recents</span>${chev}</button>${isT ? '<span class="here">Move here</span>' : ''}</div>
+      <div class="gbody">${recents.length ? recents.map(rowHTML).join('') : '<div class="empty">Recordings not in a group show up here.</div>'}</div></section>`;
+    list.innerHTML = h;
+  }
+
+  /* ---------- Main area ---------- */
+  const LINES = [
+    ['10:05', 'Mr. Yurt', 'Okay, let’s pick up where we stopped with Kweku Tsin.'],
+    ['10:06', 'Mr. Yurt', 'Remember, the pot is the thing everyone wants, and that matters for the ending.'],
+    ['10:07', 'Student', 'Is it the same pot from the first story?'],
+    ['10:07', 'Mr. Yurt', 'Good question. Hold on to that, we’ll come back to it after the reading.'],
+    ['10:09', 'Mr. Yurt', 'Page forty two. Read the first paragraph to yourselves and mark one word you don’t know.'],
+  ];
+  function renderMain() {
+    const r = recs.find(x => x.id === S.sel);
+    const st = S.msg
+      ? `<div class="st news" role="status">${esc(S.msg.text)}${S.msg.undo ? ' <a data-undo tabindex="0">Undo</a>' : ''}</div>`
+      : `<div class="st" role="status">${r.live ? 'Saved as you go, works offline' : esc(groupName(r.group))}</div>`;
+    const left = r.live
+      ? '<div class="tm"><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>12:04</div>'
+      : '<div></div>';
+    const mid = r.live ? '<div class="mid"><button>Pause</button><button>Stop</button></div>' : '<div></div>';
+    main.innerHTML = `<div class="tb"><div class="ttl"><b>${esc(r.title)}</b><span>${esc(r.who)}</span></div><button class="copy">Copy all</button></div>
+      <div class="tr">${LINES.map(l => `<div class="ln"><time>${l[0]}</time><div><b>${l[1]}:</b> ${esc(l[2])}</div></div>`).join('')}</div>
+      <div class="bb">${left}${mid}${st}</div>`;
+  }
+  function say(text, undo) {
+    clearTimeout(S.msgTimer);
+    S.msg = { text, undo };
+    renderMain();
+    S.msgTimer = setTimeout(() => { S.msg = null; renderMain(); }, 7000);
+  }
+  main.addEventListener('click', e => {
+    if (e.target.closest('[data-undo]') && S.msg && S.msg.undo) { const u = S.msg.undo; S.msg = null; u(); }
+  });
+  main.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.closest('[data-undo]') && S.msg && S.msg.undo) { const u = S.msg.undo; S.msg = null; u(); }
+  });
+
+  function select(id) { S.sel = id; renderSidebar(); renderMain(); }
+
+  list.addEventListener('click', e => {
+    const t = e.target.closest('[data-toggle]');
+    if (t) { const g = groups.find(x => x.id === t.dataset.toggle); g.open = !g.open; renderSidebar(); return; }
+    const p = e.target.closest('[data-plus]');
+    if (p) say(`In the app this starts a recording in ${groupName(p.dataset.plus)}.`);
+  });
+  list.addEventListener('keydown', e => {
+    const row = e.target.closest('.row');
+    if (!row) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(row.dataset.id); list.querySelector(`[data-id="${row.dataset.id}"]`).focus(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const rows = [...list.querySelectorAll('.row')];
+      const next = rows[rows.indexOf(row) + (e.key === 'ArrowDown' ? 1 : -1)];
+      if (next) { select(next.dataset.id); list.querySelector(`[data-id="${next.dataset.id}"]`).focus(); }
+    }
+  });
+
+  /* ---------- Drag ---------- */
+  list.addEventListener('pointerdown', e => {
+    const row = e.target.closest('.row');
+    if (!row || e.button !== 0) return;
+    e.preventDefault();
+    S.press = { id: row.dataset.id, x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener('pointermove', e => {
+    if (S.drag) return moveDrag(e.clientX, e.clientY);
+    if (S.press && Math.hypot(e.clientX - S.press.x, e.clientY - S.press.y) > 4) startDrag(e.clientX, e.clientY);
+  });
+  window.addEventListener('pointerup', () => {
+    if (S.drag) endDrag(false);
+    else if (S.press) select(S.press.id);
+    S.press = null;
+  });
+  window.addEventListener('keydown', e => { if (e.key === 'Escape' && S.drag) endDrag(true); });
+
+  function startDrag(x, y) {
+    const row = list.querySelector(`[data-id="${S.press.id}"]`);
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    const clone = row.cloneNode(true);
+    clone.classList.add('lifted');
+    clone.removeAttribute('tabindex');
+    clone.insertAdjacentHTML('beforeend', '<span class="badge">Copy as a text file</span>');
+    Object.assign(clone.style, { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px' });
+    document.body.appendChild(clone);
+    const rec = recs.find(r => r.id === S.press.id);
+    S.drag = { id: rec.id, clone, offX: S.press.x - rect.left, offY: S.press.y - rect.top, from: rec.group || 'none', target: null, out: false, hoverGroup: null, hoverTimer: 0 };
+    S.press = null;
+    renderSidebar();
+    requestAnimationFrame(() => clone.classList.add('up'));
+    document.body.style.cursor = 'grabbing';
+    moveDrag(x, y);
+  }
+
+  function moveDrag(x, y) {
+    const d = S.drag;
+    d.clone.style.left = (x - d.offX) + 'px';
+    d.clone.style.top = (y - d.offY) + 'px';
+    const el = document.elementFromPoint(x, y);
+    const out = !el || !appWin.contains(el);
+    d.out = out;
+    d.clone.classList.toggle('out', out);
+    const sec = !out && el.closest('[data-drop]');
+    const t = sec && sec.dataset.drop !== d.from ? sec.dataset.drop : null;
+    // Spring loading: rest on a folded group and it opens.
+    const g = sec && groups.find(gg => gg.id === sec.dataset.drop);
+    if (g && !g.open) {
+      if (d.hoverGroup !== g.id) {
+        clearTimeout(d.hoverTimer);
+        d.hoverGroup = g.id;
+        d.hoverTimer = setTimeout(() => { if (S.drag === d) { g.open = true; renderSidebar(); } }, 650);
+      }
+    } else if (d.hoverGroup && (!g || g.id !== d.hoverGroup)) {
+      clearTimeout(d.hoverTimer); d.hoverGroup = null;
+    }
+    if (t !== d.target) { d.target = t; renderSidebar(); }
+  }
+
+  function endDrag(cancelled) {
+    const d = S.drag;
+    clearTimeout(d.hoverTimer);
+    const rec = recs.find(r => r.id === d.id);
+    const before = rec.group;
+    const moving = !cancelled && d.target;
+    if (moving) {
+      rec.group = d.target === 'none' ? null : d.target;
+      const g = groups.find(gg => gg.id === rec.group);
+      if (g) g.open = true;
+    }
+    d.target = null;
+    renderSidebar();
+    const slot = list.querySelector(`[data-id="${d.id}"]`);
+    if (slot) slot.scrollIntoView({ block: 'nearest' });
+    const r = slot.getBoundingClientRect();
+    d.clone.classList.add('landing');
+    d.clone.classList.remove('up', 'out');
+    d.clone.style.left = r.left + 'px';
+    d.clone.style.top = r.top + 'px';
+    document.body.style.cursor = '';
+    setTimeout(() => {
+      d.clone.remove();
+      S.drag = null;
+      renderSidebar();
+      if (moving) {
+        say(`Moved to ${groupName(rec.group)}.`, () => { rec.group = before; renderSidebar(); renderMain(); say(`Back in ${groupName(before)}.`); });
+      } else if (!cancelled && d.out) {
+        say('In the app, dropping here gives Finder or Claude a text file of the transcript.');
+      }
+    }, 230);
+  }
+
+  /* ---------- Settings ---------- */
+  const PAGES = [
+    ['general', 'General', 'gear'], ['look', 'Look', 'eye', true], ['transcription', 'Transcription', 'mic'],
+    ['words', 'Words', 'words'], ['voices', 'Voices', 'voices'], ['storage', 'Storage', 'disk'],
+    ['updates', 'Updates', 'update'], ['shortcuts', 'Shortcuts', 'keys', true],
+  ];
+  const nav = document.getElementById('nav');
+  const pbody = document.getElementById('pbody');
+  const words = ['Kweku Tsin', 'Nyankupon', 'Anansi', 'Mr. Yurt'];
+  let wordUndo = null;
+  let textSize = 17;
+
+  const sw = (on, label) => `<button class="sw" role="switch" aria-checked="${on}" aria-label="${esc(label)}"></button>`;
+  const row = (lab, help, ctl = '', top) => `<div class="sr${top ? ' top' : ''}"><div class="sl"><div class="lab">${lab}</div>${help ? `<div class="help">${help}</div>` : ''}</div><div class="sc">${ctl}</div></div>`;
+  const box = (title, inner) => `<div class="grpbox">${title ? `<h4>${title}</h4>` : ''}<div class="box">${inner}</div></div>`;
+  const head = (t, p) => `<div class="ph"><h3>${t}</h3><p>${p}</p></div>`;
+
+  const RENDER = {
+    general: () => head('General', 'Your mic and how Verbatim gets your attention.') +
+      box('Microphone', row('Microphone', 'USB and wireless mics, like a DJI, show up here when plugged in. If one is unplugged in class, Verbatim switches to the MacBook mic and keeps going. It never switches to AirPods by itself.',
+        '<select aria-label="Microphone"><option>MacBook mic (recommended)</option><option>DJI Mic Mini</option></select>', true)) +
+      box('While recording',
+        row('Ask “Still recording?”', 'Recording never stops by itself until 3 hours.', '<select aria-label="Ask Still recording"><option>After 5 minutes of quiet</option><option>After 10 minutes of quiet</option><option>After 20 minutes of quiet</option><option>Never</option></select>') +
+        row('Show Verbatim in the menu bar', 'While recording it always shows, so you know it’s on.', sw(true, 'Show in menu bar')) +
+        row('Tell me things when Verbatim is hidden', 'Like “Still recording?” or low battery, as a quiet banner. Never a sound.', sw(true, 'Banners'))),
+    look: () => head('Look', 'How Verbatim looks. Nothing here changes what gets recorded.') +
+      `<div class="grpbox"><h4>Sidebar</h4><div class="box">
+        <div class="tiles" role="radiogroup" aria-label="Sidebar">
+          <button class="tile glass" role="radio" data-side="glass" aria-checked="${document.body.dataset.sidebar === 'glass'}"><span class="pv"><span class="s"><i></i><i></i><i></i></span><span class="m2"></span></span>Glass</button>
+          <button class="tile solid" role="radio" data-side="solid" aria-checked="${document.body.dataset.sidebar === 'solid'}"><span class="pv"><span class="s"><i></i><i></i><i></i></span><span class="m2"></span></span>Solid</button>
+        </div>
+        ${row('', 'Glass lets your desktop show through, blurred. Solid is a plain sheet, easier to read over busy desktop pictures. If Reduce transparency is on in your Mac’s Accessibility settings, it’s always solid.')}
+      </div></div>` +
+      box('Transcript',
+        row('Text size', 'Also ⌘+ and ⌘− anywhere in the app, ⌘0 for normal.',
+          `<div class="size"><span style="font-size:11px">A</span><input id="sizeRange" type="range" min="13" max="26" step="1" value="${textSize}" aria-label="Transcript text size"><span style="font-size:17px">A</span></div>`) +
+        `<div class="sample" id="sample" style="font-size:${textSize}px"><b>Mr. Yurt:</b> Kweku Tsin carried the pot up to the sky.</div>` +
+        row('Times', 'Imported files always show time since start.', '<select aria-label="Times"><option>Clock time (10:42)</option><option>Time since start (37:12)</option></select>') +
+        row('Include times when copying and exporting', 'Off: just the words. Cleaner for pasting into Claude.', sw(false, 'Include times'))),
+    transcription: () => head('Transcription', 'Everything runs on this Mac and works offline. These download once. If one breaks, Verbatim downloads it again by itself.') +
+      box('Downloads',
+        row('<span class="ok">✓</span> Speech model', 'Turns speech into text, live and from Voice Memos. Ready.', '') +
+        row('<span class="ok">✓</span> Speaker labels', 'Tells Mr. Yurt apart from students. Ready.', '') +
+        row('<span class="ok">✓</span> Word list helper', 'Spells names from your word list right. Ready.', '')) +
+      box('Names', row('Name recordings from what was said', 'After you stop, Apple Intelligence reads the transcript and picks a short name, like “Anansi and the sky god”. On this Mac, offline. Names you type yourself are never changed.', sw(true, 'Auto names'), true)),
+    words: () => head('Words', 'Names Verbatim listens for, and fixes for what it still gets wrong.') +
+      `<div class="grpbox"><h4>Word list</h4><div class="box">
+        ${words.map(w => `<div class="wl"><span>${esc(w)}</span><button class="x" data-rm="${esc(w)}" aria-label="Remove ${esc(w)}">✕</button></div>`).join('')}
+        <form class="addrow" id="addWord"><input id="wordIn" placeholder="Add a name, like Kweku Tsin" aria-label="New word"><button class="btn" type="submit">Add</button></form>
+      </div>${wordUndo ? `<div class="undo">Removed ${esc(wordUndo.w)}. <a data-wundo tabindex="0">Undo</a></div>` : ''}</div>` +
+      box('Fixes', `<div class="wl"><span>Nyan co pawn</span><span class="arrow">→</span><span>Nyankupon</span><button class="x" aria-label="Remove fix">✕</button></div>
+        <div class="wl"><span>Coco chin</span><span class="arrow">→</span><span>Kweku Tsin</span><button class="x" aria-label="Remove fix">✕</button></div>`),
+    voices: () => head('Voices', 'Voices Verbatim knows, so it can label them in new recordings. Kept on this Mac only.') +
+      box('', row('Mr. Yurt', 'From English, Thu 12 Nov, 14 s', `${sw(true, 'Use this voice')}<button class="btn">Forget…</button>`) +
+        row('Ryan', 'From Mic test, Fri 30 Oct, 9 s', `${sw(false, 'Use this voice')}<button class="btn">Forget…</button>`)),
+    storage: () => head('Storage', 'Text is kept forever. Audio is never deleted before its text is finished.') +
+      `<div class="grpbox"><h4>Space used</h4><div class="box"><div class="usage">
+        <div class="total">2.4 GB</div>
+        <div class="bar" role="img" aria-label="Recordings 1.1 GB, speech models 1.2 GB, recently deleted 120 MB"><i style="width:46%"></i><i style="width:49%"></i><i style="width:5%"></i></div>
+        <div class="legend"><span>Recordings 1.1 GB</span><span>Speech models 1.2 GB</span><span>Recently deleted 120 MB</span></div>
+      </div></div></div>` +
+      box('Audio', row('Keep audio for', 'To keep one recording’s audio, right-click it in the sidebar, then Keep Audio.', '<select aria-label="Keep audio for"><option>7 days</option><option>30 days</option><option>Forever</option></select>')) +
+      box('Biggest recordings',
+        row('Kweku Tsin and the pot', 'Mon 9 Nov, 52 min, 118 MB', '<button class="btn">Delete Audio</button>') +
+        row('Anansi and the sky god, part 1', 'Sun 1 Nov, 47 min, 106 MB', '<button class="btn">Delete Audio</button>')) +
+      box('Everything',
+        row('Export everything', 'All transcripts and settings in one zip file. A backup you control.', '<button class="btn">Export…</button>') +
+        row('Delete all recordings', 'They go to Recently deleted first, so you can put them back for 30 days.', '<button class="btn danger">Delete All…</button>')),
+    updates: () => head('Updates', 'Verbatim updates itself from GitHub. You’re asked before anything installs.') +
+      box('', row('Version', '', '<span style="color:var(--muted)">0.1.104</span>') +
+        row('Check for updates automatically', '', sw(true, 'Auto updates')) +
+        row('Include test builds', 'Test builds have changes Claude is still working on, so you can try them before they’re final.', sw(true, 'Test builds')) +
+        row('Up to date', 'Checked today at 9:41.', '<button class="btn">Check Now</button>')),
+    shortcuts: () => head('Shortcuts', 'Work anywhere in Verbatim. ⌘K finds everything else.') +
+      `<div class="box keys">${[
+        ['Do anything', '⌘ K'], ['New recording', '⌘ N'], ['Start or stop', '⌘ R'], ['Pause or resume', '⇧ ⌘ P'],
+        ['Add marker', '⌘ D'], ['Mini window', '⇧ ⌘ M'], ['Copy all', '⇧ ⌘ C'], ['Copy new since last copy', '⌥ ⌘ C'],
+        ['Find in transcript', '⌘ F'], ['Text bigger, smaller', '⌘ +  ⌘ −'], ['Transcribe a Voice Memo', '⌘ O'],
+      ].map(([a, k]) => `<div>${a}</div><div>${k.split(' ').filter(Boolean).map(c => `<kbd>${c}</kbd>`).join('')}</div>`).join('')}</div>`,
+  };
+
+  function renderNav() {
+    nav.innerHTML = PAGES.map(([id, name, icon, isNew]) =>
+      `<button data-page="${id}" ${S.page === id ? 'aria-current="page"' : ''}><span class="ni">${svg(icon)}</span>${name}${isNew ? '<span class="new">NEW</span>' : ''}</button>`).join('');
+  }
+  function renderPage() { pbody.innerHTML = RENDER[S.page](); pbody.scrollTop = 0; }
+  nav.addEventListener('click', e => {
+    const b = e.target.closest('[data-page]');
+    if (!b) return;
+    S.page = b.dataset.page; renderNav(); renderPage();
+  });
+  pbody.addEventListener('click', e => {
+    const s = e.target.closest('.sw');
+    if (s) s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true');
+    const t = e.target.closest('[data-side]');
+    if (t) setSidebar(t.dataset.side);
+    const rm = e.target.closest('[data-rm]');
+    if (rm) {
+      const i = words.indexOf(rm.dataset.rm);
+      words.splice(i, 1);
+      wordUndo = { w: rm.dataset.rm, i };
+      renderPage();
+    }
+    if (e.target.closest('[data-wundo]') && wordUndo) { words.splice(wordUndo.i, 0, wordUndo.w); wordUndo = null; renderPage(); }
+  });
+  pbody.addEventListener('submit', e => {
+    e.preventDefault();
+    const inp = document.getElementById('wordIn');
+    const v = inp.value.trim();
+    if (v && !words.includes(v)) { words.push(v); wordUndo = null; renderPage(); document.getElementById('wordIn').focus(); }
+  });
+  pbody.addEventListener('input', e => {
+    if (e.target.id === 'sizeRange') { textSize = +e.target.value; document.getElementById('sample').style.fontSize = textSize + 'px'; }
+  });
+
+  /* ---------- Top controls ---------- */
+  function setSeg(id, v) { document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); }
+  function setSidebar(v) {
+    document.body.dataset.sidebar = v; setSeg('segSide', v);
+    pbody.querySelectorAll('[data-side]').forEach(t => t.setAttribute('aria-checked', t.dataset.side === v));
+  }
+  function setTheme(v) { document.documentElement.dataset.theme = v; setSeg('segTheme', v); }
+  document.getElementById('segTheme').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.v); });
+  document.getElementById('segSide').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setSidebar(b.dataset.v); });
+  document.getElementById('segRows').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { document.body.dataset.rows = b.dataset.v; setSeg('segRows', b.dataset.v); } });
+
+  document.body.dataset.sidebar = 'glass';
+  document.body.dataset.rows = 'soft';
+  setSeg('segTheme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  setSeg('segSide', 'glass');
+  setSeg('segRows', 'soft');
+  renderSidebar(); renderMain(); renderNav(); renderPage();
+})();
+</script>
