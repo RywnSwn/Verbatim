@@ -150,6 +150,20 @@ shot "mini-idle"
 osascript -e 'tell application "System Events" to keystroke "m" using {shift down, command down}' || true
 sleep 1
 
+# Design pass: the Settings window (pages down the left), General then Look.
+osascript -e 'tell application "System Events" to keystroke "," using {command down}' || true
+sleep 3
+check "open Settings"
+shot "settings-general"
+osascript -e 'tell application "System Events" to key code 125' || true
+sleep 1.5
+shot "settings-look"
+osascript -e 'tell application "System Events" to key code 125' || true
+sleep 1.5
+shot "settings-transcription"
+osascript -e 'tell application "System Events" to keystroke "w" using {command down}' || true
+sleep 1
+
 # A window that comes back shorter than the app's minimum (a frame saved by an
 # older build, or macOS tiling). Ryan's window was like this: about 490 tall.
 osascript -e 'tell application "System Events" to keystroke "q" using {command down}' || true
@@ -162,6 +176,9 @@ defaults read com.rywnswn.verbatim | grep "NSWindow Frame" | sed -E 's/^ *"([^"]
   defaults write com.rywnswn.verbatim "$key" "20 250 1000 470 $5 $6 $7 $8 "
 done
 defaults read com.rywnswn.verbatim | grep "NSWindow Frame" || true
+# Design pass: the other look (solid sidebar, paper cards) on the relaunch.
+defaults write com.rywnswn.verbatim sidebarLook -string solid
+defaults write com.rywnswn.verbatim rowLook -string cards
 launch
 check "relaunch with a short saved frame"
 osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose unix id is '"$APP_PID"')' || true

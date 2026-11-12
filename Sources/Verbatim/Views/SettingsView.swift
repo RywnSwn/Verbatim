@@ -1,148 +1,154 @@
 import AVFoundation
 import SwiftUI
 
-/// Settings: General, Transcription (step 10), Words (step 8), Voices (step 7c),
-/// Storage (step 9), Updates.
+/// Settings (design pass, 2026-11-12): pages down the left like System
+/// Settings, instead of tabs across the top. Every page is a grouped form:
+/// a name and a short explanation on the left, the control on the right.
+/// General, Look (new), Transcription (step 10), Words (step 8), Voices
+/// (step 7c), Storage (step 9), Updates, Shortcuts (new).
 struct SettingsView: View {
+    @State private var page: SettingsPage? = .general
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @AppStorage(SidebarLook.key) private var sidebarLook: SidebarLook = .glass
+
+    private var solid: Bool { sidebarLook == .solid || reduceTransparency }
+
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gearshape") {
-                GeneralSettings()
+        NavigationSplitView {
+            List(SettingsPage.allCases, selection: $page) { p in
+                Label(p.title, systemImage: p.icon)
+                    .tag(p)
             }
-            Tab("Transcription", systemImage: "text.word.spacing") {
-                TranscriptionSettings()
+            .scrollContentBackground(solid ? .hidden : .automatic)
+            .background {
+                if solid { Theme.sidebarSolid.ignoresSafeArea() }
             }
-            Tab("Words", systemImage: "character.book.closed") {
-                WordSettings()
+            .toolbar(removing: .sidebarToggle)
+            .navigationSplitViewColumnWidth(190)
+        } detail: {
+            Group {
+                switch page ?? .general {
+                case .general: GeneralSettings()
+                case .look: LookSettings()
+                case .transcription: TranscriptionSettings()
+                case .words: WordSettings()
+                case .voices: VoiceSettings()
+                case .storage: StorageSettings()
+                case .updates: UpdateSettings()
+                case .shortcuts: ShortcutSettings()
+                }
             }
-            Tab("Voices", systemImage: "person.wave.2") {
-                VoiceSettings()
-            }
-            Tab("Storage", systemImage: "internaldrive") {
-                StorageSettings()
-            }
-            Tab("Updates", systemImage: "arrow.down.circle") {
-                UpdateSettings()
+            .formStyle(.grouped)
+            .navigationTitle((page ?? .general).title)
+        }
+        .frame(width: 740, height: 560)
+    }
+}
+
+enum SettingsPage: String, CaseIterable, Identifiable {
+    case general, look, transcription, words, voices, storage, updates, shortcuts
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .look: "Look"
+        case .transcription: "Transcription"
+        case .words: "Words"
+        case .voices: "Voices"
+        case .storage: "Storage"
+        case .updates: "Updates"
+        case .shortcuts: "Shortcuts"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .general: "gearshape"
+        case .look: "eye"
+        case .transcription: "text.word.spacing"
+        case .words: "character.book.closed"
+        case .voices: "person.wave.2"
+        case .storage: "internaldrive"
+        case .updates: "arrow.down.circle"
+        case .shortcuts: "keyboard"
+        }
+    }
+}
+
+/// The top of a settings page: what the page is for, then the first group's
+/// name. Used as the first section's header, so it scrolls with the page.
+struct PageHeader: View {
+    let lede: String
+    var first: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(lede)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let first {
+                // Same look as the other section names on the page.
+                Text(first)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
             }
         }
-        .frame(width: 560)
+        .textCase(nil)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 struct GeneralSettings: View {
     @Environment(RecorderModel.self) private var model
     @AppStorage(Microphones.chosenKey) private var chosenID = ""
-    @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
-    @AppStorage(TimeStyle.copyKey) private var timesInCopies = false
     @AppStorage(RecorderModel.quietMinutesKey) private var quietMinutes = 5
-    @AppStorage(TextSize.key) private var textSize = TextSize.normal
     @AppStorage("showInMenuBar") private var showInMenuBar = true
     @AppStorage(Messages.enabledKey) private var messagesOn = true
     @State private var mics: [Mic] = []
 
     var body: some View {
         Form {
-
-            Picker("Microphone:", selection: $chosenID) {
-                Text("MacBook mic (recommended)").tag("")
-                ForEach(mics.filter { !$0.isBuiltIn }) { mic in
-                    Text(mic.displayName).tag(mic.id)
-                }
-                if !chosenID.isEmpty, !mics.contains(where: { $0.id == chosenID }) {
-                    Text("Unplugged mic").tag(chosenID)
-                }
-            }
-            Group {
-                if chosenMic?.isBluetooth == true {
-                    Text("AirPods and other Bluetooth mics sound worse than the MacBook mic for a whole classroom.")
-                } else if !chosenID.isEmpty, chosenMic == nil {
-                    Text("This mic isn't plugged in, so Verbatim uses the MacBook mic.")
-                } else {
-                    Text("USB and wireless mics, like a DJI, show up here when plugged in. If one is unplugged in class, Verbatim switches to the MacBook mic and keeps going. It never switches to AirPods by itself.")
-                }
-            }
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            Picker("Ask \u{201C}Still recording?\u{201D}:", selection: $quietMinutes) {
-                Text("After 5 minutes of quiet").tag(5)
-                Text("After 10 minutes of quiet").tag(10)
-                Text("After 20 minutes of quiet").tag(20)
-                Text("After 30 minutes of quiet").tag(30)
-                Text("Never").tag(0)
-            }
-            Text("Recording never stops by itself until 3 hours.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            Divider()
-                .padding(.vertical, 6)
-
-            LabeledContent("Transcript text size:") {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Text("A").font(.system(size: 11))
-                        Slider(value: $textSize, in: TextSize.range, step: 1)
-                            .frame(width: 180)
-                            .accessibilityLabel("Transcript text size")
-                            .accessibilityValue("\(Int(textSize)) points")
-                        Text("A").font(.system(size: 17))
+            Section {
+                Picker(selection: $chosenID) {
+                    Text("MacBook mic (recommended)").tag("")
+                    ForEach(mics.filter { !$0.isBuiltIn }) { mic in
+                        Text(mic.displayName).tag(mic.id)
                     }
-                    Text("\(Text("Mr. Yurt:").fontWeight(.semibold)) Kweku Tsin carried the pot up to the sky.")
-                        .font(Theme.transcript(textSize))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 280, alignment: .leading)
-                    Text("Also \u{2318}+ and \u{2318}\u{2212} anywhere in the app, \u{2318}0 for normal.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Picker("Times:", selection: $timeStyle) {
-                Text("Clock time (10:42)").tag(TimeStyle.clock)
-                Text("Time since start (37:12)").tag(TimeStyle.sinceStart)
-            }
-            .pickerStyle(.radioGroup)
-            Text("Imported files always show time since start.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Toggle("Include times when copying and exporting", isOn: $timesInCopies)
-            Text(timesInCopies ? "Each line starts with its time, like [10:42]." : "Just the words. Cleaner for pasting into Claude.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Divider()
-                .padding(.vertical, 6)
-
-            Toggle("Show Verbatim in the menu bar", isOn: $showInMenuBar)
-            Text("While recording it always shows, so you know it's on.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Toggle("Tell me things when Verbatim is hidden", isOn: $messagesOn)
-            Text("Like \u{201C}Still recording?\u{201D} or low battery, as a quiet banner. Never a sound.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Divider()
-                .padding(.vertical, 6)
-
-            LabeledContent("Shortcuts:") {
-                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 3) {
-                    ForEach(Self.shortcuts.indices, id: \.self) { i in
-                        GridRow {
-                            Text(Self.shortcuts[i].0)
-                            Text(Self.shortcuts[i].1).foregroundStyle(.secondary).monospacedDigit()
-                        }
+                    if !chosenID.isEmpty, !mics.contains(where: { $0.id == chosenID }) {
+                        Text("Unplugged mic").tag(chosenID)
                     }
+                } label: {
+                    Text("Microphone")
+                    Text(micHelp)
                 }
-                .font(.callout)
+            } header: {
+                PageHeader(lede: "Your mic, and how Verbatim gets your attention.")
+            }
+
+            Section("While recording") {
+                Picker(selection: $quietMinutes) {
+                    Text("After 5 minutes of quiet").tag(5)
+                    Text("After 10 minutes of quiet").tag(10)
+                    Text("After 20 minutes of quiet").tag(20)
+                    Text("After 30 minutes of quiet").tag(30)
+                    Text("Never").tag(0)
+                } label: {
+                    Text("Ask \u{201C}Still recording?\u{201D}")
+                    Text("Recording never stops by itself until 3 hours.")
+                }
+                Toggle(isOn: $showInMenuBar) {
+                    Text("Show Verbatim in the menu bar")
+                    Text("While recording it always shows, so you know it's on.")
+                }
+                Toggle(isOn: $messagesOn) {
+                    Text("Tell me things when Verbatim is hidden")
+                    Text("Like \u{201C}Still recording?\u{201D} or low battery, as a quiet banner. Never a sound.")
+                }
             }
         }
-        .formStyle(.columns)
-        .padding(24)
         .onAppear(perform: refresh)
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in refresh() }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in refresh() }
@@ -151,6 +157,194 @@ struct GeneralSettings: View {
 
     private var chosenMic: Mic? { mics.first { $0.id == chosenID } }
 
+    private var micHelp: String {
+        if chosenMic?.isBluetooth == true {
+            return "AirPods and other Bluetooth mics sound worse than the MacBook mic for a whole classroom."
+        }
+        if !chosenID.isEmpty, chosenMic == nil {
+            return "This mic isn't plugged in, so Verbatim uses the MacBook mic."
+        }
+        return "USB and wireless mics, like a DJI, show up here when plugged in. If one is unplugged in class, Verbatim switches to the MacBook mic and keeps going. It never switches to AirPods by itself."
+    }
+
+    private func refresh() { mics = Microphones.list() }
+}
+
+/// Settings > Look (design pass): glass or solid sidebar, soft boxes or
+/// paper cards for recordings, transcript text size, and how times show.
+struct LookSettings: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @AppStorage(SidebarLook.key) private var sidebarLook: SidebarLook = .glass
+    @AppStorage(RowLook.key) private var rowLook: RowLook = .soft
+    @AppStorage(TextSize.key) private var textSize = TextSize.normal
+    @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
+    @AppStorage(TimeStyle.copyKey) private var timesInCopies = false
+
+    var body: some View {
+        Form {
+            Section {
+                HStack(spacing: 16) {
+                    LookTile(title: "Glass", selected: sidebarLook == .glass) { sidebarLook = .glass } preview: {
+                        SidebarPreview(glass: true)
+                    }
+                    LookTile(title: "Solid", selected: sidebarLook == .solid) { sidebarLook = .solid } preview: {
+                        SidebarPreview(glass: false)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 4)
+                Text(reduceTransparency
+                     ? "Reduce transparency is on in your Mac's Accessibility settings, so the sidebar is always solid."
+                     : "Glass lets your desktop show through, blurred. Solid is a plain sheet, easier to read over busy desktop pictures.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } header: {
+                PageHeader(lede: "How Verbatim looks. Nothing here changes what gets recorded.", first: "Sidebar")
+            }
+
+            Section("Recordings in the sidebar") {
+                HStack(spacing: 16) {
+                    LookTile(title: "Soft boxes", selected: rowLook == .soft) { rowLook = .soft } preview: {
+                        RowsPreview(look: .soft)
+                    }
+                    LookTile(title: "Paper cards", selected: rowLook == .cards) { rowLook = .cards } preview: {
+                        RowsPreview(look: .cards)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 4)
+                Text("Soft boxes are quieter. Paper cards stand out more, and the open one turns dark.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("Transcript") {
+                LabeledContent {
+                    HStack(spacing: 8) {
+                        Text("A").font(.system(size: 11))
+                        Slider(value: $textSize, in: TextSize.range, step: 1)
+                            .frame(width: 160)
+                            .accessibilityLabel("Transcript text size")
+                            .accessibilityValue("\(Int(textSize)) points")
+                        Text("A").font(.system(size: 17))
+                    }
+                } label: {
+                    Text("Text size")
+                    Text("Also \u{2318}+ and \u{2318}\u{2212} anywhere in the app, \u{2318}0 for normal.")
+                }
+                Text("\(Text("Mr. Yurt:").fontWeight(.semibold)) Kweku Tsin carried the pot up to the sky.")
+                    .font(Theme.transcript(textSize))
+                    .fixedSize(horizontal: false, vertical: true)
+                Picker(selection: $timeStyle) {
+                    Text("Clock time (10:42)").tag(TimeStyle.clock)
+                    Text("Time since start (37:12)").tag(TimeStyle.sinceStart)
+                } label: {
+                    Text("Times")
+                    Text("Imported files always show time since start.")
+                }
+                Toggle(isOn: $timesInCopies) {
+                    Text("Include times when copying and exporting")
+                    Text(timesInCopies ? "Each line starts with its time, like [10:42]." : "Just the words. Cleaner for pasting into Claude.")
+                }
+            }
+        }
+    }
+}
+
+/// A choice with a little picture of it (Settings > Look).
+struct LookTile<Preview: View>: View {
+    let title: String
+    let selected: Bool
+    let action: () -> Void
+    @ViewBuilder let preview: () -> Preview
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                preview()
+                    .frame(width: 112, height: 70)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(selected ? Theme.accent : Color.primary.opacity(0.15),
+                                          lineWidth: selected ? 2.5 : 1)
+                    }
+                Text(title)
+                    .font(.callout.weight(selected ? .semibold : .regular))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// A tiny window: desktop colors, a sidebar (glass or solid), paper.
+struct SidebarPreview: View {
+    let glass: Bool
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            LinearGradient(colors: [Color(red: 0.55, green: 0.71, blue: 0.88),
+                                    Color(red: 0.94, green: 0.68, blue: 0.58)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 2).fill(Theme.ink.opacity(0.16)).frame(height: 6)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(6)
+                .frame(width: 40)
+                .background {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(glass ? AnyShapeStyle(.thinMaterial) : AnyShapeStyle(Theme.sidebarSolid))
+                }
+                .padding(5)
+                Theme.paper
+            }
+        }
+    }
+}
+
+/// Three tiny sidebar rows in one style, the middle one open.
+struct RowsPreview: View {
+    let look: RowLook
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { i in
+                let open = i == 1
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(fill(open: open))
+                    .shadow(color: .black.opacity(look == .cards ? 0.15 : 0), radius: 0.8, y: 0.5)
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill((look == .cards && open ? Theme.paper : Theme.ink).opacity(0.4))
+                            .frame(width: 44, height: 4)
+                            .padding(.leading, 6)
+                    }
+                    .frame(height: 15)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.sidebarSolid)
+    }
+
+    private func fill(open: Bool) -> Color {
+        switch look {
+        case .soft: Theme.ink.opacity(open ? 0.16 : 0.06)
+        case .cards: open ? Theme.ink : Theme.card
+        }
+    }
+}
+
+/// Settings > Shortcuts (design pass): its own page, so General stays short.
+struct ShortcutSettings: View {
     static let shortcuts: [(String, String)] = [
         ("Do anything", "\u{2318}K"),
         ("New recording", "\u{2318}N"),
@@ -163,9 +357,24 @@ struct GeneralSettings: View {
         ("Find in transcript", "\u{2318}F"),
         ("Text bigger, smaller", "\u{2318}+  \u{2318}\u{2212}"),
         ("Transcribe a Voice Memo", "\u{2318}O"),
+        ("Show or hide the sidebar", "\u{2303}\u{2318}S"),
     ]
 
-    private func refresh() { mics = Microphones.list() }
+    var body: some View {
+        Form {
+            Section {
+                ForEach(Self.shortcuts.indices, id: \.self) { i in
+                    LabeledContent(Self.shortcuts[i].0) {
+                        Text(Self.shortcuts[i].1)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                PageHeader(lede: "These work anywhere in Verbatim. \u{2318}K finds everything else.")
+            }
+        }
+    }
 }
 
 struct UpdateSettings: View {
@@ -175,30 +384,26 @@ struct UpdateSettings: View {
 
     var body: some View {
         Form {
-            LabeledContent("Version:") {
-                Text(AppInfo.version).textSelection(.enabled)
-            }
-            Toggle("Check for updates automatically", isOn: $auto)
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Include test builds", isOn: $testBuilds)
-                Text("Test builds have changes Claude is still working on, so you can try them before they're final.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            LabeledContent("") {
-                HStack(spacing: 10) {
+            Section {
+                LabeledContent("Version") {
+                    Text(AppInfo.version).textSelection(.enabled)
+                }
+                Toggle("Check for updates automatically", isOn: $auto)
+                Toggle(isOn: $testBuilds) {
+                    Text("Include test builds")
+                    Text("Test builds have changes Claude is still working on, so you can try them before they're final.")
+                }
+                LabeledContent {
                     Button("Check Now") { Task { await updater.check(userInitiated: true) } }
                         .disabled(updater.state == .checking)
-                    Text(statusText)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                } label: {
+                    Text("Check for an update")
+                    if !statusText.isEmpty { Text(statusText) }
                 }
+            } header: {
+                PageHeader(lede: "Verbatim updates itself from GitHub.")
             }
         }
-        .formStyle(.columns)
-        .padding(24)
     }
 
     private var statusText: String {
@@ -218,34 +423,82 @@ struct UpdateSettings: View {
 /// forget it. Nothing to set up: renaming a speaker adds it.
 struct VoiceSettings: View {
     private var library: VoiceLibrary { .shared }
+    private var names: SpeakerNames { .shared }
     @State private var confirmForget: VoiceLibrary.Voice?
+    /// The last name removed from the speaker menu list, for Undo.
+    @State private var removedName: (name: String, index: Int, id: UUID)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("When you rename a speaker in a transcript (like Speaker 1 to Mr. Yurt), Verbatim saves 20 seconds of that voice on this Mac. New recordings then know them by name from the first line.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if library.voices.isEmpty {
-                Text("No voices yet. Click a speaker's name in a transcript and pick Rename.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 60)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(library.voices.sorted { $0.savedAt > $1.savedAt }) { voice in
-                        row(voice)
-                        if voice.id != library.voices.sorted(by: { $0.savedAt > $1.savedAt }).last?.id { Divider() }
-                    }
+        let voices = library.voices.sorted { $0.savedAt > $1.savedAt }
+        Form {
+            Section {
+                if voices.isEmpty {
+                    Text("No voices yet. Click a speaker's name in a transcript and pick Rename.")
+                        .foregroundStyle(.secondary)
                 }
-                .background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                ForEach(voices) { voice in
+                    row(voice)
+                }
+            } header: {
+                PageHeader(lede: "When you rename a speaker in a transcript (like Speaker 1 to Mr. Yurt), Verbatim saves 20 seconds of that voice on this Mac. New recordings then know them by name from the first line.",
+                           first: "Voices Verbatim knows")
+            } footer: {
                 if library.voices.filter(\.enabled).count > VoiceLibrary.maxInUse {
                     Text("Only the \(VoiceLibrary.maxInUse) newest switched-on voices are used, so there's room for new people too.")
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             }
+
+            Section {
+                if names.recent.isEmpty {
+                    Text("None yet. Names you type for a speaker show up here.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(names.recent, id: \.self) { name in
+                    HStack {
+                        Text(name)
+                        Spacer()
+                        Button {
+                            guard let i = Speakers.forget(name) else { return }
+                            let r = (name: name, index: i, id: UUID())
+                            removedName = r
+                            Task {
+                                try? await Task.sleep(for: .seconds(10))
+                                if removedName?.id == r.id { removedName = nil }
+                            }
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                                .frame(width: 24, height: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .help("Stop offering \(name)")
+                        .accessibilityLabel("Remove \(name)")
+                    }
+                }
+                if let removed = removedName {
+                    HStack(spacing: 8) {
+                        Text("Removed \(removed.name).").font(.callout)
+                        Button("Undo") {
+                            Speakers.restore(removed.name, at: removed.index)
+                            removedName = nil
+                        }
+                        .buttonStyle(.link)
+                        .fontWeight(.medium)
+                        Spacer()
+                    }
+                }
+            } header: {
+                Text("Names offered in the speaker menu")
+            } footer: {
+                Text("The last 8 names you typed for a speaker, offered in every recording. Removing one only stops it being offered. Transcripts keep their names.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(24)
         .alert("Forget \(confirmForget?.name ?? "")'s voice?", isPresented: Binding(
             get: { confirmForget != nil }, set: { if !$0 { confirmForget = nil } }
         )) {
@@ -260,22 +513,20 @@ struct VoiceSettings: View {
     }
 
     private func row(_ voice: VoiceLibrary.Voice) -> some View {
-        HStack(spacing: 12) {
-            Toggle(isOn: Binding(get: { voice.enabled }, set: { library.setEnabled(voice.id, $0) })) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(voice.name).font(.body.weight(.medium))
-                    Text("From \(voice.from), \(Int(voice.seconds)) s")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+        LabeledContent {
+            HStack(spacing: 10) {
+                Toggle("Use", isOn: Binding(get: { voice.enabled }, set: { library.setEnabled(voice.id, $0) }))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .help(voice.enabled ? "Used in new recordings. Switch off to stop without forgetting." : "Not used. Switch on to use it again.")
+                    .accessibilityLabel("Use \(voice.name)'s voice")
+                Button("Forget…") { confirmForget = voice }
             }
-            .toggleStyle(.checkbox)
-            .help(voice.enabled ? "Used in new recordings. Untick to stop without forgetting." : "Not used. Tick to use it again.")
-            Spacer()
-            Button("Forget…") { confirmForget = voice }
+        } label: {
+            Text(voice.name)
+            Text("From \(voice.from), \(Int(voice.seconds)) s")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
     }
 }
 
@@ -292,135 +543,124 @@ struct WordSettings: View {
 
     private struct Removed: Equatable {
         var text: String
+        var inFixes = false
         var id = UUID()
         var run: () -> Void
         static func == (a: Removed, b: Removed) -> Bool { a.id == b.id }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Word list").font(.headline)
-            Text("Names and words Verbatim listens for, live and in files. When it hears something close, it writes your spelling. A misheard name can fix itself a few seconds after it shows up.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if list.words.isEmpty {
-                Text("No words yet. Add names that are hard to spell, like people and places from class.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            } else {
-                rows(list.words, id: \.self) { word in
-                    Text(word)
-                } remove: { word in
-                    guard let i = list.removeWord(word) else { return }
-                    offerUndo("Removed \(word).") { list.insertWord(word, at: i) }
+        Form {
+            Section {
+                if list.words.isEmpty {
+                    Text("No words yet. Add names that are hard to spell, like people and places from class.")
+                        .foregroundStyle(.secondary)
                 }
+                ForEach(Array(list.words.enumerated()), id: \.offset) { _, word in
+                    removable {
+                        Text(word)
+                    } remove: {
+                        guard let i = list.removeWord(word) else { return }
+                        offerUndo("Removed \(word).") { list.insertWord(word, at: i) }
+                    }
+                }
+                HStack {
+                    TextField("New word", text: $newWord, prompt: Text("Add a name, like Kweku Tsin"))
+                        .labelsHidden()
+                        .onSubmit(addWord)
+                    Button("Add", action: addWord)
+                        .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .onChange(of: newWord) { wordProblem = nil }
+                if let wordProblem { problem(wordProblem) }
+                if let undo, !undo.inFixes { undoLine(undo) }
+                WordModelNote(inSettings: true)
+            } header: {
+                PageHeader(lede: "Names and words Verbatim listens for, live and in files. When it hears something close, it writes your spelling. A misheard name can fix itself a few seconds after it shows up.",
+                           first: "Word list")
             }
-            HStack {
-                TextField("Add a name, like Kweku Tsin", text: $newWord)
-                    .onSubmit(addWord)
-                Button("Add", action: addWord)
-                    .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .onChange(of: newWord) { wordProblem = nil }
-            if let wordProblem { problem(wordProblem) }
-            WordModelNote(inSettings: true)
 
-            Divider().padding(.vertical, 8)
-
-            Text("Fixes").font(.headline)
-            Text("Whenever Verbatim writes the left side, it writes the right side instead. Whole words only, so other words are never broken. Lines you edited are left alone.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if list.fixes.isEmpty {
-                Text("No fixes yet. When you correct a word in a transcript, Verbatim asks if it should remember it.")
+            Section {
+                if list.fixes.isEmpty {
+                    Text("No fixes yet. When you correct a word in a transcript, Verbatim asks if it should remember it.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(Array(list.fixes.enumerated()), id: \.offset) { _, fix in
+                    removable {
+                        HStack(spacing: 8) {
+                            Text(fix.from).foregroundStyle(.secondary)
+                            Image(systemName: "arrow.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .accessibilityLabel("to")
+                            Text(fix.to)
+                        }
+                    } remove: {
+                        guard let i = list.removeFix(fix) else { return }
+                        offerUndo("Removed the fix for \(fix.from).", inFixes: true) { list.insertFix(fix, at: i) }
+                    }
+                }
+                HStack {
+                    TextField("Heard as", text: $fixFrom, prompt: Text("Heard as"))
+                        .labelsHidden()
+                    Image(systemName: "arrow.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    TextField("Write", text: $fixTo, prompt: Text("Write"))
+                        .labelsHidden()
+                        .onSubmit(addFix)
+                    Button("Add", action: addFix)
+                        .disabled(fixFrom.trimmingCharacters(in: .whitespaces).isEmpty
+                                  || fixTo.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .onChange(of: fixFrom + "|" + fixTo) { fixProblem = nil }
+                if let fixProblem { problem(fixProblem) }
+                if let undo, undo.inFixes { undoLine(undo) }
+            } header: {
+                Text("Fixes")
+            } footer: {
+                Text("Whenever Verbatim writes the left side, it writes the right side instead. Whole words only, so other words are never broken. Lines you edited are left alone.")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            } else {
-                rows(list.fixes, id: \.id) { fix in
-                    HStack(spacing: 8) {
-                        Text(fix.from).foregroundStyle(.secondary)
-                        Image(systemName: "arrow.right")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .accessibilityLabel("to")
-                        Text(fix.to)
-                    }
-                } remove: { fix in
-                    guard let i = list.removeFix(fix) else { return }
-                    offerUndo("Removed the fix for \(fix.from).") { list.insertFix(fix, at: i) }
-                }
             }
-            HStack {
-                TextField("Heard as", text: $fixFrom)
-                Image(systemName: "arrow.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                TextField("Write", text: $fixTo)
-                    .onSubmit(addFix)
-                Button("Add", action: addFix)
-                    .disabled(fixFrom.trimmingCharacters(in: .whitespaces).isEmpty
-                              || fixTo.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .onChange(of: fixFrom + "|" + fixTo) { fixProblem = nil }
-            if let fixProblem { problem(fixProblem) }
-
-            HStack(spacing: 8) {
-                if let undo {
-                    Text(undo.text).font(.callout)
-                    Button("Undo") {
-                        undo.run()
-                        self.undo = nil
-                    }
-                    .buttonStyle(.link)
-                    .fontWeight(.medium)
-                }
-            }
-            .frame(height: 20)
         }
-        .padding(24)
     }
 
-    /// A plain list in a light tint, like Settings > Voices. Scrolls when long.
-    private func rows<Item, ID: Hashable, Label: View>(
-        _ items: [Item], id: KeyPath<Item, ID>,
-        @ViewBuilder label: @escaping (Item) -> Label,
-        remove: @escaping (Item) -> Void
-    ) -> some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.offset) { i, item in
-                    HStack {
-                        label(item)
-                        Spacer()
-                        Button {
-                            remove(item)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                                .frame(width: 24, height: 24)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
-                        .help("Remove")
-                        .accessibilityLabel("Remove")
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    if i < items.count - 1 { Divider() }
-                }
+    /// A row with a remove button on the right.
+    private func removable<Label: View>(@ViewBuilder _ label: () -> Label, remove: @escaping () -> Void) -> some View {
+        HStack {
+            label()
+            Spacer()
+            Button(action: remove) {
+                Image(systemName: "minus.circle")
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help("Remove")
+            .accessibilityLabel("Remove")
         }
-        .frame(maxHeight: 130)
-        .fixedSize(horizontal: false, vertical: items.count <= 4)
-        .background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func undoLine(_ undo: Removed) -> some View {
+        HStack(spacing: 8) {
+            Text(undo.text).font(.callout)
+            Button("Undo") {
+                undo.run()
+                self.undo = nil
+            }
+            .buttonStyle(.link)
+            .fontWeight(.medium)
+            Spacer()
+        }
     }
 
     private func problem(_ text: String) -> some View {
         Text(text)
-            .font(.caption)
+            .font(.callout)
             .foregroundStyle(.secondary)
     }
 
@@ -439,7 +679,7 @@ struct WordSettings: View {
             return
         }
         if let old = list.addFix(fix) {
-            offerUndo("Changed the fix for \(fix.from).") {
+            offerUndo("Changed the fix for \(fix.from).", inFixes: true) {
                 list.removeFix(PhraseFix(from: fix.from, to: fix.to))
                 list.insertFix(old, at: list.fixes.count)
             }
@@ -448,8 +688,8 @@ struct WordSettings: View {
         fixTo = ""
     }
 
-    private func offerUndo(_ text: String, run: @escaping () -> Void) {
-        let r = Removed(text: text, run: run)
+    private func offerUndo(_ text: String, inFixes: Bool = false, run: @escaping () -> Void) {
+        let r = Removed(text: text, inFixes: inFixes, run: run)
         undo = r
         Task {
             try? await Task.sleep(for: .seconds(10))
@@ -466,36 +706,30 @@ struct TranscriptionSettings: View {
 
     var body: some View {
         Form {
-            Text("Everything runs on this Mac and works offline. These download once. If one breaks, Verbatim downloads it again by itself.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 6)
-
-            LiveModelStatusLine()
-            Divider().padding(.vertical, 4)
-            statusRow("Speaker labels", note: "Tells Mr. Yurt apart from students.", ready: speakers.isReady, text: speakerText)
-            Divider().padding(.vertical, 4)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Word list helper").font(.body.weight(.medium))
-                WordModelNote(inSettings: true)
+            Section {
+                LiveModelStatusLine()
+                statusRow("Speaker labels", note: "Tells Mr. Yurt apart from students.", ready: speakers.isReady, text: speakerText)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Word list helper").font(.body.weight(.medium))
+                    WordModelNote(inSettings: true)
+                }
+            } header: {
+                PageHeader(lede: "Everything runs on this Mac and works offline. These download once. If one breaks, Verbatim downloads it again by itself.",
+                           first: "Downloads")
             }
 
-            Divider().padding(.vertical, 10)
-
-            Toggle("Name recordings from what was said", isOn: $autoName)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("After you stop, your Mac's Apple Intelligence reads the transcript and picks a short name, like \u{201C}Anansi and the sky god\u{201D}. On this Mac, offline. Names you type yourself are never changed.")
+            Section("Names") {
+                Toggle(isOn: $autoName) {
+                    Text("Name recordings from what was said")
+                    Text("After you stop, your Mac's Apple Intelligence reads the transcript and picks a short name, like \u{201C}Anansi and the sky god\u{201D}. On this Mac, offline. Names you type yourself are never changed.")
+                }
                 if autoName, let reason = AutoName.unavailableReason {
-                    Text(reason).foregroundStyle(.primary)
+                    Text(reason)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
         }
-        .formStyle(.columns)
-        .padding(24)
     }
 
     private var speakerText: String {

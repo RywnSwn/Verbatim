@@ -127,64 +127,55 @@ struct StorageSettings: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Form {
-                Picker("Keep audio for:", selection: $keepDays) {
+        Form {
+            Section {
+                if let sizes {
+                    SpaceBar(recordings: sizes.recordings, models: sizes.models, deleted: deleted.totalSize)
+                } else {
+                    Text("Working it out…").foregroundStyle(.secondary)
+                }
+            } header: {
+                PageHeader(lede: "Text is kept forever. Audio is never deleted before its text is finished.",
+                           first: "Space used")
+            }
+
+            Section("Audio") {
+                Picker(selection: $keepDays) {
                     ForEach(AudioCleanup.choices, id: \.self) { d in
                         Text(d == 0 ? "Forever" : "\(d) days").tag(d)
                     }
-                }
-                .fixedSize()
-                Text("Text is kept forever. Audio is never deleted before its text is finished. To keep one recording's audio, right-click it in the sidebar > Keep Audio.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                LabeledContent("Space used:") {
-                    if let sizes {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(Storage.text(sizes.recordings + sizes.models + deleted.totalSize)).font(.body.weight(.medium))
-                            Text("Recordings \(Storage.text(sizes.recordings)), speech models \(Storage.text(sizes.models))")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                            if deleted.totalSize > 0 {
-                                Text("Recently deleted \(Storage.text(deleted.totalSize))")
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    } else {
-                        Text("Working it out…").foregroundStyle(.secondary)
-                    }
+                } label: {
+                    Text("Keep audio for")
+                    Text("To keep one recording's audio, right-click it in the sidebar, then Keep Audio.")
                 }
             }
-            .formStyle(.columns)
 
             if let sizes, !sizes.rows.isEmpty {
-                Text("Biggest recordings").font(.headline).padding(.top, 4)
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(Array(sizes.rows.prefix(30).enumerated()), id: \.element.id) { i, row in
-                            if let info = model.info(row.id) {
-                                biggest(info, bytes: row.bytes)
-                                if i < min(sizes.rows.count, 30) - 1 { Divider() }
-                            }
+                Section("Biggest recordings") {
+                    ForEach(Array(sizes.rows.prefix(30)), id: \.id) { row in
+                        if let info = model.info(row.id) {
+                            biggest(info, bytes: row.bytes)
                         }
                     }
                 }
-                .frame(maxHeight: 170)
-                .background(Theme.line.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
             }
 
-            Divider().padding(.vertical, 4)
-            HStack {
-                Button("Export Everything…") { model.exportEverything() }
-                    .help("A zip with every transcript (as .md files you can read anywhere) and your settings. No audio.")
-                Spacer()
-                Button("Delete All Recordings…", role: .destructive) { confirmDeleteAll = true }
-                    .disabled(model.recordings.allSatisfy { !model.canDelete($0.id) })
+            Section("Everything") {
+                LabeledContent {
+                    Button("Export…") { model.exportEverything() }
+                } label: {
+                    Text("Export everything")
+                    Text("A zip with every transcript (as .md files you can read anywhere) and your settings. No audio.")
+                }
+                LabeledContent {
+                    Button("Delete All…", role: .destructive) { confirmDeleteAll = true }
+                        .disabled(model.recordings.allSatisfy { !model.canDelete($0.id) })
+                } label: {
+                    Text("Delete all recordings")
+                    Text("They go to Recently deleted first, so you can put them back for \(RecentlyDeleted.keepDays) days.")
+                }
             }
         }
-        .padding(24)
         .task(id: model.recordings.map(\.hasAudio)) { await measure() }
         .alert("Delete all recordings?", isPresented: $confirmDeleteAll) {
             Button("Delete All", role: .destructive) { model.deleteAll() }
@@ -213,8 +204,6 @@ struct StorageSettings: View {
             .disabled(blocker != nil)
             .help(blocker ?? "The text stays. Undo in the bottom bar of the main window.")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
     }
 
     private func measure() async {
@@ -227,5 +216,53 @@ struct StorageSettings: View {
                          models: modelFolders.reduce(0) { $0 + Storage.size(of: $1) })
         }.value
         sizes = result
+    }
+}
+
+/// Settings > Storage: the total, then one bar split into recordings,
+/// speech models and Recently deleted (shades of ink, labelled below).
+struct SpaceBar: View {
+    let recordings: Int64
+    let models: Int64
+    let deleted: Int64
+
+    private var total: Int64 { max(recordings + models + deleted, 1) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(Storage.text(recordings + models + deleted))
+                .font(.title3.weight(.semibold))
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    part(recordings, Theme.ink, geo.size.width)
+                    part(models, Theme.ink.opacity(0.45), geo.size.width)
+                    part(deleted, Theme.ink.opacity(0.22), geo.size.width)
+                    Spacer(minLength: 0)
+                }
+            }
+            .frame(height: 10)
+            .background(Theme.ink.opacity(0.08))
+            .clipShape(Capsule())
+            .accessibilityHidden(true)
+            HStack(spacing: 16) {
+                key("Recordings \(Storage.text(recordings))", Theme.ink)
+                key("Speech models \(Storage.text(models))", Theme.ink.opacity(0.45))
+                if deleted > 0 { key("Recently deleted \(Storage.text(deleted))", Theme.ink.opacity(0.22)) }
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func part(_ bytes: Int64, _ color: Color, _ width: CGFloat) -> some View {
+        color.frame(width: width * CGFloat(bytes) / CGFloat(total))
+    }
+
+    private func key(_ text: String, _ color: Color) -> some View {
+        HStack(spacing: 5) {
+            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 8, height: 8)
+            Text(text)
+        }
     }
 }

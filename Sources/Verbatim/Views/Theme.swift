@@ -14,6 +14,10 @@ enum Theme {
     /// Links, focus and the edit underline.
     static let accent = dynamic(light: 0x24427A, dark: 0x8FA9DD)
 
+    /// Design pass: a "paper card" row in the sidebar, and the solid sidebar.
+    static let card = dynamic(light: 0xFFFFFF, dark: 0x2D2C29)
+    static let sidebarSolid = dynamic(light: 0xF1EEE7, dark: 0x252421)
+
     /// Search hits, and the current hit (stronger).
     static let highlight = dynamic(light: 0xFBE9A6, dark: 0x5C4B16)
     static let highlightCurrent = dynamic(light: 0xF2C230, dark: 0x9A7514)
@@ -91,4 +95,18 @@ enum TextSize {
     static func set(_ value: Double) {
         UserDefaults.standard.set(min(max(value, range.lowerBound), range.upperBound), forKey: key)
     }
+}
+
+/// Settings > Look (design pass): the sidebar is glass (desktop shows through,
+/// blurred) or a solid sheet. Reduce transparency always means solid.
+enum SidebarLook: String {
+    case glass, solid
+    static let key = "sidebarLook"
+}
+
+/// Settings > Look (design pass): how each recording sits in the sidebar.
+/// Soft boxes: a light ink tint. Paper cards: white cards, the open one ink.
+enum RowLook: String {
+    case soft, cards
+    static let key = "rowLook"
 }

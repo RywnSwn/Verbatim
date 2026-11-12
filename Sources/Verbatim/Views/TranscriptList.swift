@@ -290,6 +290,22 @@ struct TranscriptList: View {
             nameDraft = ""
             naming = Naming(start: line.start, voice: nil, oldName: name ?? "")
         }
+        let past = Speakers.recentNames
+        if !past.isEmpty {
+            Divider()
+            // A Mac menu can't hold an X button, so forgetting is a submenu.
+            // The same list, with X buttons, is in Settings > Voices.
+            Menu("Forget a Name") {
+                ForEach(past, id: \.self) { n in
+                    Button(n) {
+                        guard let i = Speakers.forget(n) else { return }
+                        model.offerLineUndo("\(n) won't be offered as a speaker any more.") {
+                            Speakers.restore(n, at: i)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func lineRow(_ line: Transcript.Line, _ source: LineSource, speaker: String?, name: String?,
