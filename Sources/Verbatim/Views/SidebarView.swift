@@ -112,6 +112,8 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            // Solid, so recordings scrolling past don't show through the text.
+            .background(.bar)
         }
         .alert("Rename recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newTitle)
@@ -150,7 +152,7 @@ struct SidebarView: View {
     }
 
     private func row(_ info: RecordingInfo, indent: Bool) -> some View {
-        SidebarRow(info: info, isLive: info.id == model.currentID, phase: model.phase, elapsed: model.elapsed)
+        SidebarRow(info: info, isLive: info.id == model.currentID)
             .padding(.leading, indent ? 22 : 0)
             .tag(info.id)
             .draggable(RecordingDrag(id: info.id)) {
@@ -345,11 +347,20 @@ struct RecentsHeader: View {
     }
 }
 
+/// "Recording now, 12 min". Its own view so the ticking clock redraws only
+/// this bit of text, not the whole sidebar.
+struct LiveRowMeta: View {
+    @Environment(RecorderModel.self) private var model
+
+    var body: some View {
+        let len = RecorderModel.minutesText(model.elapsed)
+        Text(model.phase == .paused ? "Paused, \(len)" : "Recording now, \(len)")
+    }
+}
+
 struct SidebarRow: View {
     let info: RecordingInfo
     let isLive: Bool
-    let phase: RecorderModel.Phase
-    let elapsed: TimeInterval
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -361,20 +372,18 @@ struct SidebarRow: View {
                 Text(info.title)
                     .font(.body.weight(.medium))
                     .lineLimit(1)
-                Text(meta)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                Group {
+                    if isLive { LiveRowMeta() } else { Text(meta) }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
         }
         .padding(.vertical, 2)
     }
 
     private var meta: String {
-        if isLive {
-            let len = RecorderModel.minutesText(elapsed)
-            return phase == .paused ? "Paused, \(len)" : "Recording now, \(len)"
-        }
         let day = RecorderModel.dayTitle(info.createdAt)
         // Named after the day already: say the time instead of the day twice.
         let when = info.title.contains(day) ? info.createdAt.formatted(date: .omitted, time: .shortened) : day

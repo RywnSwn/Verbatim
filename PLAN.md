@@ -27,6 +27,62 @@ see step 5 notes). Ask Ryan to record the same kind of lecture again and
 compare live vs checked text. Second test (Transcribe again): no more
 missing sentences, but doubled lines and made-up text; fixed the same day.
 Markers are step 7b (built) and voice memory is step 7c (Ryan, 2026-11-10).
+Fix on 2026-11-12 (branch `claude/fix-stutter-sidebar-sizing`, which has
+`claude/step-10-polish` merged into it, RywnSwn/Verbatim#19): Ryan reported
+"so many glitches" in the step 10 test builds (sizing, stuttering, the
+sidebar) and asked about moving to Tauri. Found and fixed in code: the menu
+bar and the whole sidebar were redrawn 20 times a second while recording
+(they read `model.elapsed`), and the whole transcript was redone 8 times a
+second while audio played (it read `Playback.time`, and every visible line
+searched all lines). Rule from now on: a view that reads `elapsed`,
+`levels` or `Playback.time` must be a tiny view of its own. Also
+`DetailView` now sits in a `GeometryReader`, so a main-area screen that
+wants more height than the window can't stretch the split view and push
+the sidebar's top and bottom outside the window (Ryan saw that). Keep it.
+Mistake to avoid: this chat first branched from `main` when step 10 was
+still on its own branch, and Ryan got a test build with the old design.
+Check `git branch -r` for unmerged work before starting. Not tested by Ryan yet. Ask him for
+a glitch list (what he did, what he saw). Tauri: see `DECISIONS.md`, not
+decided by Ryan yet.
+Same day: 0.1.102 crashed for Ryan when he clicked the sidebar button
+(AppKit "too many Update Constraints passes" from the split view, same
+family as the 0.1.98 crash). Could NOT be reproduced on the CI Mac, but
+the test showed the system sidebar button did nothing below about 745 pt
+wide (no room). Fix in 0.1.109: our own sidebar button
+(`ContentView.toggleSidebar`, ⌃⌘S, system one removed); a window narrower
+than 860 pt is widened first, then the sidebar opens. Sidebar footer got a
+solid background (rows showed through the text). Not confirmed by Ryan yet;
+he was asked whether the window was narrow (sidebar hidden) or wide when it
+crashed. If it still crashes, get the new crash report and that answer.
+NEW, use it: `.github/workflows/smoke.yml` + `scripts/ci-smoke.sh` run the
+app on the CI Mac for every push to a `claude/**` branch, with fake
+recordings and groups, resize the window, press ⌃⌘S, and push screenshots
+to the `ci-smoke` branch (`git fetch origin ci-smoke`, then look at the
+PNGs). Claude can see the real app this way. Look at the screenshots before
+giving Ryan a build. Known gap: clicking a sidebar row in the script does
+not open a recording yet, so only the start screen is covered.
+Same day, the real cause of "sidebar top and bottom outside the window"
+(found with Ryan's Help > Copy Layout Details output, 0.1.115):
+NavigationSplitView made itself as tall as its columns WANTED (title bar +
+start screen content + bottom bar = 692 pt) instead of the window (552 pt).
+Fix in 0.1.117: both columns get `.frame(minHeight: 0, idealHeight: 300,
+maxHeight: .infinity)` in `ContentView` (keep these). The smoke test now
+fails if the split view's height differs from the window's. Help > Copy
+Layout Details (⌃⌘L, `Views/LayoutDetails.swift`) stays: ask Ryan for it
+whenever something is in the wrong place. His menu bar hides Help behind
+the notch, so tell him the shortcut. Ryan confirmed it ("finally") and asked to merge: step 10 and these fixes
+are on `main` since 2026-11-12 (RywnSwn/Verbatim#19 into #18 into main).
+
+Ryan's asks on 2026-11-12 for the NEXT chat (design pass, mockup first,
+use the ux-planner skill; nothing built yet):
+1. Sidebar can be opaque: a Settings choice, glass or solid.
+2. Recordings in the sidebar are hard to tell apart. Ryan (asked, same
+   day): "a little light boxing" on each row, a light tint when the pointer
+   hovers a row, and the recording whose transcript is open is highlighted.
+3. Dragging a recording should feel like holding it: the row lifts and
+   follows the pointer, a move, no green plus badge (the plus is macOS
+   saying "copy").
+4. Settings has more in it now and should get a nicer design.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 

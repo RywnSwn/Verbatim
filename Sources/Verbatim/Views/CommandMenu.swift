@@ -174,7 +174,7 @@ struct CommandMenuView: View {
         } else {
             add("start", "Start recording", "record.circle", shortcut: "⌘R", words: "record new class begin") { Task { await model.start() } }
         }
-        if model.markerTarget != nil {
+        if model.canMark {
             add("marker", "Add marker", "flag", shortcut: "⌘D", words: "mark flag important") { model.addMarker() }
         }
         let copyFrom = busy ? model.currentID : model.shownID

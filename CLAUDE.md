@@ -11,9 +11,10 @@ plain words. Never use em dashes in anything written for Ryan.
 UX matters a lot to him. He hates apps that don't consider the user.
 
 ## Current state
-Steps 1, 2, 2b, 3, 4, 5, 5c, 6, 7, 7b, 7c, 8, 9 and 11 merged, plus the in-app player and
-audio shrink after Stop (5c, 6, 7, 7b, 7c, 8, 9 and 2b not fully tested by Ryan yet).
-Step 10 (polish) built on `claude/step-10-polish`, not tested yet. See `PLAN.md` for build order and progress,
+Steps 1 to 11 merged, plus the in-app player and audio shrink after Stop
+(5c, 6, 7, 7b, 7c, 8, 9, 10 and 2b not fully tested by Ryan yet).
+Next: a design pass Ryan asked for (sidebar look, drag, Settings), mockup
+first. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).
@@ -27,7 +28,9 @@ decided and why (read it before re-arguing a choice).
 - Ryan does not want Xcode. Build with GitHub Actions on a macOS runner (repo
   is public for free minutes) or Command Line Tools + `swift build`.
 - Claude's container is Linux and cannot run the mic or build Mac apps.
-  Ryan tests on his Mac.
+  Ryan tests on his Mac. But the Smoke test workflow runs the app on the CI
+  Mac and pushes screenshots to the `ci-smoke` branch: look at them before
+  giving Ryan a build (see `PLAN.md`).
 
 ## Working rules
 - One task per chat. At the end of each session, update `PLAN.md` (and

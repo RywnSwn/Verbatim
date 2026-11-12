@@ -40,6 +40,14 @@ extension RecorderModel {
         return nil
     }
 
+    /// Whether ⌘D has something to mark. Same answer as `markerTarget != nil`,
+    /// but doesn't read the clock, so the menu bar isn't rebuilt 20 times a second.
+    var canMark: Bool {
+        if isBusy, currentID != nil { return true }
+        if let id = shownID { return Playback.shared.isShowing(id) }
+        return false
+    }
+
     /// ⌘D, the toolbar Marker button, the menu.
     func addMarker() {
         guard let target = markerTarget, let info = info(target.id) else { return }

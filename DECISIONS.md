@@ -240,3 +240,14 @@ accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
 - Start screen: "Hear it once. Keep every word." replaced by a greeting
   ("Evening, Ryan") next to a small breathing waveform mark, like Claude's
   start screen (Ryan). The waveform-to-words animation is gone.
+## Tauri asked again (2026-11-12): Claude says stay on Swift, Ryan to decide
+Ryan hit a lot of glitches (sizing, stutter, sidebar) and wondered if Tauri
+would be easier. Claude's view: the glitches came from how the views were
+written (too much redrawn too often), not from SwiftUI, and the same
+mistakes would stutter in a web view too. Against moving: about 11,000
+lines to rewrite; FluidAudio (Parakeet, speakers) is Swift only, so a
+Tauri app would still need a Swift helper for all audio and models plus a
+bridge to it; a web view costs extra memory on an 8 GB Mac; Ryan turned
+Tauri down before for the web view feel. Plan: fix the redraw bugs, get
+Ryan's glitch list, do step 10. Look at this again only if glitches remain
+that SwiftUI itself causes.
