@@ -125,10 +125,10 @@ layout_check() {
   osascript -e 'tell application "System Events" to keystroke "l" using {control down, command down}' || true
   sleep 2
   local win split
-  win="$(grep -m1 "^  frame=" "$OUT/app.log" | sed -E 's/.* h([0-9]+) contentLayoutRect.*/\1/')"
-  split="$(grep -m1 "NavigationSplitRepresentable" "$OUT/app.log" | sed -E 's/.* h([0-9]+) .*/\1/')"
+  win="$(grep -a -m1 "^  frame=" "$OUT/app.log" | sed -E 's/.* h([0-9]+) contentLayoutRect.*/\1/')"
+  split="$(grep -a -m1 "NavigationSplitRepresentable" "$OUT/app.log" | sed -E 's/.* h([0-9]+) .*/\1/')"
   echo "layout check ($1): window height $win, split view height $split"
-  grep -E "NavigationSplitRepresentable|HostingScrollView|OutlineListRepresentable|DraggingDestinationView" "$OUT/app.log" | cut -c1-170
+  grep -a -E "NavigationSplitRepresentable|HostingScrollView|OutlineListRepresentable|DraggingDestinationView" "$OUT/app.log" | cut -c1-170
   if [ -z "$win" ] || [ "$win" != "$split" ]; then
     echo "::error::Split view is not the window's height ($1): window $win, split $split"
     FAILED=1

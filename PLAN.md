@@ -61,6 +61,26 @@ to the `ci-smoke` branch (`git fetch origin ci-smoke`, then look at the
 PNGs). Claude can see the real app this way. Look at the screenshots before
 giving Ryan a build. Known gap: clicking a sidebar row in the script does
 not open a recording yet, so only the start screen is covered.
+Same day, the real cause of "sidebar top and bottom outside the window"
+(found with Ryan's Help > Copy Layout Details output, 0.1.115):
+NavigationSplitView made itself as tall as its columns WANTED (title bar +
+start screen content + bottom bar = 692 pt) instead of the window (552 pt).
+Fix in 0.1.117: both columns get `.frame(minHeight: 0, idealHeight: 300,
+maxHeight: .infinity)` in `ContentView` (keep these). The smoke test now
+fails if the split view's height differs from the window's. Help > Copy
+Layout Details (⌃⌘L, `Views/LayoutDetails.swift`) stays: ask Ryan for it
+whenever something is in the wrong place. His menu bar hides Help behind
+the notch, so tell him the shortcut. Ryan has not confirmed 0.1.117 yet.
+
+Ryan's asks on 2026-11-12 for the NEXT chat (design pass, mockup first,
+use the ux-planner skill; nothing built yet):
+1. Sidebar can be opaque: a Settings choice, glass or solid.
+2. Recordings in the sidebar get an outline. Not clear yet whether every
+   row is a thin rounded card or only the selected one: ask him.
+3. Dragging a recording should feel like holding it: the row lifts and
+   follows the pointer, a move, no green plus badge (the plus is macOS
+   saying "copy").
+4. Settings has more in it now and should get a nicer design.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
