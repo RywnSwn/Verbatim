@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
@@ -22,10 +23,37 @@ struct ContentView: View {
         }
     }
 
+    /// Our own sidebar button (the system one is removed). Opening the sidebar
+    /// in a window too narrow for it made macOS fight over the layout until
+    /// the app crashed (0.1.98, 0.1.102), or do nothing at all. So a narrow
+    /// window first grows to make room, then the sidebar opens.
+    private func toggleSidebar() {
+        if columns == .detailOnly {
+            hidForSpace = false
+            if let window = Messages.mainWindows.first ?? NSApp.keyWindow,
+               window.frame.width < Self.compactWidth {
+                var frame = window.frame
+                frame.size.width = Self.compactWidth + 20
+                if let screen = window.screen?.visibleFrame {
+                    frame.size.width = min(frame.size.width, screen.width)
+                    if frame.maxX > screen.maxX { frame.origin.x = max(screen.minX, screen.maxX - frame.width) }
+                }
+                window.setFrame(frame, display: true, animate: true)
+                guard frame.width >= Self.compactWidth else { return } // tiny screen: no room at all
+            }
+            // After the resize has been laid out, never in the middle of it.
+            Task { @MainActor in columns = .all }
+        } else {
+            hidForSpace = false
+            columns = .detailOnly
+        }
+    }
+
     var body: some View {
         @Bindable var model = model
         NavigationSplitView(columnVisibility: $columns) {
             SidebarView()
+                .toolbar(removing: .sidebarToggle)
                 // The sidebar keeps at least 230 pt; the main area gives way
                 // instead (Ryan saw it squeezed under the window's edge).
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
@@ -34,6 +62,15 @@ struct ContentView: View {
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if let notice = model.recoveryNotice {
                         NoticeLine(text: notice) { model.recoveryNotice = nil }
+                    }
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        Button(action: toggleSidebar) {
+                            Label("Sidebar", systemImage: "sidebar.left")
+                        }
+                        .keyboardShortcut("s", modifiers: [.control, .command])
+                        .help(columns == .detailOnly ? "Show the sidebar (⌃⌘S)" : "Hide the sidebar (⌃⌘S)")
                     }
                 }
                 .dropDestination(for: URL.self) { urls, _ in

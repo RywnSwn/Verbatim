@@ -112,6 +112,8 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            // Solid, so recordings scrolling past don't show through the text.
+            .background(.bar)
         }
         .alert("Rename recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newTitle)

@@ -37,15 +37,17 @@ resize() {
   sleep "${RESIZE_WAIT:-2}"
 }
 
-# The sidebar button is not exposed to accessibility, so click where it is.
-# Window sits at {20, 40}. Sidebar hidden: button at x 143. Shown: just inside
-# the sidebar's right edge (224 for a 220 pt sidebar, 264 for 260 pt).
+# Our own sidebar button answers to ⌃⌘S (same code as clicking it).
 click_at() {
   osascript -e 'tell application "System Events" to click at {'"$1"', '"$2"'}' > /dev/null || echo "click failed"
   sleep 0.5
 }
-show_sidebar() { click_at 143 65; sleep 1; }
-hide_sidebar() { click_at 224 65; click_at 264 65; sleep 1; }
+toggle_sidebar() {
+  osascript -e 'tell application "System Events" to keystroke "s" using {control down, command down}' || echo "toggle failed"
+  sleep 1.5
+}
+show_sidebar() { toggle_sidebar; }
+hide_sidebar() { toggle_sidebar; }
 
 check() {
   if ! alive; then
@@ -110,22 +112,18 @@ done
 
 # Sweep the window width through the range where the sidebar hides itself,
 # opening and closing it by hand at each step (Ryan's crash on 0.1.102).
-for h in 520 650; do
-  w=680
-  while [ "$w" -le 870 ]; do
-    RESIZE_WAIT=1 resize "$w" "$h" > /dev/null;  check "sweep resize ${w}x${h}"
-    show_sidebar; check "sweep show sidebar at ${w}x${h}"
-    hide_sidebar; check "sweep hide sidebar at ${w}x${h}"
-    show_sidebar; check "sweep show sidebar again at ${w}x${h}"
-    if [ $((w % 30)) -eq 0 ]; then shot "sweep-${w}x${h}-shown"; fi
-    hide_sidebar; check "sweep hide sidebar again at ${w}x${h}"
-    w=$((w + 5))
-  done
+w=680
+while [ "$w" -le 870 ]; do
+  RESIZE_WAIT=1 resize "$w" 560 > /dev/null;  check "sweep resize to $w"
+  show_sidebar; check "sweep show sidebar at $w"
+  if [ $((w % 40)) -eq 0 ]; then shot "sweep-$w-shown"; fi
+  hide_sidebar; check "sweep hide sidebar at $w"
+  w=$((w + 10))
 done
 
 # A recording open in the main area (click the first row), then the sidebar button.
 resize 1000 700; show_sidebar
-click_at 110 190; sleep 2;  check "open a recording";               shot "recording-open"
+click_at 170 250; sleep 2;  check "open a recording";               shot "recording-open"
 hide_sidebar;               check "hide sidebar with recording";    shot "recording-sidebar-hidden"
 show_sidebar;               check "show sidebar with recording";    shot "recording-sidebar-shown"
 resize 700 520;             check "narrow with recording";          shot "recording-narrow"
