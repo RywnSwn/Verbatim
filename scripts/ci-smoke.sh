@@ -34,7 +34,7 @@ resize() {
     set position of window 1 to {20, 40}
     set size of window 1 to {'"$1"', '"$2"'}
   end tell' || echo "resize failed"
-  sleep 2
+  sleep "${RESIZE_WAIT:-2}"
 }
 
 # The sidebar button is not exposed to accessibility, so click where it is.
@@ -42,10 +42,10 @@ resize() {
 # the sidebar's right edge (224 for a 220 pt sidebar, 264 for 260 pt).
 click_at() {
   osascript -e 'tell application "System Events" to click at {'"$1"', '"$2"'}' > /dev/null || echo "click failed"
-  sleep 1
+  sleep 0.5
 }
-show_sidebar() { click_at 143 65; sleep 2; }
-hide_sidebar() { click_at 224 65; click_at 264 65; sleep 2; }
+show_sidebar() { click_at 143 65; sleep 1; }
+hide_sidebar() { click_at 224 65; click_at 264 65; sleep 1; }
 
 check() {
   if ! alive; then
@@ -106,6 +106,24 @@ for size in "800 600" "700 520" "700 420"; do
   hide_sidebar;      check "hide sidebar at $tag";   shot "$tag-hidden"
   show_sidebar;      check "show sidebar again at $tag"
   resize 1200 780;   check "grow with sidebar open from $tag"; shot "$tag-grown"
+done
+
+# Sweep the window height through the point where the start screen switches
+# between "fits" and "scrolls", toggling the sidebar at each step.
+for w in 900 1000 760; do
+  h=380
+  while [ "$h" -le 600 ]; do
+    RESIZE_WAIT=1 resize "$w" "$h" > /dev/null;  check "sweep resize ${w}x${h}"
+    if [ "$w" -ge 860 ]; then
+      hide_sidebar; check "sweep hide sidebar at ${w}x${h}"
+      show_sidebar; check "sweep show sidebar at ${w}x${h}"
+    else
+      show_sidebar; check "sweep show sidebar at ${w}x${h}"
+      hide_sidebar; check "sweep hide sidebar at ${w}x${h}"
+    fi
+    h=$((h + 5))
+  done
+  shot "sweep-$w-done"
 done
 
 # A recording open in the main area (click the first row), then the sidebar button.
