@@ -113,7 +113,31 @@ window; nothing built yet, mockup first with the ux-planner skill):
    lines, so decide what it shows while one is being edited (for example:
    the edited line stays put and new lines keep coming under it).
 
-Mini window mockup (2026-11-12, waiting for Ryan's yes, nothing built):
+Mini window redesign BUILT (2026-11-12, branch `claude/mini-window-redesign`,
+which sits on top of `claude/fix-recording-lag`; test build 0.1.137; not
+merged, not tested by Ryan). Ryan said "get to work" on the mockup and
+asked for icons on the links (Undo, Undo Stop, Copy all have one now).
+Checked on the CI Mac: it builds and the idle look matches the mockup with
+no gap on top (smoke screenshot `07-mini-idle.png`). NOT checked anywhere
+(the CI Mac can't record): the recording look, and typing in a line. The
+risky part is the keyboard: the panel is borderless + non-activating,
+`MiniPanel.canBecomeKey` is true and `MiniLines.begin` calls
+`MiniWindow.takeKeyboard()` before focusing. If Ryan can't type in a line,
+look there first. Mini window test list:
+1. ⇧⌘M when not recording: no empty strip on top, "Ready to record", Start
+   button, last recording with Copy all.
+2. Start from it. Bars, timer and name on top; 3 lines of text; words under
+   each button.
+3. Click a line, change a word, Enter. "Line edited. Undo" with an icon.
+   Try Esc too, and clicking another app while typing (should save).
+4. While typing, keep audio playing: your line stays still, new lines come
+   under it, then "N more new lines below".
+5. × while recording: window goes, menu bar timer keeps counting. ⇧⌘M
+   brings it back.
+6. Stop: "Undo Stop" with an icon, then the idle look. Drag the window
+   somewhere, close and reopen: same spot.
+
+Mini window mockup (2026-11-12, approved by Ryan: "get to work"):
 https://claude.ai/artifact/Rb3GkVcczc7apbQsvJjfnD, copy in
 `docs/design/MiniWindow.html`. What it shows:
 - No title bar at all (borderless rounded panel), so no gap on top. Top row:
