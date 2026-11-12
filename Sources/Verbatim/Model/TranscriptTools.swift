@@ -69,8 +69,10 @@ extension RecorderModel {
         return lines.filter { $0.middle > from }
     }
 
-    func copy(_ kind: CopyKind) {
-        guard let id = shownID, let info = info(id) else { return }
+    /// Copies from the transcript on screen, or from `recording` (the mini
+    /// window and menu bar copy from the class being recorded).
+    func copy(_ kind: CopyKind, from recording: UUID? = nil) {
+        guard let id = recording ?? shownID, let info = info(id) else { return }
         let all = shownLines(id).map(\.line)
         guard !all.isEmpty else {
             copyFeedback = CopyFeedback(text: "Nothing to copy yet")

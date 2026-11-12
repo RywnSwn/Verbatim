@@ -37,6 +37,14 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     var markers: [Double]?
     /// Right-click > Keep Audio: old-audio cleanup skips it (step 9).
     var keepAudio: Bool?
+    /// Sidebar group (step 10). nil = Recents.
+    var groupID: UUID?
+    /// An SF Symbol Ryan picked for this one recording (step 10).
+    var icon: String?
+    var iconColor: IconColor?
+    /// The title was made by Verbatim ("Wed 12 Nov", a file name), not typed
+    /// by Ryan, so auto-naming may replace it (step 10). Renaming clears it.
+    var autoTitle: Bool?
 
     var duration: TimeInterval { Double(samples) / Double(sampleRate) }
     var isActive: Bool { state != .stopped }

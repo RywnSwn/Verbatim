@@ -3,12 +3,32 @@ import SwiftUI
 struct ContentView: View {
     @Environment(RecorderModel.self) private var model
     @Environment(Updater.self) private var updater
+    @Environment(\.openWindow) private var openWindow
+    /// Small window = small layout, like Claude (Ryan): below `compactWidth`
+    /// the sidebar hides itself so the main area gets the room. The toolbar
+    /// button (or ⌃⌘S) still opens it. Wide again, it comes back by itself.
+    @State private var columns: NavigationSplitViewVisibility = .all
+    @State private var hidForSpace = false
+    private static let compactWidth: CGFloat = 860
+    private static let roomyWidth: CGFloat = 940
+
+    private func fitSidebar(to width: CGFloat) {
+        if width < Self.compactWidth, columns != .detailOnly, !hidForSpace {
+            hidForSpace = true
+            columns = .detailOnly
+        } else if width >= Self.roomyWidth, hidForSpace {
+            hidForSpace = false
+            columns = .all
+        }
+    }
 
     var body: some View {
         @Bindable var model = model
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
+                // The sidebar keeps at least 230 pt; the main area gives way
+                // instead (Ryan saw it squeezed under the window's edge).
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
         } detail: {
             DetailView()
                 .safeAreaInset(edge: .top, spacing: 0) {
@@ -26,6 +46,19 @@ struct ContentView: View {
                     }
                 }
         }
+        .overlay {
+            if model.showCommandMenu {
+                CommandMenuView()
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: model.showCommandMenu)
+        .onAppear { MainWindow.open = { openWindow(id: "main") } }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            // Changed after this layout pass ends, never in the middle of it:
+            // showing or hiding the sidebar while the window is laying out can
+            // crash (Ryan's crash on 0.1.98).
+            Task { @MainActor in fitSidebar(to: width) }
+        }
     }
 }
 
@@ -35,9 +68,9 @@ struct DetailView: View {
 
     var body: some View {
         // GeometryReader: the main area takes the space the window gives it and
-        // never asks for more. Without it, a screen that wants to be taller
-        // than the window stretches the whole window content, and the top
-        // and bottom of the sidebar end up outside the window.
+        // never asks for more. A screen that wants to be taller than the
+        // window would otherwise stretch the whole window content and push
+        // the top and bottom of the sidebar outside the window.
         GeometryReader { _ in
           Group {
             if model.showingDeleted {

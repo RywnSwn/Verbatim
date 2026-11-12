@@ -33,8 +33,11 @@ struct BottomBar: View {
                     }
                 }
             }
-            .frame(height: 56)
-            .padding(.horizontal, 20)
+            // Grows for a long message in a narrow window instead of spilling
+            // past the window's rounded bottom edge. Extra side room clears the corners.
+            .frame(minHeight: 56)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 24)
         }
         .background(Theme.paper)
     }
@@ -48,6 +51,8 @@ struct BottomBar: View {
                 // window); the waveform gives up room instead, keeping the newest bars.
                 Text(RecorderModel.clock(model.elapsed))
                     .font(.system(size: 17, weight: .medium).monospacedDigit())
+                    .contentTransition(.numericText()) // digits roll, like a counter
+                    .animation(.snappy(duration: 0.3), value: Int(model.elapsed))
                     .foregroundStyle(paused ? .secondary : .primary)
                     .lineLimit(1)
                     .fixedSize()
@@ -83,6 +88,19 @@ struct BottomBar: View {
     }
 
     private var statusSpot: some View {
+        ZStack(alignment: .trailing) {
+            statusContent
+                .id(model.status?.id)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity)))
+        }
+        .clipped()
+        .animation(.snappy(duration: 0.3), value: model.status?.id)
+    }
+
+    /// New messages slide up into place and old ones slide away.
+    private var statusContent: some View {
         HStack(spacing: 6) {
             if let status = model.status {
                 Text(status.text)
@@ -101,8 +119,9 @@ struct BottomBar: View {
             }
         }
         .font(.callout)
-        .lineLimit(2)
+        .lineLimit(3)
         .multilineTextAlignment(.trailing)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// The normal message when nothing needs attention.
@@ -111,7 +130,7 @@ struct BottomBar: View {
         return "Saved as you go, works offline"
     }
 
-    private static func linkTitle(_ action: RecorderModel.Status.Action) -> String {
+    static func linkTitle(_ action: RecorderModel.Status.Action) -> String {
         switch action {
         case .stopRecording: "Stop recording"
         case .resume: "Resume"
@@ -123,12 +142,16 @@ struct BottomBar: View {
 
     private func undoBar(_ text: String, undo: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 10) {
-            Spacer()
+            Spacer(minLength: 0)
             Text(text)
                 .font(.callout)
+                .lineLimit(3)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
             Button(undo, action: action)
                 .buttonStyle(.link)
                 .font(.callout.weight(.medium))
+                .fixedSize() // the link never wraps or gets cut
         }
     }
 }

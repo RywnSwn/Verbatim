@@ -15,7 +15,7 @@ testing, at Ryan's ask: ask him for the "Step 7 test list". Step 7b
 (markers) built the same day in the same chat (Ryan's ask): see "How markers
 work". Step 7c (voice memory) built in the same chat too: see "How voice
 memory works". 7b and 7c merged 2026-11-10 (RywnSwn/Verbatim#14, #15) before
-testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 (word list) merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask: ask him for the "Step 8 test list". Step 9 built in the same chat and merged before testing (RywnSwn/Verbatim#17), at Ryan's ask: ask him for the "Step 9 test list". Next: step 10 (polish), mockup first.
+testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 (word list) merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask: ask him for the "Step 8 test list". Step 9 built in the same chat and merged before testing (RywnSwn/Verbatim#17), at Ryan's ask: ask him for the "Step 9 test list". Step 10 (polish) built 2026-11-11 on `claude/step-10-polish` after Ryan approved mockup v3 (https://claude.ai/artifact/2ii2Hd8QkNtZ6gtxUYHziJ): see "How step 10 works" and its test list.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -27,26 +27,23 @@ see step 5 notes). Ask Ryan to record the same kind of lecture again and
 compare live vs checked text. Second test (Transcribe again): no more
 missing sentences, but doubled lines and made-up text; fixed the same day.
 Markers are step 7b (built) and voice memory is step 7c (Ryan, 2026-11-10).
-Fix on 2026-11-12 (branch `claude/fix-stutter-sidebar-sizing`): Ryan
-reported "so many glitches" (sizing, stuttering, the sidebar) and asked
-about moving to Tauri. Found and fixed in code: the menu bar and the whole
-sidebar were redrawn 20 times a second while recording (they read
-`model.elapsed`), the whole transcript was redone 8 times a second while
-audio played (it read `Playback.time`, and every visible line searched all
-lines), and the start screen had fixed widths wider than the smallest
-window. Rule from now on: a view that reads `elapsed`, `levels` or
-`Playback.time` must be a tiny view of its own. Not tested by Ryan yet. He
-has not said exactly which glitches he sees: ask him for a list (what he
-did, what he saw) and make that the start of step 10. Tauri: see
-`DECISIONS.md`, not decided by Ryan yet.
-Same day, second fix: the first test build (v0.1.100) made the sidebar
-look empty. Ryan's clue: before, the top and bottom of the sidebar were
-outside the window until he resized it. Cause: a main-area screen that
-wants more height than the window stretches the whole split view, and the
-sidebar is centered in that taller space. Making the start screen's widths
-flexible made its wanted height huge. Fix: `DetailView` sits in a
-`GeometryReader` (never asks for more than the window gives) and the start
-screen scrolls when the window is too short. Keep that `GeometryReader`.
+Fix on 2026-11-12 (branch `claude/fix-stutter-sidebar-sizing`, which has
+`claude/step-10-polish` merged into it, RywnSwn/Verbatim#19): Ryan reported
+"so many glitches" in the step 10 test builds (sizing, stuttering, the
+sidebar) and asked about moving to Tauri. Found and fixed in code: the menu
+bar and the whole sidebar were redrawn 20 times a second while recording
+(they read `model.elapsed`), and the whole transcript was redone 8 times a
+second while audio played (it read `Playback.time`, and every visible line
+searched all lines). Rule from now on: a view that reads `elapsed`,
+`levels` or `Playback.time` must be a tiny view of its own. Also
+`DetailView` now sits in a `GeometryReader`, so a main-area screen that
+wants more height than the window can't stretch the split view and push
+the sidebar's top and bottom outside the window (Ryan saw that). Keep it.
+Mistake to avoid: this chat first branched from `main` (old design) and
+Ryan got a test build without step 10. Step 10 is NOT on `main` yet:
+check `git branch -r` before starting. Not tested by Ryan yet. Ask him for
+a glitch list (what he did, what he saw). Tauri: see `DECISIONS.md`, not
+decided by Ryan yet.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
@@ -90,8 +87,9 @@ class depends on it.
 9. [x] **Storage.** History sidebar, 7-day audio delete, Storage screen,
        Recently deleted, Export everything. Merged 2026-11-11
        (RywnSwn/Verbatim#17) before testing, at Ryan's ask (see "How storage works").
-10. [ ] **Polish.** First-launch screen, menu bar dropdown, Settings, notifications,
-        all the edge cases in `docs/spec.md` that aren't done yet.
+10. [x] **Polish.** Groups with icons, menu bar, mini window, quiet banners, ⌘K,
+        auto names, fuller Settings, text size, battery warning. Built, not tested
+        (see "How step 10 works").
 11. [x] **Updates.** In-app update button (own updater, not Sparkle).
 
 ## Nice to have (after the above)
@@ -758,3 +756,56 @@ Ask Mr. Yurt before recording class.
 5. Delete All Recordings, then Undo in the bottom bar.
 6. Right-click a recording: Keep Audio has a tick after clicking it.
 7. In 2 days: old recordings' audio goes, the sidebar warned first.
+
+## How step 10 works (polish)
+Mockup v3: https://claude.ai/artifact/2ii2Hd8QkNtZ6gtxUYHziJ (Ryan approved).
+- Groups (`Model/Groups.swift`, groups.json in App Support): one per class,
+  SF Symbol icon + soft color (`Views/IconPicker.swift`, ~200 icons with
+  search words). `RecordingInfo.groupID`; nil = Recents (old recordings stay
+  there, Ryan's call). Sidebar: Section per group (fold), + starts a
+  recording in it, right-click empty space > New Group, right-click a
+  recording > Move to Group / Change Icon, drag a row onto a group name.
+  Group order: right-click > Move Up / Down (no drag).
+- Names: new recordings are "Wed 12 Nov" (`autoTitle = true`). Start screen
+  has "Save in" (remembers last group). `Model/AutoName.swift`: after the
+  text is final, Apple's on-device Foundation Models picks a 2 to 6 word
+  title from up to 1,200 words spread over the class. Only once, never
+  touches names Ryan typed. Settings > Transcription turns it off and says
+  if Apple Intelligence is off.
+- `RecordingHeader`: big serif title (click to rename), times, markers, who spoke.
+- Menu bar (`Views/MenuBar.swift`, MenuBarExtra .window): template waveform
+  image + timer, dot for unseen messages. Big buttons (copy new, marker,
+  pause, stop) then text rows. Always shown while recording; Settings hides
+  it otherwise.
+- Mini window (`Views/MiniWindow.swift`): floating NSPanel, top left, all
+  desktops, remembers position. ⇧⌘M, toolbar button, menu bar.
+- Messages (`Model/Messages.swift`): front = bottom bar only; mini open =
+  mini window; behind other apps = dot + Dock badge, important ones (still
+  recording, battery, mic/disk problems) also a silent banner; window
+  closed/minimized = silent banner for everything incl. Voice Memo done and
+  3 h stop. No sound ever. First window close while recording: one banner
+  "Verbatim keeps going in the menu bar".
+- "Still recording?" after 5 min quiet by default (Ryan), Settings 5/10/20/30/never.
+- Battery: checked every 60 s while recording, warns once at 15% on battery.
+- ⌘K (`Views/CommandMenu.swift`): actions, Record in group, Go to recording.
+- Text size ⌘+ / ⌘− / ⌘0 and a Settings slider (`TextSize`), transcript only.
+- Timer digits roll (`.contentTransition(.numericText())`), bottom bar
+  messages slide in/out. Ideas from Ryan's library list, done natively.
+- Compact layout (Ryan, like Claude): window narrower than 860 pt hides the
+  sidebar by itself (`ContentView.columns`), back at 940 pt. Window min 680x500. Sidebar changes wait for the layout pass to end (0.1.98 crashed when it did not).
+  Start screen scrolls when short. Sidebar min 220, no main area min.
+- Not done: "Download again" button for models (they already re-download by
+  themselves); drag to reorder groups; Mac-wide notification tests.
+
+## Step 10 test list for Ryan
+1. Right-click empty sidebar space > New Group, name it "English 2026", click
+   its icon, search "book", pick a color. Make "World Studies 2026" too.
+2. Press + on a group: records right away, named after today, inside the group.
+3. Drag an old recording onto a group name. Right-click > Move to Group back.
+4. Record 2+ min of a lecture video, Stop, wait ~15 s: does it get a real name?
+5. Close the window while recording: banner once, menu bar shows waveform +
+   timer. Click it: big buttons work, Open Verbatim brings the window back.
+6. ⇧⌘M: mini window top left. Switch to another app, it stays on top. Drag it.
+7. Hide the window behind others, stay quiet 5 min: silent banner with Stop.
+8. ⌘K, type "mark", Return. ⌘+ and ⌘− change transcript size.
+9. Settings: General sections, Transcription tab, DJI mic in the list.

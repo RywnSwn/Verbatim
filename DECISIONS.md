@@ -221,11 +221,30 @@ accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
   days ahead, right-click Keep Audio saves one, and nothing goes in the 2 days
   after the update that added it.
 
+## Step 10 polish choices (2026-11-11)
+- Groups instead of Today/This week: Ryan wanted a Claude-like sidebar.
+  Old recordings stay in Recents (they were tests). No sidebar search box
+  (clutter); ⌘F in a transcript and ⌘K cover finding things.
+- Recording names: the day ("Wed 12 Nov"), then an on-device AI name.
+  Never "English" on everything.
+- Mini window is back (Ryan asked), as a small floating panel. The menu bar
+  dropdown stays too. Earlier he rated the old mini window low.
+- Messages get louder only as Verbatim gets harder to see, and never make
+  a sound (class). This keeps the 2026-11-09 "no popups" rule when the
+  window is in front.
+- Ryan's web library list (shadcn, Sonner, cmdk, NumberFlow...) can't run
+  in a Swift app; their ideas are done natively (⌘K, rolling digits,
+  sliding messages). Magic UI / Aceternity skipped: the "AI look".
+- Icon colors: a few soft, muted colors (Ryan), ink by default.
+- "Still recording?" after 5 min of quiet by default (Ryan).
+- Start screen: "Hear it once. Keep every word." replaced by a greeting
+  ("Evening, Ryan") next to a small breathing waveform mark, like Claude's
+  start screen (Ryan). The waveform-to-words animation is gone.
 ## Tauri asked again (2026-11-12): Claude says stay on Swift, Ryan to decide
 Ryan hit a lot of glitches (sizing, stutter, sidebar) and wondered if Tauri
 would be easier. Claude's view: the glitches came from how the views were
 written (too much redrawn too often), not from SwiftUI, and the same
-mistakes would stutter in a web view too. Against moving: about 9,000
+mistakes would stutter in a web view too. Against moving: about 11,000
 lines to rewrite; FluidAudio (Parakeet, speakers) is Swift only, so a
 Tauri app would still need a Swift helper for all audio and models plus a
 bridge to it; a web view costs extra memory on an 8 GB Mac; Ryan turned

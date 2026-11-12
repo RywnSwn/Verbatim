@@ -18,8 +18,16 @@ enum Theme {
     static let highlight = dynamic(light: 0xFBE9A6, dark: 0x5C4B16)
     static let highlightCurrent = dynamic(light: 0xF2C230, dark: 0x9A7514)
 
+    /// Soft icon colors for groups (step 10). Muted so they sit with the ink.
+    static let iconBlue = dynamic(light: 0x3F64A8, dark: 0x8FA9DD)
+    static let iconGreen = dynamic(light: 0x4E7A52, dark: 0x8DB892)
+    static let iconRed = dynamic(light: 0xA5503F, dark: 0xD99282)
+    static let iconAmber = dynamic(light: 0xA97A22, dark: 0xD6B060)
+    static let iconPurple = dynamic(light: 0x6E5A9C, dark: 0xB3A2D9)
+
     /// Transcript text: serif, a bit bigger than normal text so it reads like notes.
-    static let transcript = Font.system(size: 17, design: .serif)
+    /// Size comes from Settings or ⌘+ / ⌘− (step 10), see `TextSize`.
+    static func transcript(_ size: Double) -> Font { Font.system(size: size, design: .serif) }
     static let transcriptLineSpacing: CGFloat = 5
     /// Space between transcript lines.
     static let lineGap: CGFloat = 14
@@ -62,4 +70,25 @@ struct InkButtonStyle: ButtonStyle {
 extension ButtonStyle where Self == InkButtonStyle {
     static var ink: InkButtonStyle { InkButtonStyle() }
     static var inkLarge: InkButtonStyle { InkButtonStyle(large: true) }
+}
+
+/// Transcript text size (step 10): ⌘+ / ⌘− / ⌘0, and the slider in Settings.
+/// Only the transcript changes, not buttons or menus.
+enum TextSize {
+    static let key = "transcriptTextSize"
+    static let normal: Double = 17
+    static let range: ClosedRange<Double> = 13...26
+
+    static var current: Double {
+        let v = UserDefaults.standard.double(forKey: key)
+        return v == 0 ? normal : v
+    }
+
+    static func change(by step: Double) {
+        set(current + step)
+    }
+
+    static func set(_ value: Double) {
+        UserDefaults.standard.set(min(max(value, range.lowerBound), range.upperBound), forKey: key)
+    }
 }
