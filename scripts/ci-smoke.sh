@@ -89,6 +89,8 @@ JSON
 }
 
 seed
+# No "update ready" bar, so the window can be as short as Ryan's.
+defaults write com.rywnswn.verbatim checkForUpdates -bool false
 osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' || true
 launch
 check "at launch"
@@ -96,9 +98,22 @@ osascript -e 'tell application "System Events" to get {position, size} of window
 
 # Wide but short, like Ryan's window (about 1000 x 495): the sidebar's top
 # and bottom must stay inside the window.
-for size in "1000 500" "1000 540" "1000 600" "940 500" "1020 700"; do
+for size in "1000 400" "1000 540" "1000 600" "940 400"; do
   set -- $size
   resize "$1" "$2";  check "resize to $1x$2";  shot "short-$1x$2"
+  osascript -e 'tell application "System Events" to tell (first process whose unix id is '"$APP_PID"')
+    set out to "window " & (size of window 1 as text)
+    repeat with e in (entire contents of window 1)
+      try
+        if class of e is in {scroll area, outline, splitter group, group} then
+          set {x, y} to position of e
+          set {w, h} to size of e
+          set out to out & linefeed & (class of e as text) & " y=" & y & " h=" & h & " x=" & x & " w=" & w
+        end if
+      end try
+    end repeat
+    return out
+  end tell' | head -40
 done
 
 kill "$APP_PID" 2>/dev/null || true
