@@ -90,9 +90,10 @@ struct PageHeader: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if let first {
+                // Same look as the other section names on the page.
                 Text(first)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
             }
         }
         .textCase(nil)
@@ -124,7 +125,7 @@ struct GeneralSettings: View {
                     Text(micHelp)
                 }
             } header: {
-                PageHeader(lede: "Your mic, and how Verbatim gets your attention.", first: "Microphone")
+                PageHeader(lede: "Your mic, and how Verbatim gets your attention.")
             }
 
             Section("While recording") {
