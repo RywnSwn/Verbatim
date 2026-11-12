@@ -124,6 +124,9 @@ seed
 mcp_check
 # No "update ready" bar, so the window can be as short as Ryan's.
 defaults write com.rywnswn.verbatim checkForUpdates -bool false
+# A mini window size saved by an older build, like on Ryan's Mac. 0.1.150
+# crashed opening the mini window with this (sizes fought until it crashed).
+defaults write com.rywnswn.verbatim "NSWindow Frame VerbatimMiniWindow" "16 560 330 300 0 0 1440 875 "
 osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' || true
 launch
 check "at launch"
