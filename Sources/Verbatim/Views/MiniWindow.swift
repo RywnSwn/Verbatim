@@ -11,10 +11,16 @@ import SwiftUI
 @Observable
 final class MiniWindow {
     static let shared = MiniWindow()
-    private static let frameName = "VerbatimMiniWindow"
+    /// Where the top left corner was, so it opens there again. Only the spot
+    /// is kept, never the size: the old "VerbatimMiniWindow" autosave put
+    /// back the size of the pre-redesign window, AppKit and SwiftUI then
+    /// fought over the height until the app crashed (0.1.150, Ryan opened the
+    /// mini window while not recording).
+    private static let spotKey = "MiniWindowTopLeft"
 
     @ObservationIgnored private var panel: NSPanel?
     @ObservationIgnored private var keyObserver: NSObjectProtocol?
+    @ObservationIgnored private var moveObserver: NSObjectProtocol?
     private(set) var isShown = false
     /// Goes up when typing in the mini window has to end (it was closed, or
     /// you clicked into another window): the line being edited saves itself.
@@ -48,8 +54,21 @@ final class MiniWindow {
     /// Verbatim's other windows in front of the app you're in.
     func takeKeyboard() { panel?.makeKey() }
 
-    /// The shadow follows the window's shape, which changes with the text.
-    func contentResized() { panel?.invalidateShadow() }
+    /// The window takes the height its content wants. Done after the layout
+    /// pass, never inside it, and only when the height really changed, so a
+    /// resize can never start another resize. The top edge stays put.
+    func contentResized(_ size: CGSize) {
+        Task { @MainActor in
+            guard let panel = self.panel else { return }
+            let height = ceil(size.height)
+            guard height > 20, abs(panel.frame.height - height) > 0.5 || abs(panel.frame.width - MiniView.width) > 0.5 else { return }
+            var frame = panel.frame
+            frame.origin.y = frame.maxY - height
+            frame.size = CGSize(width: MiniView.width, height: height)
+            panel.setFrame(frame, display: true, animate: false)
+            panel.invalidateShadow()
+        }
+    }
 
     private func makePanel() -> NSPanel {
         // No title bar at all: a hidden one still kept its height free at the
@@ -76,17 +95,30 @@ final class MiniWindow {
             .environment(LiveTranscriber.shared)
             .environment(Transcriber.shared)
             .tint(Theme.accent)
+        // No automatic sizing: contentResized(_:) sets the size itself.
         let host = NSHostingController(rootView: root)
-        host.sizingOptions = [.preferredContentSize]
+        host.sizingOptions = []
         panel.contentViewController = host
+        panel.setContentSize(NSSize(width: MiniView.width, height: 160))
 
-        if !panel.setFrameUsingName(Self.frameName), let screen = NSScreen.main {
+        // Forget the old saved frame (it held the wrong size).
+        UserDefaults.standard.removeObject(forKey: "NSWindow Frame VerbatimMiniWindow")
+        let size = panel.frame.size
+        if let saved = UserDefaults.standard.string(forKey: Self.spotKey),
+           case let topLeft = NSPointFromString(saved),
+           NSScreen.screens.contains(where: { $0.visibleFrame.insetBy(dx: -20, dy: -20).contains(topLeft) }) {
+            panel.setFrameOrigin(NSPoint(x: topLeft.x, y: topLeft.y - size.height))
+        } else if let screen = NSScreen.main {
             // Top left, just under the menu bar.
             let area = screen.visibleFrame
-            let size = panel.frame.size
             panel.setFrameOrigin(NSPoint(x: area.minX + 16, y: area.maxY - size.height - 16))
         }
-        panel.setFrameAutosaveName(Self.frameName)
+        moveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification, object: panel, queue: .main
+        ) { note in
+            guard let frame = (note.object as? NSWindow)?.frame else { return }
+            UserDefaults.standard.set(NSStringFromPoint(NSPoint(x: frame.minX, y: frame.maxY)), forKey: "MiniWindowTopLeft")
+        }
 
         keyObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
@@ -143,12 +175,17 @@ struct MiniView: View {
             }
         }
         .frame(width: Self.width)
+        // Always its own natural height, whatever the window offers, so the
+        // height never depends on the window's size (no back and forth).
+        .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(Theme.ink)
         .background(Theme.paper)
         .clipShape(shape)
         .overlay { shape.strokeBorder(Theme.ink.opacity(0.18), lineWidth: 0.5) }
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { _ in MiniWindow.shared.contentResized() }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { MiniWindow.shared.contentResized($0) }
         .animation(.snappy(duration: 0.25), value: model.status?.id)
+        // Until the window has caught up, sit at the top of it.
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     /// Close, then what's going on, then back to the big window.
