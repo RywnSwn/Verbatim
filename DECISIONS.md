@@ -259,3 +259,18 @@ and Soft boxes/Paper cards (soft is the default). Settings moved from top
 tabs to pages down the left (System Settings style), with new Look and
 Shortcuts pages, since General had grown too long. Sidebar left `List` so
 we control the row look; arrow keys, Delete and menus were rebuilt.
+
+## Nothing that moves while recording may be many views (2026-11-12)
+The live transcript froze while recording and caught up on Pause/Stop. A
+stall sample showed the main thread stuck in SwiftUI's RenderBox
+(`SharedSurfaceGroup::add_subsurface` > `wait_for_allocations` >
+`CAContext waitForCommitId`) on macOS 26: many small drawing surfaces
+changing 20 times a second made each frame wait on the render server, so
+live text never got the main thread. Fixed in 0.1.150 (Ryan confirmed on
+0.1.153). Rule: anything that changes while recording is ONE `Canvas` or
+plain `Text`. No shape per waveform bar, no
+`.contentTransition(.numericText())`, no repeating `.symbolEffect`, and the
+menu bar icon's bars stay still (only its timer moves, once a second).
+Views that read `elapsed`, `levels` or `Playback.time` stay tiny views of
+their own. Wrong guesses made first, don't retry them: speaker model compute
+units, memory, header recount.

@@ -269,8 +269,8 @@ gear menu, notes, diagnostics) and `claude/mini-window-crash` are in main.
   `.fixedSize` vertically, only the top-left spot is saved
   (`MiniWindowTopLeft`), the old key is removed. Smoke test seeds the old
   key. Ryan tested 0.1.153: good.
-- Still open: does recording still freeze on 0.1.150+? (one Canvas
-  waveform, no rolling digits). Ryan has not said yet.
+- Recording freeze FIXED (Ryan, 0.1.153: "smooth now no freeze"). Cause
+  and rule in `DECISIONS.md` ("Nothing that moves while recording...").
 - Connector works only in the Claude desktop app on Ryan's Mac. Ryan
   mostly uses cloud Claude, where it can't reach his Mac. Idea offered, not
   decided: save transcripts to a repo so cloud Claude can read them.
