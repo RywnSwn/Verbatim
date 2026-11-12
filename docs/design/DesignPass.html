@@ -227,6 +227,15 @@ select { font: inherit; font-size: 12.5px; padding: 3px 6px; border-radius: 6px;
 .tile .pv .s i { height: 6px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 14%, transparent); display: block; }
 .tile.glass .pv .s { background: var(--glass); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--ink) 15%, transparent); }
 .tile.solid .pv .s { background: var(--side-solid); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--ink) 15%, transparent); }
+.tile .pv.rows { background: var(--side-solid); display: flex; flex-direction: column; gap: 4px; padding: 7px 8px; }
+.tile .pv.rows::before { display: none; }
+.tile .pv.rows i { display: block; height: 15px; border-radius: 4px; position: relative; }
+.tile .pv.rows i::after { content: ""; position: absolute; left: 6px; top: 5px; width: 46%; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 35%, transparent); }
+.tile.soft .pv.rows i { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.tile.soft .pv.rows i.o { background: color-mix(in srgb, var(--ink) 16%, transparent); }
+.tile.cards .pv.rows i { background: var(--card); box-shadow: 0 .5px 1.5px rgba(0,0,0,.15); }
+.tile.cards .pv.rows i.o { background: var(--ink); }
+.tile.cards .pv.rows i.o::after { background: color-mix(in srgb, var(--paper) 70%, transparent); }
 .tile[aria-checked="true"] .pv { box-shadow: 0 0 0 2.5px var(--accent); }
 .tile[aria-checked="true"] { font-weight: 600; }
 
@@ -283,8 +292,8 @@ select { font: inherit; font-size: 12.5px; padding: 3px 6px; border-radius: 6px;
       <div class="seg" id="segTheme"><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
     <div class="opt"><span>Sidebar</span>
       <div class="seg" id="segSide"><button data-v="glass">Glass</button><button data-v="solid">Solid</button></div></div>
-    <div class="opt"><span>Row style, pick one</span>
-      <div class="seg" id="segRows"><button data-v="soft">A. Soft boxes</button><button data-v="cards">B. Paper cards</button></div></div>
+    <div class="opt"><span>Recordings</span>
+      <div class="seg" id="segRows"><button data-v="soft">Soft boxes</button><button data-v="cards">Paper cards</button></div></div>
   </div>
 
   <section class="sec">
@@ -316,11 +325,11 @@ select { font: inherit; font-size: 12.5px; padding: 3px 6px; border-radius: 6px;
     <h2>Settings</h2>
     <ul class="notes">
       <li><b>Pages down the side</b><span>Like System Settings. Eight pages fit easily, where six tabs across the top were already crowded.</span></li>
-      <li><b>New Look page</b><span>Glass or solid sidebar, text size, and how times show. General had grown too long.</span></li>
+      <li><b>New Look page</b><span>Glass or solid sidebar, soft boxes or paper cards for recordings, text size, and how times show. General had grown too long.</span></li>
       <li><b>Every row works the same way</b><span>Name and a short explanation on the left, the switch or menu on the right.</span></li>
       <li><b>Shortcuts get their own page</b><span>Easier to find, and they stop pushing everything else down.</span></li>
     </ul>
-    <p class="try">Try it: pick Solid on the Look page and watch the sidebar change in both windows. Remove a word on the Words page, then Undo.</p>
+    <p class="try">Try it: on the Look page, pick Solid or Paper cards and watch the windows change. Remove a word on the Words page, then Undo.</p>
     <div class="scroller">
       <div class="stage">
         <div class="win prefs">
@@ -603,6 +612,11 @@ select { font: inherit; font-size: 12.5px; padding: 3px 6px; border-radius: 6px;
           <button class="tile solid" role="radio" data-side="solid" aria-checked="${document.body.dataset.sidebar === 'solid'}"><span class="pv"><span class="s"><i></i><i></i><i></i></span><span class="m2"></span></span>Solid</button>
         </div>
         ${row('', 'Glass lets your desktop show through, blurred. Solid is a plain sheet, easier to read over busy desktop pictures. If Reduce transparency is on in your Mac’s Accessibility settings, it’s always solid.')}
+        <div class="tiles" role="radiogroup" aria-label="Recordings" style="border-top:1px solid color-mix(in srgb, var(--ink) 8%, transparent)">
+          <button class="tile soft" role="radio" data-rowstyle="soft" aria-checked="${document.body.dataset.rows !== 'cards'}"><span class="pv rows"><i></i><i class="o"></i><i></i></span>Soft boxes</button>
+          <button class="tile cards" role="radio" data-rowstyle="cards" aria-checked="${document.body.dataset.rows === 'cards'}"><span class="pv rows"><i></i><i class="o"></i><i></i></span>Paper cards</button>
+        </div>
+        ${row('', 'How each recording looks in the sidebar. Soft boxes are quieter. Paper cards stand out more, and the open one turns dark.')}
       </div></div>` +
       box('Transcript',
         row('Text size', 'Also ⌘+ and ⌘− anywhere in the app, ⌘0 for normal.',
@@ -667,6 +681,8 @@ select { font: inherit; font-size: 12.5px; padding: 3px 6px; border-radius: 6px;
     if (s) s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true');
     const t = e.target.closest('[data-side]');
     if (t) setSidebar(t.dataset.side);
+    const rs = e.target.closest('[data-rowstyle]');
+    if (rs) setRows(rs.dataset.rowstyle);
     const rm = e.target.closest('[data-rm]');
     if (rm) {
       const i = words.indexOf(rm.dataset.rm);
@@ -695,7 +711,11 @@ select { font: inherit; font-size: 12.5px; padding: 3px 6px; border-radius: 6px;
   function setTheme(v) { document.documentElement.dataset.theme = v; setSeg('segTheme', v); }
   document.getElementById('segTheme').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.v); });
   document.getElementById('segSide').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setSidebar(b.dataset.v); });
-  document.getElementById('segRows').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { document.body.dataset.rows = b.dataset.v; setSeg('segRows', b.dataset.v); } });
+  function setRows(v) {
+    document.body.dataset.rows = v; setSeg('segRows', v);
+    pbody.querySelectorAll('[data-rowstyle]').forEach(t => t.setAttribute('aria-checked', t.dataset.rowstyle === v));
+  }
+  document.getElementById('segRows').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setRows(b.dataset.v); });
 
   document.body.dataset.sidebar = 'glass';
   document.body.dataset.rows = 'soft';

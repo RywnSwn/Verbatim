@@ -86,12 +86,13 @@ use the ux-planner skill; nothing built yet):
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
-Design pass mockup (2026-11-12, waiting for Ryan's review, nothing built):
+Design pass mockup (2026-11-12, approved by Ryan, nothing built yet):
 https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
 `docs/design/DesignPass.html`. What it shows:
-- Rows: each recording on its own borderless box, 3 pt apart. Ryan picks
-  A "Soft boxes" (ink tint 4.5%, hover 8.5%, open 15% + bolder name) or
-  B "Paper cards" (white cards with a faint shadow, open card turns ink).
+- Rows: each recording on its own borderless box, 3 pt apart. Two styles,
+  and Ryan wants BOTH as a choice in Settings > Look ("Recordings"):
+  "Soft boxes" (default: ink tint 4.5%, hover 8.5%, open 15% + bolder
+  name) or "Paper cards" (white cards with a faint shadow, open card ink).
 - Glass or Solid sidebar: new choice in Settings > Look. Reduce
   transparency on = always solid.
 - Drag: row lifts (scale 1.05, tilt 1.6 degrees, shadow), gap stays where
@@ -103,7 +104,8 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
 - Settings: pages down the left (General, Look new, Transcription, Words,
   Voices, Storage, Updates, Shortcuts new) instead of top tabs. Each page:
   title + one line, then filled groups of rows (label and help left,
-  control right). Look holds sidebar, text size, times, times in copies.
+  control right). Look holds sidebar (glass/solid), recordings (soft
+  boxes/paper cards), text size, times, times in copies.
 
 ## Build order (one milestone per chat)
 
