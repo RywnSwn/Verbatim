@@ -26,6 +26,7 @@ struct TranscriptList: View {
     var isLive = false
 
     @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
+    @AppStorage(TextSize.key) private var textSize = TextSize.normal
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
     @State private var editing: EditKey?
@@ -51,18 +52,10 @@ struct TranscriptList: View {
     /// Times in the gutter play from that line (finished recordings with audio).
     private var canPlay: Bool { !isLive && info.hasAudio }
 
-    /// The line being heard right now, while the player is open.
-    private var playingRowID: String? {
-        guard !isLive, playback.isShowing(info.id) else { return nil }
-        let t = playback.time + 0.05
-        var found: String?
-        for row in rows {
-            if case .line(let line, let source) = row {
-                if line.start <= t { found = TranscriptRow.id(source, line.start) } else { break }
-            }
-        }
-        return found
-    }
+    /// The line being heard right now, while the player is open. Kept up to
+    /// date by `PlayheadTracker`, so this view is redrawn when the line
+    /// changes, not on every tick of the audio clock.
+    @State private var playingRowID: String?
 
     private struct EditKey: Hashable {
         var source: LineSource
@@ -98,8 +91,11 @@ struct TranscriptList: View {
         let labels = Speakers.labeler(info.id)
         let options = labels.options(live)
         let marked = Markers.markedStarts(checked + live, info.markers)
+        let rows = self.rows
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.lineGap) {
+                RecordingHeader(info: info, lines: checked + live, isLive: isLive)
+                    .padding(.bottom, 10)
                 ForEach(rows) { row in
                     switch row {
                     case .line(let line, let source):
@@ -122,7 +118,7 @@ struct TranscriptList: View {
                         HStack(alignment: .firstTextBaseline, spacing: 18) {
                             Color.clear.frame(width: 52, height: 1)
                             Text(text)
-                                .font(Theme.transcript)
+                                .font(Theme.transcript(textSize))
                                 .lineSpacing(Theme.transcriptLineSpacing)
                                 .foregroundStyle(Theme.ink.opacity(0.45))
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -138,6 +134,14 @@ struct TranscriptList: View {
         }
         .scrollPosition($position)
         .background(Theme.paper)
+        .background {
+            if !isLive, playback.isShowing(info.id) {
+                PlayheadTracker(checked: checked, live: live, playingRowID: $playingRowID)
+            }
+        }
+        .onChange(of: !isLive && playback.isShowing(info.id)) { _, showing in
+            if !showing { playingRowID = nil }
+        }
         .onScrollGeometryChange(for: Bool.self) { geo in
             geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 60
         } action: { _, bottom in
@@ -230,56 +234,6 @@ struct TranscriptList: View {
         withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: match.rowID, anchor: .center) }
     }
 
-    /// The playing line with the word being heard marked. Uses the word times
-    /// Parakeet gave (step 5c). Older or edited lines have none, so the word is
-    /// estimated: the line's time shared out by word length, with a little
-    /// extra after commas and full stops.
-    private func wordHighlighted(_ line: Transcript.Line) -> Text {
-        let text = line.text
-        var words: [Range<String.Index>] = []
-        var i = text.startIndex
-        while i < text.endIndex {
-            while i < text.endIndex, text[i].isWhitespace { i = text.index(after: i) }
-            let start = i
-            while i < text.endIndex, !text[i].isWhitespace { i = text.index(after: i) }
-            if start < i { words.append(start..<i) }
-        }
-        guard !words.isEmpty else { return Text(text) }
-        var current = words.count - 1
-        if let starts = line.words, starts.count == words.count {
-            let t = playback.time + 0.05
-            current = max(0, (starts.lastIndex { $0 <= t }) ?? 0)
-            return marked(text, words[current])
-        }
-        guard line.end > line.start else { return Text(text) }
-        let weights: [Double] = words.map { r in
-            let w = text[r]
-            var weight = Double(w.count) + 2
-            if let last = w.last {
-                if ".?!".contains(last) { weight += 5 } else if ",;:".contains(last) { weight += 3 }
-            }
-            return weight
-        }
-        let total = weights.reduce(0, +)
-        let fraction = (playback.time - line.start) / (line.end - line.start)
-        let target = min(max(fraction, 0), 1) * total
-        var sum = 0.0
-        for (k, w) in weights.enumerated() {
-            sum += w
-            if target < sum { current = k; break }
-        }
-        return marked(text, words[current])
-    }
-
-    /// The word gets a `WordMark`, which `WordMarkRenderer` draws as a soft
-    /// rounded box behind it (a plain text background has square corners).
-    private func marked(_ text: String, _ word: Range<String.Index>) -> Text {
-        let before = Text(String(text[..<word.lowerBound]))
-        let mark = Text(String(text[word])).customAttribute(WordMark())
-        let after = Text(String(text[word.upperBound...]))
-        return Text("\(before)\(mark)\(after)")
-    }
-
     /// The line's text with search hits in yellow; the current hit stronger.
     private func highlighted(_ text: String, _ source: LineSource, _ start: Double) -> AttributedString {
         let ranges = RecorderModel.ranges(of: query, in: text)
@@ -300,7 +254,7 @@ struct TranscriptList: View {
     }
 
     /// "Mr. Yurt:" in bold, then the line.
-    private func labelled(_ text: Text, _ name: String?) -> Text {
+    static func labelled(_ text: Text, _ name: String?) -> Text {
         guard let name else { return text }
         return Text("\(Text(name + ":").fontWeight(.semibold)) \(text)")
     }
@@ -351,7 +305,7 @@ struct TranscriptList: View {
             if isEditing {
                 TextField("Line", text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(Theme.transcript)
+                    .font(Theme.transcript(textSize))
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .focused($fieldFocused)
                     .onSubmit { save() }
@@ -364,12 +318,11 @@ struct TranscriptList: View {
             } else {
                 Group {
                     if !query.isEmpty {
-                        labelled(Text(highlighted(line.text, source, line.start)), name)
+                        Self.labelled(Text(highlighted(line.text, source, line.start)), name)
                     } else if isPlaying {
-                        labelled(wordHighlighted(line), name)
-                            .textRenderer(WordMarkRenderer(color: Theme.accent.opacity(0.22)))
+                        PlayingLineText(line: line, name: name)
                     } else {
-                        labelled(Text(line.text), name)
+                        Self.labelled(Text(line.text), name)
                     }
                 }
                     .overlay(alignment: .topLeading) {
@@ -377,7 +330,7 @@ struct TranscriptList: View {
                             SpeakerLabelButton(name: name) { speakerItems(line, current: speaker, name: name, options: options) }
                         }
                     }
-                    .font(Theme.transcript)
+                    .font(Theme.transcript(textSize))
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -529,19 +482,102 @@ extension RecordingInfo {
     }
 }
 
+/// Watches the audio clock and reports which line is being heard. Draws
+/// nothing. It is the only thing redrawn on every tick, so the transcript
+/// itself stays still until the line changes.
+private struct PlayheadTracker: View {
+    let checked: [Transcript.Line]
+    let live: [Transcript.Line]
+    @Binding var playingRowID: String?
+
+    private var current: String? {
+        let t = Playback.shared.time + 0.05
+        if let l = live.last(where: { $0.start <= t }) { return TranscriptRow.id(.live, l.start) }
+        if let l = checked.last(where: { $0.start <= t }) { return TranscriptRow.id(.checked, l.start) }
+        return nil
+    }
+
+    var body: some View {
+        Color.clear
+            .onChange(of: current, initial: true) { _, id in playingRowID = id }
+    }
+}
+
+/// The playing line with the word being heard marked. Its own view, so the
+/// audio clock redraws this one line and nothing else. Uses the word times
+/// Parakeet gave (step 5c). Older or edited lines have none, so the word is
+/// estimated: the line's time shared out by word length, with a little
+/// extra after commas and full stops.
+private struct PlayingLineText: View {
+    let line: Transcript.Line
+    let name: String?
+
+    var body: some View {
+        TranscriptList.labelled(highlighted(at: Playback.shared.time), name)
+            .textRenderer(WordMarkRenderer(color: Theme.accent.opacity(0.22)))
+    }
+
+    private func highlighted(at time: Double) -> Text {
+        let text = line.text
+        var words: [Range<String.Index>] = []
+        var i = text.startIndex
+        while i < text.endIndex {
+            while i < text.endIndex, text[i].isWhitespace { i = text.index(after: i) }
+            let start = i
+            while i < text.endIndex, !text[i].isWhitespace { i = text.index(after: i) }
+            if start < i { words.append(start..<i) }
+        }
+        guard !words.isEmpty else { return Text(text) }
+        var current = words.count - 1
+        if let starts = line.words, starts.count == words.count {
+            let t = time + 0.05
+            current = max(0, (starts.lastIndex { $0 <= t }) ?? 0)
+            return marked(text, words[current])
+        }
+        guard line.end > line.start else { return Text(text) }
+        let weights: [Double] = words.map { r in
+            let w = text[r]
+            var weight = Double(w.count) + 2
+            if let last = w.last {
+                if ".?!".contains(last) { weight += 5 } else if ",;:".contains(last) { weight += 3 }
+            }
+            return weight
+        }
+        let total = weights.reduce(0, +)
+        let fraction = (time - line.start) / (line.end - line.start)
+        let target = min(max(fraction, 0), 1) * total
+        var sum = 0.0
+        for (k, w) in weights.enumerated() {
+            sum += w
+            if target < sum { current = k; break }
+        }
+        return marked(text, words[current])
+    }
+
+    /// The word gets a `WordMark`, which `WordMarkRenderer` draws as a soft
+    /// rounded box behind it (a plain text background has square corners).
+    private func marked(_ text: String, _ word: Range<String.Index>) -> Text {
+        let before = Text(String(text[..<word.lowerBound]))
+        let mark = Text(String(text[word])).customAttribute(WordMark())
+        let after = Text(String(text[word.upperBound...]))
+        return Text("\(before)\(mark)\(after)")
+    }
+}
+
 /// Sits exactly on top of the bold "Mr. Yurt:" (same text, see-through), so
 /// clicking the name opens the menu right there. Shaded on hover.
 struct SpeakerLabelButton<Items: View>: View {
     let name: String
     @ViewBuilder let items: () -> Items
     @State private var hovering = false
+    @AppStorage(TextSize.key) private var textSize = TextSize.normal
 
     var body: some View {
         Menu {
             items()
         } label: {
             Text(name + ":")
-                .font(Theme.transcript)
+                .font(Theme.transcript(textSize))
                 .fontWeight(.semibold)
                 // See-through, so the name under it shows. On hover it draws
                 // itself over the shade (the shade would hide the one under it).

@@ -1,0 +1,43 @@
+name: Smoke test
+
+# Runs the app on a real Mac, resizes the window, toggles the sidebar and saves
+# screenshots to the `ci-smoke` branch (Claude can't run Mac apps itself).
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5.0.0
+
+      - name: Build Verbatim.app
+        run: scripts/build-app.sh 0.0.0 0
+
+      - name: Run the app and take screenshots
+        id: run
+        continue-on-error: true
+        run: scripts/ci-smoke.sh "$RUNNER_TEMP/smoke"
+
+      - name: Save screenshots to the ci-smoke branch
+        run: |
+          cd "$RUNNER_TEMP/smoke"
+          echo "${{ github.sha }} (${{ github.ref_name }}), run ${{ github.run_number }}, result: ${{ steps.run.outcome }}" > README.txt
+          git init -q -b ci-smoke
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Smoke screenshots for ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-smoke
+
+      - name: Fail if the app crashed
+        if: steps.run.outcome == 'failure'
+        run: exit 1

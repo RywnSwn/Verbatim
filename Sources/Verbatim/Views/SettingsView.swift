@@ -1,13 +1,16 @@
 import AVFoundation
 import SwiftUI
 
-/// Settings: General, Words (step 8), Voices (step 7c), Storage (step 9), Updates.
-/// The rest arrives in step 10.
+/// Settings: General, Transcription (step 10), Words (step 8), Voices (step 7c),
+/// Storage (step 9), Updates.
 struct SettingsView: View {
     var body: some View {
         TabView {
             Tab("General", systemImage: "gearshape") {
                 GeneralSettings()
+            }
+            Tab("Transcription", systemImage: "text.word.spacing") {
+                TranscriptionSettings()
             }
             Tab("Words", systemImage: "character.book.closed") {
                 WordSettings()
@@ -22,7 +25,7 @@ struct SettingsView: View {
                 UpdateSettings()
             }
         }
-        .frame(width: 520)
+        .frame(width: 560)
     }
 }
 
@@ -31,6 +34,10 @@ struct GeneralSettings: View {
     @AppStorage(Microphones.chosenKey) private var chosenID = ""
     @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
     @AppStorage(TimeStyle.copyKey) private var timesInCopies = false
+    @AppStorage(RecorderModel.quietMinutesKey) private var quietMinutes = 5
+    @AppStorage(TextSize.key) private var textSize = TextSize.normal
+    @AppStorage("showInMenuBar") private var showInMenuBar = true
+    @AppStorage(Messages.enabledKey) private var messagesOn = true
     @State private var mics: [Mic] = []
 
     var body: some View {
@@ -51,15 +58,46 @@ struct GeneralSettings: View {
                 } else if !chosenID.isEmpty, chosenMic == nil {
                     Text("This mic isn't plugged in, so Verbatim uses the MacBook mic.")
                 } else {
-                    Text("Verbatim never switches to AirPods by itself.")
+                    Text("USB and wireless mics, like a DJI, show up here when plugged in. If one is unplugged in class, Verbatim switches to the MacBook mic and keeps going. It never switches to AirPods by itself.")
                 }
             }
             .font(.callout)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
+            Picker("Ask \u{201C}Still recording?\u{201D}:", selection: $quietMinutes) {
+                Text("After 5 minutes of quiet").tag(5)
+                Text("After 10 minutes of quiet").tag(10)
+                Text("After 20 minutes of quiet").tag(20)
+                Text("After 30 minutes of quiet").tag(30)
+                Text("Never").tag(0)
+            }
+            Text("Recording never stops by itself until 3 hours.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
             Divider()
                 .padding(.vertical, 6)
+
+            LabeledContent("Transcript text size:") {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text("A").font(.system(size: 11))
+                        Slider(value: $textSize, in: TextSize.range, step: 1)
+                            .frame(width: 180)
+                            .accessibilityLabel("Transcript text size")
+                            .accessibilityValue("\(Int(textSize)) points")
+                        Text("A").font(.system(size: 17))
+                    }
+                    Text("\(Text("Mr. Yurt:").fontWeight(.semibold)) Kweku Tsin carried the pot up to the sky.")
+                        .font(Theme.transcript(textSize))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 280, alignment: .leading)
+                    Text("Also \u{2318}+ and \u{2318}\u{2212} anywhere in the app, \u{2318}0 for normal.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             Picker("Times:", selection: $timeStyle) {
                 Text("Clock time (10:42)").tag(TimeStyle.clock)
@@ -74,6 +112,34 @@ struct GeneralSettings: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+                .padding(.vertical, 6)
+
+            Toggle("Show Verbatim in the menu bar", isOn: $showInMenuBar)
+            Text("While recording it always shows, so you know it's on.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Toggle("Tell me things when Verbatim is hidden", isOn: $messagesOn)
+            Text("Like \u{201C}Still recording?\u{201D} or low battery, as a quiet banner. Never a sound.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+                .padding(.vertical, 6)
+
+            LabeledContent("Shortcuts:") {
+                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 3) {
+                    ForEach(Self.shortcuts.indices, id: \.self) { i in
+                        GridRow {
+                            Text(Self.shortcuts[i].0)
+                            Text(Self.shortcuts[i].1).foregroundStyle(.secondary).monospacedDigit()
+                        }
+                    }
+                }
+                .font(.callout)
+            }
         }
         .formStyle(.columns)
         .padding(24)
@@ -84,6 +150,20 @@ struct GeneralSettings: View {
     }
 
     private var chosenMic: Mic? { mics.first { $0.id == chosenID } }
+
+    static let shortcuts: [(String, String)] = [
+        ("Do anything", "\u{2318}K"),
+        ("New recording", "\u{2318}N"),
+        ("Start or stop", "\u{2318}R"),
+        ("Pause or resume", "\u{21E7}\u{2318}P"),
+        ("Add marker", "\u{2318}D"),
+        ("Mini window", "\u{21E7}\u{2318}M"),
+        ("Copy all", "\u{21E7}\u{2318}C"),
+        ("Copy new since last copy", "\u{2325}\u{2318}C"),
+        ("Find in transcript", "\u{2318}F"),
+        ("Text bigger, smaller", "\u{2318}+  \u{2318}\u{2212}"),
+        ("Transcribe a Voice Memo", "\u{2318}O"),
+    ]
 
     private func refresh() { mics = Microphones.list() }
 }
@@ -374,6 +454,73 @@ struct WordSettings: View {
         Task {
             try? await Task.sleep(for: .seconds(10))
             if undo == r { undo = nil }
+        }
+    }
+}
+
+/// Settings > Transcription (step 10): the three downloads and where they
+/// stand, and naming recordings from what was said.
+struct TranscriptionSettings: View {
+    @AppStorage(AutoName.enabledKey) private var autoName = true
+    private var speakers: SpeakerModel { .shared }
+
+    var body: some View {
+        Form {
+            Text("Everything runs on this Mac and works offline. These download once. If one breaks, Verbatim downloads it again by itself.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 6)
+
+            LiveModelStatusLine()
+            Divider().padding(.vertical, 4)
+            statusRow("Speaker labels", note: "Tells Mr. Yurt apart from students.", ready: speakers.isReady, text: speakerText)
+            Divider().padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Word list helper").font(.body.weight(.medium))
+                WordModelNote(inSettings: true)
+            }
+
+            Divider().padding(.vertical, 10)
+
+            Toggle("Name recordings from what was said", isOn: $autoName)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("After you stop, your Mac's Apple Intelligence reads the transcript and picks a short name, like \u{201C}Anansi and the sky god\u{201D}. On this Mac, offline. Names you type yourself are never changed.")
+                if autoName, let reason = AutoName.unavailableReason {
+                    Text(reason).foregroundStyle(.primary)
+                }
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .formStyle(.columns)
+        .padding(24)
+    }
+
+    private var speakerText: String {
+        switch speakers.state {
+        case .ready: "Ready."
+        case .waiting: "Downloads by itself after the speech model."
+        case .downloading(let f): "Downloading, \(Int(f * 100))% of \(SpeakerEngine.sizeText)."
+        case .preparing: "Getting ready. First time only."
+        case .failed(let f): "Stopped at \(Int(f * 100))%. Trying again by itself."
+        }
+    }
+
+    private func statusRow(_ title: String, note: String, ready: Bool, text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: ready ? "checkmark" : "arrow.down")
+                .fontWeight(.semibold)
+                .foregroundStyle(ready ? Color.green : Theme.accent)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.body.weight(.medium))
+                Text("\(note) \(text)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

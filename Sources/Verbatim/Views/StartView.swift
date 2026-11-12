@@ -5,21 +5,35 @@ import SwiftUI
 struct StartView: View {
     @Environment(RecorderModel.self) private var model
 
+    /// Scrolls when the window is short, centered when it fits. Without this
+    /// the screen was taller than a short window, which pushed the sidebar's
+    /// top and bottom past the window's edges (Ryan's screenshot).
     var body: some View {
+        GeometryReader { proxy in
+            ScrollView(.vertical) {
+                content
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 28) {
             VStack(spacing: 26) {
-                VStack(spacing: 0) {
-                    Text("Hear it once.")
-                        .font(.system(size: 54, weight: .medium, design: .serif))
-                    Text("Keep every word.")
-                        .font(.system(size: 54, weight: .regular, design: .serif))
-                        .italic()
+                // Simple and warm, like Claude's start screen (Ryan, step 10):
+                // the waveform mark and a greeting for the time of day.
+                HStack(alignment: .center, spacing: 16) {
+                    WaveMark()
+                        .frame(width: 40, height: 40)
+                        .accessibilityHidden(true)
+                    Text(Greeting.text())
+                        .font(.system(size: 46, weight: .regular, design: .serif))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6) // a narrow window shrinks it, never squeezes the sidebar
                 }
-                .multilineTextAlignment(.center)
-
-                WaveToWords()
-                    .frame(width: 620, height: 40)
-                    .accessibilityHidden(true)
+                .padding(.bottom, 6)
 
                 Button {
                     Task { await model.start() }
@@ -30,6 +44,8 @@ struct StartView: View {
                     }
                 }
                 .buttonStyle(.inkLarge)
+
+                GroupChooser()
 
                 Text("Or drop a Voice Memo here to transcribe it.")
                     .font(.callout)
@@ -44,108 +60,80 @@ struct StartView: View {
                     LiveModelStatusLine()
                 }
             }
-            .frame(width: 460, alignment: .leading)
+            .frame(maxWidth: 460, alignment: .leading) // shrinks with the window
         }
-        .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 32)
     }
 }
 
-/// The signature: grey bars while someone talks, dots when quiet,
-/// and the words appearing next to it. Speech eases in and out, pauses a
-/// moment at commas and full stops, and the words fade before it repeats.
-struct WaveToWords: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private static let line = "\u{201C}Anansi has just made his deal with Nyankupon, the sky god. Write this down.\u{201D}"
-    private static let charTime = 0.065
-    private static let punctuationPause = 0.45
-    private static let hold = 1.8, fade = 0.6, rest = 0.7
-    private let barCount = 22
-
-    /// When each character appears, and the stretches of time with talking.
-    private static let schedule: (times: [Double], talking: [ClosedRange<Double>], end: Double) = {
-        var times: [Double] = []
-        var talking: [ClosedRange<Double>] = []
-        var t = 0.3, segmentStart = t
-        for ch in line {
-            times.append(t)
-            t += charTime
-            if ch == "," || ch == "." {
-                talking.append(segmentStart...t)
-                t += punctuationPause
-                segmentStart = t
-            }
+/// "Evening, Ryan". The first name comes from the Mac's account name.
+enum Greeting {
+    static func text(at date: Date = Date()) -> String {
+        let hour = Calendar.current.component(.hour, from: date)
+        let first = NSFullUserName().split(separator: " ").first.map(String.init) ?? ""
+        let name = first.isEmpty ? "" : ", \(first)"
+        switch hour {
+        case 5..<12: return "Morning\(name)"
+        case 12..<17: return "Afternoon\(name)"
+        case 17..<22: return "Evening\(name)"
+        default: return first.isEmpty ? "Up late?" : "Up late, \(first)?"
         }
-        if segmentStart < t { talking.append(segmentStart...t) }
-        return (times, talking, t)
-    }()
+    }
+}
 
-    private static var cycle: Double { schedule.end + hold + fade + rest }
+/// Verbatim's mark: five ink bars, the signature waveform, breathing gently.
+/// Still when Reduce Motion is on.
+struct WaveMark: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private static let rest: [Double] = [0.38, 0.7, 1, 0.7, 0.38]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
-            let t = reduceMotion ? Self.schedule.end + 0.1 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.cycle)
-            let shown = Self.schedule.times.filter { $0 <= t }.count
-            let wordsOpacity = textOpacity(at: t)
-            let level = loudness(at: t)
-
-            HStack(spacing: 14) {
-                HStack(spacing: 3) {
-                    ForEach(0..<barCount, id: \.self) { i in
-                        let h = barHeight(index: i, time: t, loudness: level)
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(h > 4 ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-                            .frame(width: 3, height: h)
-                    }
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .center, spacing: 4) {
+                ForEach(0..<5, id: \.self) { i in
+                    let move = reduceMotion ? 0 : 0.18 * sin(t * 1.6 + Double(i) * 0.9)
+                    Capsule()
+                        .fill(Theme.ink)
+                        .frame(width: 5, height: 40 * min(1, max(0.2, Self.rest[i] + move)))
                 }
-                .frame(height: 40)
+            }
+            .frame(maxHeight: .infinity)
+        }
+    }
+}
 
-                Text(String(Self.line.prefix(shown)))
-                    .font(.system(size: 16))
+/// "Save in: English 2026". Remembers the last pick, so the next class
+/// starts in the same group with one click.
+struct GroupChooser: View {
+    @Environment(RecorderModel.self) private var model
+    private var store: GroupStore { .shared }
+
+    var body: some View {
+        if !store.groups.isEmpty {
+            @Bindable var store = store
+            HStack(spacing: 6) {
+                Text("Save in")
                     .foregroundStyle(.secondary)
-                    .opacity(wordsOpacity)
-                    .lineLimit(1)
-                    .fixedSize()
-                Spacer(minLength: 0)
+                Picker("Save in", selection: $store.lastUsedID) {
+                    ForEach(store.groups) { group in
+                        Label {
+                            Text(group.name)
+                        } icon: {
+                            Image(systemName: group.icon ?? "folder")
+                        }
+                        .tag(Optional(group.id))
+                    }
+                    Divider()
+                    Text("Recents (no group)").tag(UUID?.none)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .clipped()
-            .mask {
-                LinearGradient(
-                    stops: [.init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
-                    startPoint: .leading, endPoint: .trailing
-                )
-            }
+            .font(.callout)
         }
-    }
-
-    /// 0 when quiet, 1 mid-sentence, easing in and out at each pause.
-    private func loudness(at t: Double) -> Double {
-        var best = 0.0
-        for seg in Self.schedule.talking {
-            let rise = smooth((t - seg.lowerBound) / 0.25)
-            let fall = smooth((seg.upperBound + 0.1 - t) / 0.35)
-            best = max(best, min(rise, fall))
-        }
-        return best
-    }
-
-    private func textOpacity(at t: Double) -> Double {
-        let fadeStart = Self.schedule.end + Self.hold
-        if t < fadeStart { return 1 }
-        return 1 - smooth((t - fadeStart) / Self.fade)
-    }
-
-    private func smooth(_ x: Double) -> Double {
-        let c = min(max(x, 0), 1)
-        return c * c * (3 - 2 * c)
-    }
-
-    private func barHeight(index i: Int, time t: Double, loudness: Double) -> CGFloat {
-        let wave = abs(sin(t * 6.3 + Double(i) * 0.9)) * (0.6 + 0.4 * abs(sin(t * 2.1 + Double(i) * 0.37)))
-        let scale = 0.4 + Double(i % 5) / 6
-        return 3 + (wave * 30 * scale * loudness).rounded()
     }
 }
 

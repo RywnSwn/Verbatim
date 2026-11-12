@@ -1,19 +1,79 @@
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
     @Environment(RecorderModel.self) private var model
     @Environment(Updater.self) private var updater
+    @Environment(\.openWindow) private var openWindow
+    /// Small window = small layout, like Claude (Ryan): below `compactWidth`
+    /// the sidebar hides itself so the main area gets the room. The toolbar
+    /// button (or ⌃⌘S) still opens it. Wide again, it comes back by itself.
+    @State private var columns: NavigationSplitViewVisibility = .all
+    @State private var hidForSpace = false
+    private static let compactWidth: CGFloat = 860
+    private static let roomyWidth: CGFloat = 940
+
+    private func fitSidebar(to width: CGFloat) {
+        if width < Self.compactWidth, columns != .detailOnly, !hidForSpace {
+            hidForSpace = true
+            columns = .detailOnly
+        } else if width >= Self.roomyWidth, hidForSpace {
+            hidForSpace = false
+            columns = .all
+        }
+    }
+
+    /// Our own sidebar button (the system one is removed). Opening the sidebar
+    /// in a window too narrow for it made macOS fight over the layout until
+    /// the app crashed (0.1.98, 0.1.102), or do nothing at all. So a narrow
+    /// window first grows to make room, then the sidebar opens.
+    private func toggleSidebar() {
+        if columns == .detailOnly {
+            hidForSpace = false
+            if let window = Messages.mainWindows.first ?? NSApp.keyWindow,
+               window.frame.width < Self.compactWidth {
+                var frame = window.frame
+                frame.size.width = Self.compactWidth + 20
+                if let screen = window.screen?.visibleFrame {
+                    frame.size.width = min(frame.size.width, screen.width)
+                    if frame.maxX > screen.maxX { frame.origin.x = max(screen.minX, screen.maxX - frame.width) }
+                }
+                window.setFrame(frame, display: true, animate: true)
+                guard frame.width >= Self.compactWidth else { return } // tiny screen: no room at all
+            }
+            // After the resize has been laid out, never in the middle of it.
+            Task { @MainActor in columns = .all }
+        } else {
+            hidForSpace = false
+            columns = .detailOnly
+        }
+    }
 
     var body: some View {
         @Bindable var model = model
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
+                .toolbar(removing: .sidebarToggle)
+                // The sidebar keeps at least 230 pt; the main area gives way
+                // instead (Ryan saw it squeezed under the window's edge).
+                // See the note on the detail column: never let the list's own
+                // height decide how tall the window's content is.
+                .frame(minHeight: 0, idealHeight: 300, maxHeight: .infinity)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
         } detail: {
             DetailView()
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if let notice = model.recoveryNotice {
                         NoticeLine(text: notice) { model.recoveryNotice = nil }
+                    }
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        Button(action: toggleSidebar) {
+                            Label("Sidebar", systemImage: "sidebar.left")
+                        }
+                        .keyboardShortcut("s", modifiers: [.control, .command])
+                        .help(columns == .detailOnly ? "Show the sidebar (⌃⌘S)" : "Hide the sidebar (⌃⌘S)")
                     }
                 }
                 .dropDestination(for: URL.self) { urls, _ in
@@ -25,6 +85,27 @@ struct ContentView: View {
                         BottomBar()
                     }
                 }
+                // NavigationSplitView makes itself as tall as this column
+                // *wants* to be (title bar + content + bottom bar), not as tall
+                // as the window. On Ryan's Mac that was 692 pt in a 552 pt
+                // window, so the sidebar's top and bottom were outside it
+                // (0.1.115 layout details). Saying "I want little, I take what
+                // I'm given" makes the split view follow the window.
+                .frame(minWidth: 0, idealWidth: 400, maxWidth: .infinity,
+                       minHeight: 0, idealHeight: 300, maxHeight: .infinity)
+        }
+        .overlay {
+            if model.showCommandMenu {
+                CommandMenuView()
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: model.showCommandMenu)
+        .onAppear { MainWindow.open = { openWindow(id: "main") } }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            // Changed after this layout pass ends, never in the middle of it:
+            // showing or hiding the sidebar while the window is laying out can
+            // crash (Ryan's crash on 0.1.98).
+            Task { @MainActor in fitSidebar(to: width) }
         }
     }
 }
@@ -34,7 +115,12 @@ struct DetailView: View {
     @Environment(RecorderModel.self) private var model
 
     var body: some View {
-        Group {
+        // GeometryReader: the main area takes the space the window gives it and
+        // never asks for more. A screen that wants to be taller than the
+        // window would otherwise stretch the whole window content and push
+        // the top and bottom of the sidebar outside the window.
+        GeometryReader { _ in
+          Group {
             if model.showingDeleted {
                 RecentlyDeletedView()
             } else if let id = model.selection, let info = model.recordings.first(where: { $0.id == id }) {
@@ -48,8 +134,9 @@ struct DetailView: View {
             } else {
                 StartView()
             }
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: model.selection) {
             model.searchText = ""
             // Audio belongs to the transcript on screen; don't keep playing behind another one.

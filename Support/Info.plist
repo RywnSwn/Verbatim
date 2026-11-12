@@ -28,6 +28,19 @@
 	<string>NSApplication</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Verbatim listens to your class so it can write down what is said. Audio stays on this Mac.</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.rywnswn.verbatim.recording</string>
+			<key>UTTypeDescription</key>
+			<string>Verbatim recording</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Verbatim uses your Mac's own speech recognition for live text until its own live model has downloaded. Everything stays on this Mac.</string>
 </dict>
