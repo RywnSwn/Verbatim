@@ -38,7 +38,32 @@ resize() {
 }
 
 toggle_sidebar() {
-  osascript -e 'tell application "System Events" to keystroke "s" using {control down, command down}' || echo "toggle failed"
+  # Click the real sidebar button in the toolbar, like Ryan does.
+  osascript -e 'tell application "System Events" to tell (first process whose unix id is '"$APP_PID"')
+    set found to "no sidebar button found"
+    repeat with e in (entire contents of window 1)
+      try
+        if class of e is button then
+          set d to ""
+          try
+            set d to d & (description of e as text)
+          end try
+          try
+            set d to d & " " & (title of e as text)
+          end try
+          try
+            set d to d & " " & (help of e as text)
+          end try
+          if d contains "idebar" then
+            set found to "clicked: " & d
+            click e
+            exit repeat
+          end if
+        end if
+      end try
+    end repeat
+    return found
+  end tell' || echo "toggle failed"
   sleep 3
 }
 
