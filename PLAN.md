@@ -119,6 +119,15 @@ work: sidebar rows, drag, glass or solid, Settings pages, speaker model off
 the GPU, forget speaker names). Test builds from this branch have all of
 it. Only `scripts/ci-smoke.sh` clashed (both parts kept). Not merged into
 `main` yet: Ryan tests first.
+Lag came back (Ryan, 2026-11-12 evening, after the design pass was merged
+in): the one live-audio difference between the builds that felt fine
+(0.1.135, 137: lag fix only) and the ones that lagged (139+) is
+`SpeakerEngine.computeUnits = .cpuAndNeuralEngine` from the design pass
+chat. Put back to `.all` (FluidAudio's default). Not confirmed by Ryan yet.
+⌃⌘L now also says "LIVE TEXT BEHIND THE MIC: X s now, worst Y s"
+(`LiveFeed.behind`): audio waiting for the models. If that grows while
+recording, the models are too slow (not the drawing). If lag is still
+there, get that paste before changing anything else.
 Lag numbers: `Model/HitchMeter.swift` checks ten times a second how long
 the main thread takes to answer. ⌃⌘L (Copy Layout Details) now ends with
 "MAIN THREAD ... while recording: N checks, N slower than 0.1 s, worst

@@ -10,14 +10,23 @@ enum LiveInput: Sendable {
 
 /// Hands samples from the audio thread to the live engine, in order.
 final class LiveFeed: @unchecked Sendable {
+    /// The one feed, reachable from any thread.
+    static let shared = LiveFeed()
     private let lock = NSLock()
     private var continuation: AsyncStream<LiveInput>.Continuation?
+    /// Samples handed over, and samples the engines are done with. The gap
+    /// is how far live text is behind the mic (shown by `HitchMeter`).
+    private var given: Int64 = 0
+    private var done: Int64 = 0
+    private var worstBehind: Int64 = 0
 
     func open() -> AsyncStream<LiveInput> {
         let (stream, c) = AsyncStream<LiveInput>.makeStream()
         lock.withLock {
             continuation?.finish()
             continuation = c
+            given = 0
+            done = 0
         }
         return stream
     }
@@ -25,7 +34,28 @@ final class LiveFeed: @unchecked Sendable {
     var isOpen: Bool { lock.withLock { continuation != nil } }
 
     func yield(_ input: LiveInput) {
-        lock.withLock { _ = continuation?.yield(input) }
+        lock.withLock {
+            guard let continuation else { return }
+            if case .samples(let s) = input {
+                given += Int64(s.count)
+                worstBehind = max(worstBehind, given - done)
+            }
+            continuation.yield(input)
+        }
+    }
+
+    /// The engines finished this many samples.
+    func finished(_ samples: Int) {
+        lock.withLock { done += Int64(samples) }
+    }
+
+    /// Seconds of audio waiting right now, and the most since the last call.
+    func behind() -> (now: Double, worst: Double) {
+        lock.withLock {
+            let out = (Double(max(0, given - done)) / 16_000, Double(worstBehind) / 16_000)
+            worstBehind = max(0, given - done)
+            return out
+        }
     }
 
     func close() {
@@ -68,7 +98,7 @@ final class LiveTranscriber {
     var editing: (id: UUID, start: Double)?
 
     /// Written to from the audio thread.
-    nonisolated let feed = LiveFeed()
+    nonisolated let feed = LiveFeed.shared
 
     @ObservationIgnored private let runner = LiveRunner()
     @ObservationIgnored private var runTask: Task<Void, Never>?
@@ -443,6 +473,7 @@ actor LiveRunner {
                     await deliver(out, offset: offset, engine: name, id: id, run: run)
                 }
                 position += Int64(samples.count)
+                LiveFeed.shared.finished(samples.count)
             case .flush:
                 if let e = engine {
                     let out = await e.end()

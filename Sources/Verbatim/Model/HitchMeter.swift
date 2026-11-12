@@ -68,7 +68,9 @@ final class HitchMeter: @unchecked Sendable {
     /// The numbers since the last report, then starts counting afresh.
     func report() -> String {
         queue.sync {
-            let text = "MAIN THREAD (since the last copy)\n  while recording: \(recording.text)\n  not recording: \(idle.text)"
+            let behind = LiveFeed.shared.behind()
+            let live = String(format: "LIVE TEXT BEHIND THE MIC (audio waiting for the models): %.1f s now, worst %.1f s since the last copy", behind.now, behind.worst)
+            let text = "MAIN THREAD (since the last copy)\n  while recording: \(recording.text)\n  not recording: \(idle.text)\n\(live)"
             recording = Bucket()
             idle = Bucket()
             return text
