@@ -1,0 +1,368 @@
+<title>Verbatim Mini Window</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: short notes, then a fake Mac desktop with a working mini window, then what changed. */
+:root {
+  --page: #EEEBE4; --paper: #FCFBF8; --ink: #1F1D1A; --muted: #69645C; --line: #E6E2DA;
+  --accent: #24427A; --shadow: rgba(31, 29, 26, 0.22); --bar: rgba(252, 251, 248, 0.6);
+  --wall:
+    radial-gradient(circle at 12% 18%, #8DB6E0 0, transparent 42%),
+    radial-gradient(circle at 78% 82%, #EFAE93 0, transparent 48%),
+    radial-gradient(circle at 88% 12%, #A9D3A0 0, transparent 38%),
+    linear-gradient(135deg, #D7E3EF, #F0E2D3);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+    --accent: #8FA9DD; --shadow: rgba(0, 0, 0, 0.55); --bar: rgba(29, 28, 26, 0.6);
+    --wall:
+      radial-gradient(circle at 12% 18%, #27466E 0, transparent 42%),
+      radial-gradient(circle at 78% 82%, #6B3524 0, transparent 48%),
+      radial-gradient(circle at 88% 12%, #2E5530 0, transparent 38%),
+      linear-gradient(135deg, #141A24, #221A15);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+  --accent: #8FA9DD; --shadow: rgba(0, 0, 0, 0.55); --bar: rgba(29, 28, 26, 0.6);
+  --wall:
+    radial-gradient(circle at 12% 18%, #27466E 0, transparent 42%),
+    radial-gradient(circle at 78% 82%, #6B3524 0, transparent 48%),
+    radial-gradient(circle at 88% 12%, #2E5530 0, transparent 38%),
+    linear-gradient(135deg, #141A24, #221A15);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--page); color: var(--ink); font-family: var(--sans); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px; -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.page { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1 { font-family: var(--serif); font-weight: 500; font-size: 32px; margin: 0; line-height: 1.1; }
+h2 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0; }
+p { margin: 0; line-height: 1.5; }
+.lead { color: var(--muted); max-width: 62ch; }
+.intro, .sec { display: flex; flex-direction: column; gap: 12px; }
+.try { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 20px; line-height: 1.45; max-width: 66ch; }
+.strip { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.strip > span { font-size: 12px; color: var(--muted); }
+.seg { display: inline-flex; flex-wrap: wrap; background: color-mix(in srgb, var(--ink) 7%, transparent); border-radius: 8px; padding: 2px; }
+.seg button { padding: 5px 11px; border-radius: 6px; font-size: 12.5px; }
+.seg button[aria-pressed="true"] { background: var(--paper); box-shadow: 0 1px 2px var(--shadow); font-weight: 500; }
+
+/* Fake desktop */
+.stage { position: relative; background: var(--wall); border-radius: 14px; min-height: 470px; overflow: hidden; display: flex; flex-direction: column; }
+.menubar { display: flex; justify-content: flex-end; align-items: center; gap: 14px; height: 28px; padding: 0 12px; background: var(--bar); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 12.5px; }
+.menubar .mb { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 5px; font-variant-numeric: tabular-nums; }
+.menubar .mb:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.desk { flex: 1; padding: 16px; display: flex; align-items: flex-start; }
+.gone { font-size: 12.5px; background: var(--bar); padding: 8px 12px; border-radius: 9px; max-width: 300px; line-height: 1.4; }
+
+/* The mini window: no title bar at all, so nothing sits above the top row. */
+.mini { width: min(330px, 100%); background: var(--paper); border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 25%, transparent), 0 14px 40px var(--shadow); display: flex; flex-direction: column; }
+.top { display: flex; align-items: center; gap: 8px; padding: 7px 8px 6px 8px; min-height: 36px; }
+.ib { width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); flex-shrink: 0; }
+.ib:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink); }
+.ib svg, .act svg, .mb svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.wave { display: inline-flex; align-items: center; gap: 2px; height: 18px; }
+.wave i { display: block; width: 2.5px; height: 3px; border-radius: 2px; background: var(--muted); transition: height .12s ease-out; }
+.clock { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.chip { font-size: 11px; font-weight: 500; color: var(--muted); padding: 1px 7px; border-radius: 9px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.name { flex: 1; min-width: 0; text-align: right; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.appname { flex: 1; font-size: 12.5px; font-weight: 600; }
+
+.lines { display: flex; flex-direction: column; gap: 2px; padding: 0 6px 6px; }
+.ln { font-family: var(--serif); font-size: 13.5px; line-height: 1.42; padding: 3px 6px; border-radius: 6px; cursor: text; color: var(--muted); text-align: left; overflow-wrap: anywhere; }
+.ln:last-of-type, .ln.fixed { color: var(--ink); }
+.ln:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.ln .lock { display: inline-block; margin-left: 5px; opacity: .45; font-size: 10px; }
+.edit { padding: 3px 6px; display: flex; flex-direction: column; gap: 4px; }
+.edit textarea { font-family: var(--serif); font-size: 13.5px; line-height: 1.42; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--accent); padding: 0 0 3px; resize: none; width: 100%; outline: none; }
+.edit small, .more { font-size: 11px; color: var(--muted); }
+.more { padding: 0 12px 6px; }
+.hint { font-family: var(--serif); font-size: 13.5px; color: var(--muted); padding: 3px 12px 8px; }
+
+.msg { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; border-top: 1px solid var(--line); padding: 7px 12px; font-size: 12px; }
+.link { color: var(--accent); font-weight: 500; font-size: 12px; }
+.link:hover { text-decoration: underline; }
+.acts { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 4px; border-top: 1px solid var(--line); }
+.act { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px 5px; border-radius: 8px; font-size: 10.5px; color: var(--muted); }
+.act svg { color: var(--ink); }
+.act:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+.act:active { background: color-mix(in srgb, var(--ink) 14%, transparent); }
+
+.idle { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.idle .ready { font-family: var(--serif); font-size: 17px; }
+.idle .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.start { background: var(--ink); color: var(--paper); border-radius: 9px; padding: 8px 12px; font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.start:hover { opacity: .88; } .start:active { opacity: .75; }
+.start i { width: 8px; height: 8px; border-radius: 50%; background: var(--paper); display: block; }
+.last { display: flex; align-items: baseline; gap: 10px; border-top: 1px solid var(--line); padding-top: 9px; font-size: 12px; }
+.last div { flex: 1; min-width: 0; }
+.last b { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.last span { color: var(--muted); }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px 28px; margin: 0; padding: 0; list-style: none; }
+.notes li { line-height: 1.45; min-width: 0; }
+.notes b { font-weight: 600; display: block; margin-bottom: 2px; }
+.notes span { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .wave i { transition: none; } }
+</style>
+
+<div class="page">
+  <div class="intro">
+    <h1>Mini window, new design</h1>
+    <p class="lead">A mockup you can click. It is not the real app yet. The words below are made up and arrive by themselves, like in class. Nothing gets built until you say this is right.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Try it</h2>
+    <ol class="try">
+      <li>Click any line of text and fix a word. Press Enter to save, Esc to cancel. Watch what happens to new words while you type.</li>
+      <li>Press Marker, Copy new, Pause, then Stop. After Stop you see the new "not recording" look.</li>
+      <li>Press the × at the top left. The window goes away but the recording keeps going. Click the timer in the fake menu bar to bring it back.</li>
+    </ol>
+    <div class="strip">
+      <span>Jump to</span>
+      <div class="seg" id="jump">
+        <button type="button" data-go="rec" aria-pressed="true">Recording</button>
+        <button type="button" data-go="paused" aria-pressed="false">Paused</button>
+        <button type="button" data-go="idle" aria-pressed="false">Not recording</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="menubar">
+      <button type="button" class="mb" id="mb" title="Verbatim in the menu bar. Click to show the mini window."></button>
+      <span>Thu 12 Nov&nbsp; 10:17</span>
+    </div>
+    <div class="desk" id="desk"></div>
+  </div>
+
+  <div class="sec">
+    <h2>What changes</h2>
+    <ul class="notes">
+      <li><b>No more empty strip on top</b><span>The window loses its hidden title bar, which was holding that space. The first row sits right at the top.</span></li>
+      <li><b>A close button</b><span>× at the top left, where Mac windows have it. It only hides the window. Recording never stops because you closed it.</span></li>
+      <li><b>Not bare when idle</b><span>It says it is ready, which mic it will use, a real Start button, and your last recording with Copy all.</span></li>
+      <li><b>Buttons have names</b><span>A small word under each icon, so you don't have to hover to learn what they do.</span></li>
+      <li><b>Fix text right here</b><span>Click a line to type in it. It shows the last 3 lines instead of 2 so there is more to grab.</span></li>
+      <li><b>Editing while words keep coming</b><span>The line you are fixing stays still and is never changed under you. New words start a new line below it. If more than 2 new lines pile up, it just counts them. When you save, the view goes back to the newest words.</span></li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function () {
+  var I = {
+    x: '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+    big: '<svg viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9"/></svg>',
+    copy: '<svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1h-8v8h1"/></svg>',
+    flag: '<svg viewBox="0 0 16 16"><path d="M4 14V2.5M4 3h8l-2 3 2 3H4"/></svg>',
+    pause: '<svg viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg>',
+    play: '<svg viewBox="0 0 16 16"><path d="M5 3l8 5-8 5z"/></svg>',
+    stop: '<svg viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>',
+    wave: '<svg viewBox="0 0 16 16"><path d="M2.5 7v2M5.2 5v6M8 2.5v11M10.8 5v6M13.5 7v2"/></svg>'
+  };
+  var SCRIPT = ("So Anansi goes to the sky god and asks to buy his stories. Nyankupon laughs at him, because kings have tried and failed. " +
+    "He names the price, which is four things nobody has ever caught. Write this down, it will be on the quiz. " +
+    "The first is the python, the second is the leopard, then the hornets, and last the fairy nobody can see. " +
+    "Now why does a small spider think he can do what kings could not? Talk to the person next to you for one minute. " +
+    "Kweku Tsin is his son, and he shows up later in the story. Keep that name in your notes.").split(" ");
+
+  var s = {
+    mode: "rec", shown: true, secs: 724, wi: 0, nextId: 4, editing: null, msg: null, msgTimer: 0, copied: 3, last: null,
+    lines: [
+      { id: 1, text: "Okay, books open to page forty one please.", fixed: false },
+      { id: 2, text: "Today we carry on with the group bonds story from last week.", fixed: false },
+      { id: 3, text: "Who remembers what the spider wanted?", fixed: false }
+    ]
+  };
+  var desk = document.getElementById("desk"), mb = document.getElementById("mb");
+
+  function clock(t) { var m = Math.floor(t / 60), x = t % 60; return (m < 10 ? "0" : "") + m + ":" + (x < 10 ? "0" : "") + x; }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function btn(cls, html, title, fn) { var b = el("button", cls, html); b.type = "button"; if (title) { b.title = title; b.setAttribute("aria-label", title); } b.onclick = fn; return b; }
+  function say(text, undoLabel, undo) {
+    clearTimeout(s.msgTimer);
+    s.msg = { text: text, label: undoLabel, undo: undo };
+    s.msgTimer = setTimeout(function () { s.msg = null; draw(); }, 6000);
+  }
+
+  function visible() {
+    if (s.editing != null) {
+      var i = s.lines.findIndex(function (l) { return l.id === s.editing; });
+      return { lines: s.lines.slice(i, i + 3), more: Math.max(0, s.lines.length - (i + 3)) };
+    }
+    return { lines: s.lines.slice(-3), more: 0 };
+  }
+
+  function draw() {
+    mb.innerHTML = I.wave + (s.mode === "idle" ? "" : "<span>" + clock(s.secs) + "</span>");
+    document.querySelectorAll("#jump button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.go === s.mode)); });
+    if (!s.shown) {
+      desk.replaceChildren(el("div", "gone", s.mode === "idle" ? "Mini window closed. Click the Verbatim icon in the menu bar (or press ⇧⌘M) to show it."
+        : "Mini window closed. Still recording, see the timer in the menu bar. Click it (or press ⇧⌘M) to bring the window back."));
+      return;
+    }
+    var mini = desk.querySelector(".mini");
+    if (!mini || mini.dataset.mode !== s.mode) {
+      mini = el("div", "mini"); mini.dataset.mode = s.mode;
+      desk.replaceChildren(mini);
+      build(mini);
+    }
+    update(mini);
+  }
+
+  function build(mini) {
+    var top = el("div", "top");
+    top.append(btn("ib", I.x, s.mode === "idle" ? "Close mini window" : "Close mini window (recording keeps going)", function () { finishEdit(true); s.shown = false; draw(); }));
+    if (s.mode === "idle") {
+      top.append(el("span", "appname", "Verbatim"));
+    } else {
+      var w = el("span", "wave"); for (var k = 0; k < 10; k++) w.append(el("i"));
+      top.append(w, el("span", "clock"));
+      if (s.mode === "paused") top.append(el("span", "chip", "Paused"));
+      top.append(el("span", "name", "Anansi and the sky god"));
+    }
+    top.append(btn("ib", I.big, "Back to the big window", function () { say("In the real app this opens the big window.", null, null); draw(); }));
+    mini.append(top);
+
+    if (s.mode === "idle") {
+      var idle = el("div", "idle");
+      idle.append(el("div", "", '<div class="ready">Ready to record</div><div class="sub">MacBook mic. Saves into English 2026.</div>'));
+      idle.append(btn("start", "<i></i>Start recording", null, function () { go("rec"); }));
+      var last = el("div", "last");
+      last.append(el("div", "", "<b>" + (s.last ? s.last.name : "Wed 11 Nov") + "</b><span>" + (s.last ? s.last.len : "47 min") + ", last recording</span>"));
+      last.append(btn("link", "Copy all", null, function () { say("Copied " + (s.last ? s.last.count : 58) + " lines.", null, null); draw(); }));
+      idle.append(last);
+      mini.append(idle);
+    } else {
+      mini.append(el("div", "lines"), el("div", "more"));
+    }
+    mini.append(el("div", "msgslot"));
+    if (s.mode !== "idle") {
+      var acts = el("div", "acts");
+      acts.append(
+        btn("act", I.copy + "Copy new", "Copy new since last copy", function () {
+          var n = s.lines.length - s.copied; s.copied = s.lines.length;
+          say(n > 0 ? "Copied " + n + " new line" + (n === 1 ? "" : "s") + "." : "Nothing new since your last copy.", null, null); draw();
+        }),
+        btn("act", I.flag + "Marker", "Mark this moment", function () { say("Marker added at " + clock(s.secs) + ".", "Undo", function () { say("Marker removed.", null, null); }); draw(); }),
+        s.mode === "paused" ? btn("act", I.play + "Resume", "Resume", function () { go("rec"); })
+                            : btn("act", I.pause + "Pause", "Pause", function () { go("paused"); }),
+        btn("act", I.stop + "Stop", "Stop", function () {
+          finishEdit(true);
+          s.last = { name: "Anansi and the sky god", len: Math.round(s.secs / 60) + " min", count: s.lines.length };
+          go("idle");
+          say("Stopped and saved, " + s.last.len + ".", "Undo Stop", function () { go("rec"); });
+          draw();
+        })
+      );
+      mini.append(acts);
+    }
+  }
+
+  function update(mini) {
+    var c = mini.querySelector(".clock"); if (c) c.textContent = clock(s.secs);
+    var box = mini.querySelector(".lines");
+    if (box) {
+      var v = visible(), ids = v.lines.map(function (l) { return String(l.id); });
+      Array.from(box.children).forEach(function (n) { if (ids.indexOf(n.dataset.id) < 0) n.remove(); });
+      v.lines.forEach(function (l, i) {
+        var n = box.children[i];
+        if (!n || n.dataset.id !== String(l.id)) {
+          var made = l.id === s.editing ? editor(l) : lineButton(l);
+          box.insertBefore(made, n || null); n = made;
+        }
+        if (l.id !== s.editing) {
+          var want = l.text + (l.fixed ? " •" : "");
+          if (n.dataset.t !== want) { n.dataset.t = want; n.textContent = l.text; if (l.fixed) n.append(el("span", "lock", "fixed")); }
+          n.classList.toggle("fixed", !!l.fixed && i === v.lines.length - 1);
+        }
+      });
+      mini.querySelector(".more").textContent = v.more > 0 ? v.more + " more new line" + (v.more === 1 ? "" : "s") + " below. Save to see them." : "";
+      mini.querySelector(".more").hidden = v.more === 0;
+    }
+    var slot = mini.querySelector(".msgslot");
+    if (!s.msg) { slot.replaceChildren(); }
+    else if (slot.dataset.t !== s.msg.text || !slot.firstChild) {
+      var m = el("div", "msg"); m.append(el("span", "", s.msg.text));
+      if (s.msg.label) { var u = s.msg.undo; m.append(btn("link", s.msg.label, null, function () { s.msg = null; if (u) u(); draw(); })); }
+      slot.replaceChildren(m);
+    }
+    slot.dataset.t = s.msg ? s.msg.text : "";
+  }
+
+  function lineButton(l) {
+    var b = btn("ln", "", "Click to fix this line", function () { startEdit(l.id); });
+    b.dataset.id = String(l.id);
+    return b;
+  }
+  function editor(l) {
+    var wrap = el("div", "edit"); wrap.dataset.id = String(l.id);
+    var ta = el("textarea"); ta.id = "mini-edit"; ta.value = l.text; ta.rows = 1; ta.setAttribute("aria-label", "Fix this line");
+    ta.onkeydown = function (e) {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finishEdit(true); draw(); }
+      if (e.key === "Escape") { e.preventDefault(); finishEdit(false); draw(); }
+    };
+    var fit = function () { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+    ta.oninput = fit;
+    ta.onblur = function () { if (s.editing === l.id) { finishEdit(true); draw(); } };
+    wrap.append(ta, el("small", "", "Enter saves. Esc cancels. New words go on a new line."));
+    setTimeout(function () { fit(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
+    return wrap;
+  }
+  function startEdit(id) { finishEdit(true); s.editing = id; clearEditNode(); draw(); }
+  function clearEditNode() { var box = desk.querySelector(".lines"); if (box) box.replaceChildren(); }
+  function finishEdit(save) {
+    if (s.editing == null) return;
+    var id = s.editing, l = s.lines.find(function (x) { return x.id === id; }), ta = document.getElementById("mini-edit");
+    s.editing = null;
+    if (save && l && ta) {
+      var old = l.text, wasFixed = l.fixed, now = ta.value.trim();
+      if (now && now !== old) {
+        l.text = now; l.fixed = true;
+        say("Line fixed.", "Undo", function () { l.text = old; l.fixed = wasFixed; });
+      }
+    }
+    clearEditNode();
+  }
+  function go(mode) {
+    finishEdit(true);
+    if (mode === "rec" && s.mode === "idle") {
+      s.secs = 0; s.wi = 0; s.copied = 0; s.msg = null;
+      s.lines = [{ id: s.nextId++, text: SCRIPT[0], fixed: false }]; s.wi = 1;
+    }
+    s.mode = mode; s.shown = true; draw();
+  }
+
+  function addWord() {
+    var w = SCRIPT[s.wi % SCRIPT.length]; s.wi++;
+    var last = s.lines[s.lines.length - 1];
+    var ended = /[.?!]$/.test(last.text) && last.text.length >= 55;
+    if (last.fixed || last.id === s.editing || ended) s.lines.push({ id: s.nextId++, text: w, fixed: false });
+    else last.text += " " + w;
+  }
+
+  document.getElementById("jump").onclick = function (e) { var b = e.target.closest("button"); if (b) go(b.dataset.go); };
+  mb.onclick = function () { s.shown = true; draw(); };
+  var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  setInterval(function () { if (s.mode === "rec") { s.secs++; draw(); } }, 1000);
+  setInterval(function () { if (s.mode === "rec") { addWord(); draw(); } }, 420);
+  setInterval(function () {
+    desk.querySelectorAll(".wave i").forEach(function (b) {
+      b.style.height = (s.mode !== "rec" ? 3 : still ? 9 : 3 + Math.round(Math.random() * 14)) + "px";
+    });
+  }, 160);
+  draw();
+})();
+</script>

@@ -113,6 +113,28 @@ window; nothing built yet, mockup first with the ux-planner skill):
    lines, so decide what it shows while one is being edited (for example:
    the edited line stays put and new lines keep coming under it).
 
+Mini window mockup (2026-11-12, waiting for Ryan's yes, nothing built):
+https://claude.ai/artifact/Rb3GkVcczc7apbQsvJjfnD, copy in
+`docs/design/MiniWindow.html`. What it shows:
+- No title bar at all (borderless rounded panel), so no gap on top. Top row:
+  × (left, hides the window only, recording keeps going), bars, timer,
+  recording name, back-to-big-window button.
+- Recording: last 3 lines (was 2). Click a line to edit it in place: Enter
+  saves, Esc cancels, clicking away saves, "Line fixed. Undo" in the
+  message strip. While editing, that line stays on top and still; new words
+  start a new line below (same rule as the big window); at most 2 newer
+  lines show, then "N more new lines below. Save to see them."
+- Buttons have a small word under each icon: Copy new, Marker, Pause, Stop.
+- Not recording: "Ready to record", mic and group, an ink Start recording
+  button, the last recording with Copy all. After Stop: "Stopped and saved,
+  12 min. Undo Stop".
+- Closed while recording: the menu bar timer shows it's still going; the
+  menu bar icon or ⇧⌘M brings it back.
+Build notes: the panel must be able to take the keyboard for typing
+(`becomesKeyOnlyIfNeeded` is already on). Reuse `LineEditor` and
+`LiveTranscriber.editing` from the big window. Add the mini window to the
+smoke test screenshots.
+
 Ryan's asks on 2026-11-12 for the NEXT chat (design pass, mockup first,
 use the ux-planner skill; nothing built yet):
 1. Sidebar can be opaque: a Settings choice, glass or solid.
