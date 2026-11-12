@@ -116,14 +116,19 @@ extension RecorderModel {
     static func text(_ lines: [Transcript.Line], info: RecordingInfo, markdown: Bool) -> String {
         let withTimes = TimeStyle.includeInCopies
         let labels = Speakers.labeler(info.id)
-        let marked = Markers.markedStarts(RecorderModel.shared.shownLines(info.id).map(\.line), info.markers)
+        let shown = RecorderModel.shared.shownLines(info.id).map(\.line)
+        let marked = Markers.markedStarts(shown, info.markers)
+        let notes = Notes.byLine(shown, info.notes)
         let rows = lines.map { line in
             var row = line.text
             if let name = labels.name(line) {
                 row = markdown ? "**\(name):** \(line.text)" : "[\(name)]: \"\(line.text)\""
             }
             if withTimes { row = "[\(info.timeLabel(line.start))] \(row)" }
-            return marked.contains(line.start) ? "⚑ \(row)" : row
+            if marked.contains(line.start) { row = "⚑ \(row)" }
+            // What Ryan typed under the line, so Claude sees it too.
+            if let note = notes[line.start] { row += markdown ? "\n\n> Note: \(note)" : "\n    (Note: \(note))" }
+            return row
         }
         return rows.joined(separator: markdown ? "\n\n" : "\n")
     }

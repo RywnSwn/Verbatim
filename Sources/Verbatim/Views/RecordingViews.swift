@@ -70,6 +70,15 @@ struct RecordingNowView: View {
                 .help("Mark this moment, like \"write this down\" (⌘D)")
             }
             ToolbarItem(placement: .primaryAction) {
+                Button {
+                    model.requestNote()
+                } label: {
+                    Label("Note", systemImage: "pencil")
+                }
+                .labelStyle(.titleAndIcon)
+                .help("Type a note on what's being said now, like what's on the board (⇧⌘N)")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 ExportMenu(hasLines: !(checked + lines).isEmpty)
             }
             ToolbarItem(placement: .primaryAction) {

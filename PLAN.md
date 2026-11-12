@@ -239,7 +239,22 @@ not tested by Ryan. Ryan was asked to delete the other branches on GitHub
   to Claude, Check for Updates, Get Help or Send Feedback (GitHub issues),
   Copy Details for Claude, version. `SettingsNav.shared.page` picks the
   Settings page. Not seen open in a screenshot.
-- **Notes on lines: MOCKUP ONLY**, waiting for Ryan's yes:
+- **Notes on lines: BUILT** (Ryan: "build the specified notes"), not tested
+  by Ryan. `Model/Notes.swift`: `LineNote` (time, text) in
+  recording.json `notes`, matched to lines like markers
+  (`Notes.byLine`). `RecorderModel.setNote` (Undo), `requestNote` (⇧⌘N,
+  toolbar Note button, ⌘K) sets `noteRequest`, which `TranscriptList`
+  picks up and starts typing (`noteEditor`, `NoteRow`). Copies and exports
+  add "(Note: ...)" under the line (Markdown: a quote line); the connector
+  shows and searches notes; the header counts them. Not in the mini
+  window yet. Notes test list:
+  1. Right-click a line > Add note, type, Enter: shows under the line with
+     a pencil. "Note added. Undo" at the bottom.
+  2. While recording press ⇧⌘N (or the Note button): typing starts under
+     the line being said. The transcript holds still while you type.
+  3. Click a note: change it. Empty it + Enter: deleted. Undo both.
+  4. Copy all and paste somewhere: "(Note: ...)" is under its line.
+  The mockup it was built to:
   https://claude.ai/artifact/Pnh8vYCydmaZ53roYAyXUt, copy in
   `docs/design/Notes.html`. One note per line, under the line with a
   pencil, warmer color. Add: right-click > Add note, a Note toolbar button,

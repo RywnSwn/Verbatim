@@ -34,6 +34,10 @@ struct TranscriptList: View {
     /// typing lives in `LineEditor`, so a key press redraws that one line and
     /// not the whole transcript.
     @State private var draft = LineDraft()
+    /// The line whose note is being typed (see `Notes`).
+    @State private var notingLine: Transcript.Line?
+    @State private var noteDraft = LineDraft()
+    @FocusState private var noteFocused: Bool
     @FocusState private var fieldFocused: Bool
     /// Last time you scrolled by hand, so playing audio doesn't yank the view away.
     @State private var lastUserScroll = Date.distantPast
@@ -94,6 +98,7 @@ struct TranscriptList: View {
         let labels = Speakers.labeler(info.id)
         let options = labels.options(live)
         let marked = Markers.markedStarts(checked + live, info.markers)
+        let notes = Notes.byLine(checked + live, info.notes)
         let rows = self.rows
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.lineGap) {
@@ -108,7 +113,12 @@ struct TranscriptList: View {
                         case .line(let line, let source):
                             lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil,
                                     name: source == .live ? labels.name(line) : nil, options: options,
-                                    marked: marked.contains(line.start))
+                                    marked: marked.contains(line.start), note: notes[line.start])
+                            if notingLine?.start == line.start {
+                                noteEditor
+                            } else if let note = notes[line.start] {
+                                NoteRow(text: note) { beginNote(line, note) }
+                            }
                             if let offer = model.fixOffer, offer.recordingID == info.id, offer.start == line.start {
                                 fixOfferRow(offer.fix)
                             }
@@ -165,7 +175,22 @@ struct TranscriptList: View {
             // Clicking somewhere else saves, like a text field in Notes.
             if !fieldFocused, editing != nil { save() }
         }
-        .onDisappear { if editing != nil { save() } }
+        .onDisappear {
+            if editing != nil { save() }
+            if notingLine != nil { saveNote() }
+        }
+        .onChange(of: noteFocused) {
+            if !noteFocused, notingLine != nil { saveNote() }
+        }
+        .onChange(of: model.noteRequest, initial: true) { _, request in
+            // ⇧⌘N or the Note button: type a note on the line being said now.
+            guard let request, request.id == info.id else { return }
+            model.noteRequest = nil
+            let source: LineSource = live.contains { $0.start == request.start } ? .live : .checked
+            guard let line = (checked + live).first(where: { $0.start == request.start }) else { return }
+            beginNote(line, Notes.byLine(checked + live, info.notes)[line.start] ?? "")
+            position.scrollTo(id: TranscriptRow.id(source, line.start), anchor: .center)
+        }
         .onScrollPhaseChange { _, phase in
             if phase == .interacting || phase == .tracking || phase == .decelerating { lastUserScroll = Date() }
         }
@@ -223,7 +248,9 @@ struct TranscriptList: View {
     }
 
     /// Don't scroll away from a line you're editing or a search hit.
-    private var followsLive: Bool { isLive && atBottom && editing == nil && model.searchText.isEmpty }
+    private var followsLive: Bool {
+        isLive && atBottom && editing == nil && notingLine == nil && model.searchText.isEmpty
+    }
 
     // MARK: - Search
 
@@ -309,7 +336,7 @@ struct TranscriptList: View {
     }
 
     private func lineRow(_ line: Transcript.Line, _ source: LineSource, speaker: String?, name: String?,
-                         options: [Speakers.SpeakerOption], marked: Bool) -> some View {
+                         options: [Speakers.SpeakerOption], marked: Bool, note: String?) -> some View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
         let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
@@ -389,6 +416,10 @@ struct TranscriptList: View {
             } else {
                 Button("Add marker here") { model.addMarker(info.id, line: line) }
             }
+            Button(note == nil ? "Add note" : "Edit note") { beginNote(line, note ?? "") }
+            if note != nil {
+                Button("Delete note") { model.setNote(info.id, line: line, text: "") }
+            }
             if source == .live {
                 Menu("Speaker") { speakerItems(line, current: speaker, name: name, options: options) }
             }
@@ -454,8 +485,47 @@ struct TranscriptList: View {
         return Array(all[index...])
     }
 
+    /// The note being typed, under its line: a pencil, then the field.
+    private var noteEditor: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: "pencil")
+                .font(.caption)
+                .foregroundStyle(Theme.note)
+            VStack(alignment: .leading, spacing: 5) {
+                LineEditor(draft: noteDraft, focused: $noteFocused, font: .callout,
+                           prompt: "What the mic can't hear, like what's on the board",
+                           onSave: { saveNote() }, onCancel: { finishNote() })
+                Text("Enter saves. Esc cancels. Empty deletes the note.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.leading, 70)
+        .padding(.top, -8)
+    }
+
+    private func beginNote(_ line: Transcript.Line, _ text: String) {
+        if editing != nil { save() }
+        if notingLine != nil { saveNote() }
+        noteDraft.text = text
+        notingLine = line
+        Task { @MainActor in noteFocused = true }
+    }
+
+    private func saveNote() {
+        guard let line = notingLine else { return }
+        finishNote()
+        model.setNote(info.id, line: line, text: noteDraft.text)
+    }
+
+    private func finishNote() {
+        notingLine = nil
+        noteFocused = false
+    }
+
     private func begin(_ line: Transcript.Line, _ source: LineSource) {
         if editing != nil { save() }
+        if notingLine != nil { saveNote() }
         draft.text = line.text
         editing = EditKey(source: source, start: line.start)
         if source == .live { liveTranscriber.editing = (info.id, line.start) }
@@ -509,15 +579,17 @@ struct LineEditor: View {
     let draft: LineDraft
     var focused: FocusState<Bool>.Binding
     let font: Font
+    let prompt: String
     let onSave: () -> Void
     let onCancel: () -> Void
     @State private var text: String
 
-    init(draft: LineDraft, focused: FocusState<Bool>.Binding, font: Font,
+    init(draft: LineDraft, focused: FocusState<Bool>.Binding, font: Font, prompt: String = "Line",
          onSave: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.draft = draft
         self.focused = focused
         self.font = font
+        self.prompt = prompt
         self.onSave = onSave
         self.onCancel = onCancel
         _text = State(initialValue: draft.text)
@@ -531,7 +603,7 @@ struct LineEditor: View {
                 draft.text = $0
             }
         )
-        TextField("Line", text: typed, axis: .vertical)
+        TextField(prompt, text: typed, axis: .vertical)
             .textFieldStyle(.plain)
             .font(font)
             .lineSpacing(Theme.transcriptLineSpacing)
@@ -543,6 +615,39 @@ struct LineEditor: View {
                 Rectangle().fill(Theme.accent).frame(height: 1).offset(y: 3)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A note under its line: a pencil and the text, in a warm color and
+/// smaller than the transcript, so it never looks like speech. Click to change it.
+private struct NoteRow: View {
+    let text: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Image(systemName: "pencil")
+                    .font(.caption)
+                Text(text)
+                    .font(.callout)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(Theme.note)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Theme.ink.opacity(hovering ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .padding(.leading, 64)
+        .padding(.top, -8)
+        .help("Click to change this note")
+        .accessibilityLabel("Note: \(text)")
+        .accessibilityHint("Edit note")
     }
 }
 

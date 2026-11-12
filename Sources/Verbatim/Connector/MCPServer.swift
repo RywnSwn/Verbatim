@@ -103,7 +103,7 @@ enum MCPServer {
         )
         let read = tool(
             "read_transcript", "Read a transcript",
-            "Reads one recording's transcript: one line per sentence or two, with the time, the speaker if known, and [MARKED] on lines the user marked as important. Works on the class being recorded right now too (about 10 seconds behind).",
+            "Reads one recording's transcript: one line per sentence or two, with the time, the speaker if known, [MARKED] on lines the user marked as important, and \"(Note: ...)\" under a line for things the user typed that the mic can't hear, like what was on the board. Works on the class being recorded right now too (about 10 seconds behind).",
             properties: [
                 "recording": property("string", "The recording's id, words from its name, or \"latest\" (the one being recorded now, or else the newest)."),
                 "last_minutes": property("number", "Only the last N minutes, for \"what did he just say\"."),
@@ -115,7 +115,7 @@ enum MCPServer {
         )
         let search = tool(
             "search_transcripts", "Search transcripts",
-            "Finds lines that contain all the given words (any letter case) in every recording, or in one. Returns each hit with its recording, time and speaker.",
+            "Finds lines (or the user's notes on them) that contain all the given words (any letter case) in every recording, or in one. Returns each hit with its recording, time and speaker.",
             properties: [
                 "query": property("string", "Words to look for, like \"quiz\" or \"sky god\"."),
                 "recording": property("string", "Search only this recording: its id, words from its name, or \"latest\"."),
@@ -168,6 +168,7 @@ enum MCPServer {
         }
         let (everyLine, labels) = Library.lines(info)
         let marked = Markers.markedStarts(everyLine, info.markers)
+        let notes = Notes.byLine(everyLine, info.notes)
         var lines = everyLine
         if let last = number(args["last_minutes"]), last > 0 {
             let end = everyLine.map(\.end).max() ?? 0
@@ -194,7 +195,7 @@ enum MCPServer {
         var body: [String] = []
         var size = 0
         for line in lines {
-            let text = Library.text(line, in: info, labels: labels, marked: marked.contains(line.start))
+            let text = Library.text(line, in: info, labels: labels, marked: marked.contains(line.start), note: notes[line.start])
             size += text.utf8.count + 1
             if size > 220_000 {
                 body.append("(Stopped here: the rest is too long for one go. Call again with from_minute \(Int(line.start / 60)).)")
@@ -224,8 +225,9 @@ enum MCPServer {
         var more = 0
         for info in all {
             let (lines, labels) = Library.lines(info)
+            let notes = Notes.byLine(lines, info.notes)
             let found = lines.filter { line in
-                let text = line.text.lowercased()
+                let text = (line.text + " " + (notes[line.start] ?? "")).lowercased()
                 return words.allSatisfy { text.contains($0) }
             }
             guard !found.isEmpty else { continue }
@@ -240,7 +242,7 @@ enum MCPServer {
                     more += 1
                     continue
                 }
-                out.append(Library.text(line, in: info, labels: labels, marked: marked.contains(line.start)))
+                out.append(Library.text(line, in: info, labels: labels, marked: marked.contains(line.start), note: notes[line.start]))
                 hits += 1
             }
             out.append("")

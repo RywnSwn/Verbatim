@@ -100,11 +100,14 @@ enum Library {
         return info.wallTime(atSecond: seconds).formatted(date: .omitted, time: .shortened)
     }
 
-    /// "[10:42] Mr. Yurt: So Anansi goes to the sky god."
-    static func text(_ line: Transcript.Line, in info: RecordingInfo, labels: Speakers.Labeler, marked: Bool) -> String {
+    /// "[10:42] Mr. Yurt: So Anansi goes to the sky god.", then the note under it, if any.
+    static func text(_ line: Transcript.Line, in info: RecordingInfo, labels: Speakers.Labeler, marked: Bool, note: String?) -> String {
         var out = marked ? "[MARKED] " : ""
         out += "[\(time(line.start, in: info))] "
         if let name = labels.name(line) { out += name + ": " }
-        return out + line.text
+        out += line.text
+        // What the user typed under the line (things the mic can't hear).
+        if let note { out += "\n    (Note: \(note))" }
+        return out
     }
 }

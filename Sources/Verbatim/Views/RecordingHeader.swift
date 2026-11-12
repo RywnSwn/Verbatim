@@ -144,6 +144,8 @@ private struct HeaderMeta: View {
         }
         let markers = info.markers?.count ?? 0
         if markers > 0 { parts.append(markers == 1 ? "1 marker" : "\(markers) markers") }
+        let notes = info.notes?.count ?? 0
+        if notes > 0 { parts.append(notes == 1 ? "1 note" : "\(notes) notes") }
         return parts.joined(separator: ". ") + "."
     }
 }

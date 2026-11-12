@@ -83,7 +83,7 @@ JSON
     cat > "$base/Recordings/$id/recording.json" <<JSON
 {"formatVersion":1,"id":"$id","title":"Anansi and the sky god, part $i","createdAt":"2026-11-0${i}T03:05:00Z",
  "endedAt":"2026-11-0${i}T03:52:00Z","state":"stopped","sampleRate":16000,"samples":45120000,"events":[],
- "audioDeletedAt":"2026-11-0${i}T04:00:00Z","groupID":$group}
+ "audioDeletedAt":"2026-11-0${i}T04:00:00Z","groupID":$group,"notes":[{"time":5.0,"text":"On the board: Anansi = trickster"}]}
 JSON
   done
   # One transcript, so the Claude connector has something to read.
@@ -115,6 +115,7 @@ mcp_check() {
   grep -q '"name":"search_transcripts"' "$OUT/mcp.txt" || { echo "::error::Connector: tools missing"; FAILED=1; }
   grep -q 'Mr. Yurt: Today we carry on with Anansi' "$OUT/mcp.txt" || { echo "::error::Connector: transcript not read"; FAILED=1; }
   grep -q 'Speaker 1: Is the quiz on Friday' "$OUT/mcp.txt" || { echo "::error::Connector: search found nothing"; FAILED=1; }
+  grep -q '(Note: On the board: Anansi = trickster)' "$OUT/mcp.txt" || { echo "::error::Connector: note missing"; FAILED=1; }
   grep -q '3 recordings match' "$OUT/mcp.txt" || { echo "::error::Connector: unclear name not handled"; FAILED=1; }
   grep -q '"code":-32601' "$OUT/mcp.txt" || { echo "::error::Connector: unknown method not refused"; FAILED=1; }
 }

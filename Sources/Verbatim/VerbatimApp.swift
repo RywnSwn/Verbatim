@@ -111,6 +111,9 @@ struct VerbatimApp: App {
                 Button("Add Marker") { model.addMarker() }
                     .keyboardShortcut("d", modifiers: .command)
                     .disabled(!model.canMark)
+                Button("Add Note") { model.requestNote() }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                    .disabled(!model.canMark)
 
                 Divider()
 

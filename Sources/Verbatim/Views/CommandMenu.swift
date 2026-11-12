@@ -176,6 +176,7 @@ struct CommandMenuView: View {
         }
         if model.canMark {
             add("marker", "Add marker", "flag", shortcut: "⌘D", words: "mark flag important") { model.addMarker() }
+            add("note", "Add note", "pencil", shortcut: "⇧⌘N", words: "note write board comment") { model.requestNote() }
         }
         let copyFrom = busy ? model.currentID : model.shownID
         if let copyFrom, !model.shownLines(copyFrom).isEmpty {

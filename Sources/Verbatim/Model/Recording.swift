@@ -35,6 +35,8 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     var audioDeletedAt: Date?
     /// Moments Ryan marked with ⌘D (seconds into the audio), step 7b.
     var markers: [Double]?
+    /// Notes Ryan typed on lines (see `Notes`).
+    var notes: [LineNote]?
     /// Right-click > Keep Audio: old-audio cleanup skips it (step 9).
     var keepAudio: Bool?
     /// Sidebar group (step 10). nil = Recents.

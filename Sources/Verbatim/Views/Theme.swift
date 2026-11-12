@@ -13,6 +13,9 @@ enum Theme {
     static let line = dynamic(light: 0xE6E2DA, dark: 0x34322E)
     /// Links, focus and the edit underline.
     static let accent = dynamic(light: 0x24427A, dark: 0x8FA9DD)
+    /// Notes Ryan typed under a line: a warm pencil color, so a note never
+    /// looks like something that was said.
+    static let note = dynamic(light: 0x6B5A2E, dark: 0xD6C08A)
 
     /// Design pass: a "paper card" row in the sidebar, and the solid sidebar.
     static let card = dynamic(light: 0xFFFFFF, dark: 0x2D2C29)

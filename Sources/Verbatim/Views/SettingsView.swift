@@ -364,6 +364,7 @@ struct ShortcutSettings: View {
         ("Start or stop", "\u{2318}R"),
         ("Pause or resume", "\u{21E7}\u{2318}P"),
         ("Add marker", "\u{2318}D"),
+        ("Add note", "\u{21E7}\u{2318}N"),
         ("Mini window", "\u{21E7}\u{2318}M"),
         ("Copy all", "\u{21E7}\u{2318}C"),
         ("Copy new since last copy", "\u{2325}\u{2318}C"),
