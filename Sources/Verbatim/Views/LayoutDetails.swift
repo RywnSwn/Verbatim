@@ -29,6 +29,8 @@ enum LayoutDetails {
                 walk(content, depth: 0, into: &out)
             }
         }
+        out.append("")
+        out.append(HitchMeter.shared.report())
         return out.joined(separator: "\n")
     }
 

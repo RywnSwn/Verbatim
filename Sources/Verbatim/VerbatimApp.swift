@@ -143,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
             Messages.shared.setUp()
+            HitchMeter.shared.start()
             // Name anything that stopped before it got a name (step 10).
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(20))

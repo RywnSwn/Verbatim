@@ -113,6 +113,20 @@ window; nothing built yet, mockup first with the ux-planner skill):
    lines, so decide what it shows while one is being edited (for example:
    the edited line stays put and new lines keep coming under it).
 
+Merged together (2026-11-12, Ryan's ask): `claude/mini-window-redesign` now
+holds the lag fix + the mini window + `claude/design-pass` (another chat's
+work: sidebar rows, drag, glass or solid, Settings pages, speaker model off
+the GPU, forget speaker names). Test builds from this branch have all of
+it. Only `scripts/ci-smoke.sh` clashed (both parts kept). Not merged into
+`main` yet: Ryan tests first.
+Lag numbers: `Model/HitchMeter.swift` checks ten times a second how long
+the main thread takes to answer. ⌃⌘L (Copy Layout Details) now ends with
+"MAIN THREAD ... while recording: N checks, N slower than 0.1 s, worst
+X s". If Ryan still sees lag: have him record a few minutes, press ⌃⌘L and
+paste. Many slow checks = the app's own drawing is the problem (look at
+views). Few or none while it still feels laggy = it's the models or
+memory (word spotter, 8 GB), not the drawing.
+
 Mini window redesign BUILT (2026-11-12, branch `claude/mini-window-redesign`,
 which sits on top of `claude/fix-recording-lag`; test build 0.1.137; not
 merged, not tested by Ryan). Ryan said "get to work" on the mockup and
