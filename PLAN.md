@@ -15,7 +15,7 @@ testing, at Ryan's ask: ask him for the "Step 7 test list". Step 7b
 (markers) built the same day in the same chat (Ryan's ask): see "How markers
 work". Step 7c (voice memory) built in the same chat too: see "How voice
 memory works". 7b and 7c merged 2026-11-10 (RywnSwn/Verbatim#14, #15) before
-testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 (word list) merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask: ask him for the "Step 8 test list". Step 9 built in the same chat and merged before testing (RywnSwn/Verbatim#17), at Ryan's ask: ask him for the "Step 9 test list". Step 10 (polish) built 2026-11-11 on `claude/step-10-polish` after Ryan approved mockup v3 (https://claude.ai/artifact/2ii2Hd8QkNtZ6gtxUYHziJ): see "How step 10 works" and its test list.
+testing, at Ryan's ask: ask him for the 7, 7b and 7c test lists. Step 8 (word list) merged 2026-11-11 (RywnSwn/Verbatim#16) before testing, at Ryan's ask: ask him for the "Step 8 test list". Step 9 built in the same chat and merged before testing (RywnSwn/Verbatim#17), at Ryan's ask: ask him for the "Step 9 test list". Step 10 (polish) merged 2026-11-12 (RywnSwn/Verbatim#18) after Ryan approved mockup v3 (https://claude.ai/artifact/2ii2Hd8QkNtZ6gtxUYHziJ): see "How step 10 works" and its test list.
 (Another chat had also built 5c, RywnSwn/Verbatim#11; Ryan closed it. Its
 branch `claude/step-5c-parakeet-only` couldn't be deleted from the
 container; Ryan can delete it on GitHub.)
@@ -127,8 +127,10 @@ class depends on it.
        Recently deleted, Export everything. Merged 2026-11-11
        (RywnSwn/Verbatim#17) before testing, at Ryan's ask (see "How storage works").
 10. [x] **Polish.** Groups with icons, menu bar, mini window, quiet banners, ⌘K,
-        auto names, fuller Settings, text size, battery warning. Built, not tested
-        (see "How step 10 works").
+        auto names, fuller Settings, text size, battery warning, compact layout.
+        Merged 2026-11-12 (RywnSwn/Verbatim#18). Ryan saw it on 0.1.93 to 0.1.99;
+        still check: sidebar crash in a small window fixed in 0.1.99?
+        (see "How step 10 works" and its test list).
 11. [x] **Updates.** In-app update button (own updater, not Sparkle).
 
 ## Nice to have (after the above)
