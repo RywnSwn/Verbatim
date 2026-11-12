@@ -27,7 +27,9 @@ decided and why (read it before re-arguing a choice).
 - Ryan does not want Xcode. Build with GitHub Actions on a macOS runner (repo
   is public for free minutes) or Command Line Tools + `swift build`.
 - Claude's container is Linux and cannot run the mic or build Mac apps.
-  Ryan tests on his Mac.
+  Ryan tests on his Mac. But the Smoke test workflow runs the app on the CI
+  Mac and pushes screenshots to the `ci-smoke` branch: look at them before
+  giving Ryan a build (see `PLAN.md`).
 
 ## Working rules
 - One task per chat. At the end of each session, update `PLAN.md` (and

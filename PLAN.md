@@ -44,6 +44,23 @@ Ryan got a test build without step 10. Step 10 is NOT on `main` yet:
 check `git branch -r` before starting. Not tested by Ryan yet. Ask him for
 a glitch list (what he did, what he saw). Tauri: see `DECISIONS.md`, not
 decided by Ryan yet.
+Same day: 0.1.102 crashed for Ryan when he clicked the sidebar button
+(AppKit "too many Update Constraints passes" from the split view, same
+family as the 0.1.98 crash). Could NOT be reproduced on the CI Mac, but
+the test showed the system sidebar button did nothing below about 745 pt
+wide (no room). Fix in 0.1.109: our own sidebar button
+(`ContentView.toggleSidebar`, ⌃⌘S, system one removed); a window narrower
+than 860 pt is widened first, then the sidebar opens. Sidebar footer got a
+solid background (rows showed through the text). Not confirmed by Ryan yet;
+he was asked whether the window was narrow (sidebar hidden) or wide when it
+crashed. If it still crashes, get the new crash report and that answer.
+NEW, use it: `.github/workflows/smoke.yml` + `scripts/ci-smoke.sh` run the
+app on the CI Mac for every push to a `claude/**` branch, with fake
+recordings and groups, resize the window, press ⌃⌘S, and push screenshots
+to the `ci-smoke` branch (`git fetch origin ci-smoke`, then look at the
+PNGs). Claude can see the real app this way. Look at the screenshots before
+giving Ryan a build. Known gap: clicking a sidebar row in the script does
+not open a recording yet, so only the start screen is covered.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 
