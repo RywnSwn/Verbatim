@@ -139,6 +139,18 @@ runs `/usr/bin/sample` on Verbatim when the main thread has been stuck
 1.5 s during a recording and ⌃⌘L pastes the main thread's stack ("STALL
 SAMPLE") plus the longest gap between audio buffers ("MIC"). NEXT STEP:
 get that paste from Ryan and read the stack. Do not guess again.
+Second and third pastes (0.1.146): mic fine (no gaps), live text 14 s
+behind then 0 after Stop, main thread answering only every 1 to 5 s while
+recording, CPU idle in the sample (threads waiting, not computing). Ryan:
+all text flies in on Pause or Stop, the rest of the app is fine, memory is
+not it. Reading: the main thread is jammed while audio is captured, and
+LiveRunner needs about 7 main-thread hops before the first word, so text
+waits too. Suspect (NOT confirmed): `MenuBarLabel` was fed `levels` and
+`elapsed` 20 times a second; a menu bar item is drawn outside the app, so
+each change is a round trip to macOS. 0.1.148 feeds it `menuBars` and
+`menuClock` (2 changes a second at most). 0.1.148 also prints the main
+thread's stack from the saved sample (`Diagnostics/stall.txt`), even after
+a relaunch: get that paste to confirm or kill this suspect.
 Lag numbers: `Model/HitchMeter.swift` checks ten times a second how long
 the main thread takes to answer. ⌃⌘L (Copy Layout Details) now ends with
 "MAIN THREAD ... while recording: N checks, N slower than 0.1 s, worst

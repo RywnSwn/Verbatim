@@ -58,6 +58,14 @@ final class RecorderModel {
     var showingDeleted = false
     private(set) var levels: [Float] = Array(repeating: 0, count: RecorderModel.barCount)
     private(set) var elapsed: TimeInterval = 0
+    /// What the menu bar icon shows: five bars and the timer. Changed twice
+    /// a second at most, and only when it looks different. The menu bar item
+    /// lives outside the app's own window, so every change is a round trip
+    /// to macOS; fed 20 times a second (as `levels` and `elapsed` are) it is
+    /// the prime suspect for the main thread freezing while recording.
+    private(set) var menuBars: [Float] = []
+    private(set) var menuClock = "00:00"
+    @ObservationIgnored private var menuTick = 0
     private(set) var status: Status?
     private(set) var stoppedNote: StoppedNote?
     /// Shown for 10 s after Move to Trash, with Undo.
@@ -218,6 +226,7 @@ final class RecorderModel {
         selection = info.id
         elapsed = 0
         levels = Array(repeating: 0, count: Self.barCount)
+        menuBars = []
         lastLoud = Date()
         quietWarned = false
         batteryWarned = false
@@ -244,6 +253,7 @@ final class RecorderModel {
         updateCurrent { $0.state = .paused }
         phase = .paused
         levels = Array(repeating: 0, count: Self.barCount)
+        menuBars = []
         saveCurrent()
         if status?.action == .stopRecording { status = nil }
     }
@@ -292,6 +302,7 @@ final class RecorderModel {
         device = nil
         status = nil
         levels = Array(repeating: 0, count: Self.barCount)
+        menuBars = []
         Messages.shared.withdraw("stillRecording")
         Messages.shared.withdraw("battery")
 
@@ -794,6 +805,14 @@ final class RecorderModel {
         levels.append(level)
         elapsed = Double(samples) / 16_000
         restartedAfterError = false
+        menuTick += 1
+        if menuTick % 10 == 0 {
+            // Rounded to quarters: small wobbles don't count as a change.
+            let bars = levels.suffix(5).map { ($0 * 4).rounded() / 4 }
+            if bars != menuBars { menuBars = bars }
+        }
+        let clock = MenuBarIcon.shortClock(elapsed)
+        if clock != menuClock { menuClock = clock }
 
         let quietMinutes = Self.quietMinutes
         if level > 0.3 {

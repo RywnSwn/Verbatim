@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 
 /// The menu bar icon (step 10): a tiny waveform, plus the timer while
-/// recording. A dot means a message you haven't seen yet.
+/// recording. Reads `menuBars` and `menuClock` (2 changes a second at most),
+/// never `levels` or `elapsed`: see the note on them in RecorderModel. A dot means a message you haven't seen yet.
 struct MenuBarLabel: View {
     @Environment(RecorderModel.self) private var model
     @Environment(\.openWindow) private var openWindow
@@ -10,12 +11,12 @@ struct MenuBarLabel: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(nsImage: MenuBarIcon.image(
-                levels: model.isBusy ? Array(model.levels.suffix(5)) : nil,
+                levels: model.isBusy ? model.menuBars : nil,
                 paused: model.phase == .paused,
                 dot: Messages.shared.unseen > 0
             ))
             if model.isBusy {
-                Text(MenuBarIcon.shortClock(model.elapsed))
+                Text(model.menuClock)
                     .monospacedDigit()
             }
         }
