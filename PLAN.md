@@ -560,9 +560,18 @@ Ask Mr. Yurt before recording class.
   timer, waveform and text lag, all catch up on Pause): the speaker model
   (Sortformer) used FluidAudio's default compute units `.all`, so it could
   run on the GPU, which also draws the window. Now `.cpuAndNeuralEngine`
-  (`SpeakerEngine.computeUnits`), like Parakeet and the word spotter. Not
-  confirmed by Ryan yet. If it still lags: ask which version, whether it's
-  only the first minute, and try with Speaker labels' model missing.
+  (`SpeakerEngine.computeUnits`), like Parakeet and the word spotter. Ryan
+  (same day): STILL very laggy, so this was not it (or not all of it). He
+  wants the next chat to look at it. Ideas to check: (1) the word spotter
+  (CTC 110M) runs on every Parakeet chunk while the word list has words,
+  try with an empty word list; (2) main thread: `LiveTranscriber.apply`
+  (LineBuilder + `fix` over the whole text) and `TranscriptList` body
+  (Speakers.labeler, Markers, rows) run on every volatile/final update;
+  (3) memory on 8 GB (Parakeet + Sortformer + CTC + Apple Intelligence
+  naming): ask Ryan to check Activity Monitor > Memory pressure while
+  recording; (4) did it start with step 7 (speakers) or step 8 (word
+  list)? Add a timing log (main-thread hitch counter in Copy Layout
+  Details) so Ryan can paste real numbers.
 
 - Speaker names (same day, Ryan: one-time names piled up in the speaker
   menu, no way to remove them): `SpeakerNames` (observable, UserDefaults
