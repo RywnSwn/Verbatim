@@ -16,9 +16,12 @@ struct StartView: View {
                         .italic()
                 }
                 .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
 
                 WaveToWords()
-                    .frame(width: 620, height: 40)
+                    .frame(maxWidth: 620)
+                    .frame(height: 40)
                     .accessibilityHidden(true)
 
                 Button {
@@ -44,7 +47,7 @@ struct StartView: View {
                     LiveModelStatusLine()
                 }
             }
-            .frame(width: 460, alignment: .leading)
+            .frame(maxWidth: 460, alignment: .leading)
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

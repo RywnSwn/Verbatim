@@ -23,7 +23,7 @@ struct SidebarView: View {
                     ForEach(groups) { group in
                         Section(group.title) {
                             ForEach(group.items) { info in
-                                SidebarRow(info: info, isLive: info.id == model.currentID, phase: model.phase, elapsed: model.elapsed)
+                                SidebarRow(info: info, isLive: info.id == model.currentID)
                                     .tag(info.id)
                                     .contextMenu {
                                         Button("Rename…") {
@@ -140,25 +140,21 @@ struct SidebarGroup: Identifiable {
 struct SidebarRow: View {
     let info: RecordingInfo
     let isLive: Bool
-    let phase: RecorderModel.Phase
-    let elapsed: TimeInterval
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(info.title)
                 .font(.body.weight(.medium))
-            Text(meta)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Group {
+                if isLive { LiveRowMeta() } else { Text(meta) }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
     }
 
     private var meta: String {
-        if isLive {
-            let len = RecorderModel.minutesText(elapsed)
-            return phase == .paused ? "Paused, \(len)" : "Recording now, \(len)"
-        }
         let day = info.createdAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
         let base = "\(day), \(RecorderModel.minutesText(info.duration))"
         if !info.hasAudio { return base + ", no audio" }
@@ -167,6 +163,17 @@ struct SidebarRow: View {
             return day + (left <= 1 ? ", audio deletes tomorrow" : ", audio deletes in \(left) days")
         }
         return base
+    }
+}
+
+/// "Recording now, 12 min". Its own view so the ticking clock redraws only
+/// this bit of text, not the whole sidebar.
+struct LiveRowMeta: View {
+    @Environment(RecorderModel.self) private var model
+
+    var body: some View {
+        let len = RecorderModel.minutesText(model.elapsed)
+        Text(model.phase == .paused ? "Paused, \(len)" : "Recording now, \(len)")
     }
 }
 

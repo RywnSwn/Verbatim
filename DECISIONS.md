@@ -220,3 +220,15 @@ accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
   reason for the 7-day rule, and the Trash would fill up. The sidebar warns 3
   days ahead, right-click Keep Audio saves one, and nothing goes in the 2 days
   after the update that added it.
+
+## Tauri asked again (2026-11-12): Claude says stay on Swift, Ryan to decide
+Ryan hit a lot of glitches (sizing, stutter, sidebar) and wondered if Tauri
+would be easier. Claude's view: the glitches came from how the views were
+written (too much redrawn too often), not from SwiftUI, and the same
+mistakes would stutter in a web view too. Against moving: about 9,000
+lines to rewrite; FluidAudio (Parakeet, speakers) is Swift only, so a
+Tauri app would still need a Swift helper for all audio and models plus a
+bridge to it; a web view costs extra memory on an 8 GB Mac; Ryan turned
+Tauri down before for the web view feel. Plan: fix the redraw bugs, get
+Ryan's glitch list, do step 10. Look at this again only if glitches remain
+that SwiftUI itself causes.

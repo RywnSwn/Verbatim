@@ -27,6 +27,18 @@ see step 5 notes). Ask Ryan to record the same kind of lecture again and
 compare live vs checked text. Second test (Transcribe again): no more
 missing sentences, but doubled lines and made-up text; fixed the same day.
 Markers are step 7b (built) and voice memory is step 7c (Ryan, 2026-11-10).
+Fix on 2026-11-12 (branch `claude/fix-stutter-sidebar-sizing`): Ryan
+reported "so many glitches" (sizing, stuttering, the sidebar) and asked
+about moving to Tauri. Found and fixed in code: the menu bar and the whole
+sidebar were redrawn 20 times a second while recording (they read
+`model.elapsed`), the whole transcript was redone 8 times a second while
+audio played (it read `Playback.time`, and every visible line searched all
+lines), and the start screen had fixed widths wider than the smallest
+window. Rule from now on: a view that reads `elapsed`, `levels` or
+`Playback.time` must be a tiny view of its own. Not tested by Ryan yet. He
+has not said exactly which glitches he sees: ask him for a list (what he
+did, what he saw) and make that the start of step 10. Tauri: see
+`DECISIONS.md`, not decided by Ryan yet.
 Behaviour and edge cases: `docs/spec.md`. Layout to build to:
 `docs/design/README.md`.
 

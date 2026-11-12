@@ -74,7 +74,7 @@ struct VerbatimApp: App {
 
                 Button("Add Marker") { model.addMarker() }
                     .keyboardShortcut("d", modifiers: .command)
-                    .disabled(model.markerTarget == nil)
+                    .disabled(!model.canMark)
 
                 Divider()
 
