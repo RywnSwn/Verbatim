@@ -142,6 +142,14 @@ for size in "1000 400" "960 620"; do
   shot "layout-$1x$2-with-bar"
 done
 
+# The mini window (⇧⌘M): top left, floating. No empty strip above its first row.
+osascript -e 'tell application "System Events" to keystroke "m" using {shift down, command down}' || echo "mini toggle failed"
+sleep 2
+check "mini window shown"
+shot "mini-idle"
+osascript -e 'tell application "System Events" to keystroke "m" using {shift down, command down}' || true
+sleep 1
+
 # A window that comes back shorter than the app's minimum (a frame saved by an
 # older build, or macOS tiling). Ryan's window was like this: about 490 tall.
 osascript -e 'tell application "System Events" to keystroke "q" using {command down}' || true

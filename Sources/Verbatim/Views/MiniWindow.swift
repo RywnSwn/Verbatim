@@ -2,9 +2,11 @@ import AppKit
 import SwiftUI
 
 /// A small window that floats on top of every app (step 10, Ryan's ask), top
-/// left by default. Shows that it's recording, what was just said, any
-/// message, and five buttons. Drag it anywhere; the spot is remembered.
-/// Shows on every desktop and over full-screen apps.
+/// left by default. Redesigned 2026-11-12 to match docs/design/MiniWindow.html:
+/// no title bar (so no empty strip on top), a close button, the last lines
+/// (click one to fix it), named buttons, and a real "ready" look when idle.
+/// Drag it anywhere; the spot is remembered. Shows on every desktop and over
+/// full-screen apps.
 @MainActor
 @Observable
 final class MiniWindow {
@@ -12,7 +14,11 @@ final class MiniWindow {
     private static let frameName = "VerbatimMiniWindow"
 
     @ObservationIgnored private var panel: NSPanel?
+    @ObservationIgnored private var keyObserver: NSObjectProtocol?
     private(set) var isShown = false
+    /// Goes up when typing in the mini window has to end (it was closed, or
+    /// you clicked into another window): the line being edited saves itself.
+    private(set) var endEditing = 0
 
     private init() {}
 
@@ -25,7 +31,9 @@ final class MiniWindow {
         isShown = true
     }
 
+    /// Only hides the window. Recording never stops because of this.
     func hide() {
+        endEditing += 1
         panel?.orderOut(nil)
         isShown = false
     }
@@ -36,19 +44,26 @@ final class MiniWindow {
         MainWindow.show()
     }
 
+    /// Typing needs the keyboard. The panel takes it without bringing
+    /// Verbatim's other windows in front of the app you're in.
+    func takeKeyboard() { panel?.makeKey() }
+
+    /// The shadow follows the window's shape, which changes with the text.
+    func contentResized() { panel?.invalidateShadow() }
+
     private func makePanel() -> NSPanel {
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 160),
-            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
+        // No title bar at all: a hidden one still kept its height free at the
+        // top (the "weird margin" Ryan saw). Corners and edge are drawn by MiniView.
+        let panel = MiniPanel(
+            contentRect: NSRect(x: 0, y: 0, width: MiniView.width, height: 160),
+            styleMask: [.nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         panel.identifier = NSUserInterfaceItemIdentifier("mini")
-        panel.titlebarAppearsTransparent = true
-        panel.titleVisibility = .hidden
-        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-            panel.standardWindowButton(button)?.isHidden = true
-        }
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -72,66 +87,104 @@ final class MiniWindow {
             panel.setFrameOrigin(NSPoint(x: area.minX + 16, y: area.maxY - size.height - 16))
         }
         panel.setFrameAutosaveName(Self.frameName)
+
+        keyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
+        ) { _ in
+            Task { @MainActor in MiniWindow.shared.endEditing += 1 }
+        }
         return panel
     }
 }
 
+/// A panel with no title bar can't take the keyboard unless it says so.
+private final class MiniPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 /// What's inside the mini window.
 struct MiniView: View {
+    static let width: CGFloat = 330
     @Environment(RecorderModel.self) private var model
 
     private var paused: Bool { model.phase == .paused }
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
-            if model.isBusy, let info = model.current {
-                HStack(spacing: 8) {
-                    MiniClock(paused: paused)
-                    if paused {
-                        Text("Paused").font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 8)
-                    Text(info.title)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 10)
-
-                LastLines(id: info.id, count: 2, size: 13.5)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 6)
-                    .padding(.bottom, 8)
+            topRow
+            if model.isBusy, let id = model.currentID {
+                MiniLines(id: id)
+                    .padding(.horizontal, 6)
+                    .padding(.bottom, 6)
             } else {
-                Text("Not recording")
-                    .font(.callout.weight(.medium))
+                MiniIdle()
                     .padding(.horizontal, 12)
-                    .padding(.top, 12)
-                    .padding(.bottom, 10)
+                    .padding(.top, 2)
+                    .padding(.bottom, 12)
             }
 
             MiniMessage()
 
-            Divider()
-            HStack(spacing: 2) {
-                if model.isBusy {
-                    MiniButton("Copy new since last copy", "doc.on.doc") { model.copy(.new, from: model.currentID) }
-                    MiniButton("Add marker", "flag") { model.addMarker() }
+            if model.isBusy {
+                Divider()
+                HStack(spacing: 2) {
+                    MiniButton("Copy new", "doc.on.doc", help: "Copy new since last copy") {
+                        model.copy(.new, from: model.currentID)
+                    }
+                    MiniButton("Marker", "flag", help: "Mark this moment") { model.addMarker() }
                         .disabled(model.markerTarget == nil)
-                    MiniButton(paused ? "Resume" : "Pause", paused ? "play.fill" : "pause.fill") { model.togglePause() }
-                    MiniButton("Stop", "stop.fill") { model.stop() }
-                } else {
-                    MiniButton("Start recording", "record.circle") { Task { await model.start() } }
+                    MiniButton(paused ? "Resume" : "Pause", paused ? "play.fill" : "pause.fill",
+                               help: paused ? "Resume recording" : "Pause recording") { model.togglePause() }
+                    MiniButton("Stop", "stop.fill", help: "Stop and save") { model.stop() }
                 }
-                MiniButton("Back to the big window", "arrow.up.left.and.arrow.down.right") { MiniWindow.shared.expand() }
+                .padding(4)
             }
-            .padding(4)
         }
-        .frame(width: 320)
+        .frame(width: Self.width)
         .foregroundStyle(Theme.ink)
         .background(Theme.paper)
+        .clipShape(shape)
+        .overlay { shape.strokeBorder(Theme.ink.opacity(0.18), lineWidth: 0.5) }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { _ in MiniWindow.shared.contentResized() }
         .animation(.snappy(duration: 0.25), value: model.status?.id)
+    }
+
+    /// Close, then what's going on, then back to the big window.
+    private var topRow: some View {
+        HStack(spacing: 8) {
+            MiniIconButton("xmark", help: model.isBusy ? "Close the mini window. Recording keeps going." : "Close the mini window") {
+                MiniWindow.shared.hide()
+            }
+            if model.isBusy {
+                MiniClock(paused: paused)
+                if paused {
+                    Text("Paused")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 1)
+                        .background(Theme.ink.opacity(0.08), in: Capsule())
+                }
+                Spacer(minLength: 4)
+                Text(model.current?.title ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            } else {
+                Text("Verbatim")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Spacer(minLength: 4)
+            }
+            MiniIconButton("arrow.up.left.and.arrow.down.right", help: "Back to the big window") {
+                MiniWindow.shared.expand()
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 7)
+        .padding(.bottom, 6)
     }
 }
 
@@ -153,53 +206,252 @@ private struct MiniClock: View {
     }
 }
 
+/// The last lines of the class being recorded. Click one to fix it right
+/// here: Enter saves, Esc cancels, clicking away saves. While you type, that
+/// line stays on top and is never changed; new words start a new line under
+/// it (same rule as the big window). At most two newer lines show, then a count.
+private struct MiniLines: View {
+    @Environment(RecorderModel.self) private var model
+    @Environment(LiveTranscriber.self) private var live
+    let id: UUID
+
+    @State private var editing: EditKey?
+    @State private var draft = LineDraft()
+    @FocusState private var focused: Bool
+
+    private struct EditKey: Equatable {
+        var source: LineSource
+        var start: Double
+    }
+
+    private static let shown = 3
+    private static let font = Font.system(size: 13.5, design: .serif)
+
+    var body: some View {
+        let all = model.shownLines(id)
+        let editIndex = editing.flatMap { key in
+            all.firstIndex { $0.source == key.source && $0.line.start == key.start }
+        }
+        let from = editIndex ?? max(0, all.count - Self.shown)
+        let rows = Array(all[from..<min(all.count, from + Self.shown)])
+        let more = editIndex == nil ? 0 : all.count - (from + rows.count)
+        let labels = Speakers.labeler(id)
+
+        VStack(alignment: .leading, spacing: 2) {
+            if all.isEmpty {
+                Text(live.volatile.isEmpty ? "Words show up here a couple of seconds after they're said." : live.volatile)
+                    .font(Self.font)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+            }
+            ForEach(Array(rows.enumerated()), id: \.element.line.start) { i, row in
+                if editIndex != nil, i == 0 {
+                    VStack(alignment: .leading, spacing: 6) {
+                        LineEditor(draft: draft, focused: $focused, font: Self.font,
+                                   onSave: { save() }, onCancel: { finish() })
+                        Text("Enter saves. Esc cancels. New words go on a new line.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                } else {
+                    MiniLineRow(text: row.line.text, name: labels.name(row.line), font: Self.font,
+                                newest: i == rows.count - 1) { begin(row.line, row.source) }
+                }
+            }
+            if more > 0 {
+                Text(more == 1 ? "1 more new line below. Save to see it." : "\(more) more new lines below. Save to see them.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: focused) {
+            // Clicking somewhere else in the mini window saves.
+            if !focused, editing != nil { save() }
+        }
+        .onChange(of: MiniWindow.shared.endEditing) { if editing != nil { save() } }
+        .onChange(of: editIndex == nil) {
+            // The line went away (deleted in the big window): stop editing.
+            if editing != nil, editIndex == nil { finish() }
+        }
+        .onDisappear { if editing != nil { save() } }
+    }
+
+    private func begin(_ line: Transcript.Line, _ source: LineSource) {
+        if editing != nil { save() }
+        draft.text = line.text
+        editing = EditKey(source: source, start: line.start)
+        if source == .live { live.editing = (id, line.start) }
+        MiniWindow.shared.takeKeyboard()
+        Task { @MainActor in focused = true }
+    }
+
+    private func save() {
+        guard let key = editing else { return }
+        finish()
+        model.editLine(id, key.source, start: key.start, text: draft.text)
+    }
+
+    private func finish() {
+        editing = nil
+        focused = false
+        live.editing = nil
+    }
+}
+
+/// One line you can click to fix. Lighter when it's an older line.
+private struct MiniLineRow: View {
+    let text: String
+    let name: String?
+    let font: Font
+    let newest: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            TranscriptList.labelled(Text(text), name)
+                .font(font)
+                .foregroundStyle(newest ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(.secondary))
+                .lineLimit(4)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Theme.ink.opacity(hovering ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .pointerStyle(.horizontalText)
+        .help("Click to fix this line")
+        .accessibilityHint("Edit line")
+    }
+}
+
+/// Not recording: says it's ready, which mic and group, a real Start button,
+/// and the last recording with Copy all. Mic access off: says so, with the fix.
+private struct MiniIdle: View {
+    @Environment(RecorderModel.self) private var model
+
+    private var blocked: Bool { model.micPermission == .denied || model.micPermission == .restricted }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(blocked ? "Verbatim can't hear anything" : "Ready to record")
+                    .font(.system(size: 17, design: .serif))
+                Text(blocked ? "Microphone access is off for Verbatim. Turn it on, then come back." : readyNote)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if blocked {
+                Button { model.openMicSettings() } label: {
+                    Label("Open Microphone settings", systemImage: "gearshape")
+                }
+                .buttonStyle(MiniMainButtonStyle())
+            } else {
+                Button { Task { await model.start() } } label: {
+                    Label("Start recording", systemImage: "record.circle")
+                }
+                .buttonStyle(MiniMainButtonStyle())
+            }
+            if let last = model.recordings.first {
+                Divider()
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(last.title)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                        Text("\(RecorderModel.minutesText(last.duration)), last recording")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    MiniLink("Copy all", "doc.on.doc") { model.copy(.all, from: last.id) }
+                }
+            }
+        }
+    }
+
+    /// "MacBook mic. Saves into English 2026."
+    private var readyNote: String {
+        let groups = GroupStore.shared
+        let group = groups.group(groups.lastUsedID)?.name ?? "Recents"
+        return "\(model.micName). Saves into \(group)."
+    }
+}
+
+/// The one filled button in the mini window (Start recording).
+private struct MiniMainButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Theme.paper)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(Theme.ink, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .contentShape(Rectangle())
+    }
+}
+
 /// The bottom bar's message, in the mini window (with its link).
 private struct MiniMessage: View {
     @Environment(RecorderModel.self) private var model
 
     var body: some View {
         if let feedback = model.copyFeedback {
-            line(Text(feedback.text), link: nil)
+            line(feedback.text) { EmptyView() }
         } else if let status = model.status {
-            line(Text(status.text), link: status.action)
-        } else if let note = model.stoppedNote {
-            VStack(spacing: 0) {
-                Divider()
-                HStack(spacing: 8) {
-                    Text(note.text).font(.caption)
-                    Spacer(minLength: 0)
-                    Button("Undo Stop") { model.undoStop() }
-                        .buttonStyle(.link)
-                        .font(.caption.weight(.medium))
+            line(status.text) {
+                if let action = status.action {
+                    MiniLink(BottomBar.linkTitle(action), Self.icon(action)) { model.perform(action) }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+            }
+        } else if let note = model.stoppedNote {
+            line(note.text) {
+                MiniLink("Undo Stop", "arrow.uturn.backward") { model.undoStop() }
             }
         }
     }
 
-    private func line(_ text: Text, link: RecorderModel.Status.Action?) -> some View {
+    private func line<Link: View>(_ text: String, @ViewBuilder link: () -> Link) -> some View {
         VStack(spacing: 0) {
             Divider()
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                text.font(.caption)
+                Text(text)
+                    .font(.caption)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                if let link {
-                    Button(BottomBar.linkTitle(link)) { model.perform(link) }
-                        .buttonStyle(.link)
-                        .font(.caption.weight(.medium))
-                }
+                link()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
+
+    private static func icon(_ action: RecorderModel.Status.Action) -> String {
+        switch action {
+        case .stopRecording: "stop.fill"
+        case .resume: "play.fill"
+        case .undoDelete, .undoLine, .undoAudioDelete: "arrow.uturn.backward"
+        case .showFile: "folder"
+        case .changeVoice: "person.2"
+        }
+    }
 }
 
-/// One icon button, with its name on hover and for VoiceOver.
-private struct MiniButton: View {
+/// A text link with a small icon in front (Undo, Undo Stop, Copy all).
+private struct MiniLink: View {
     let title: String
     let icon: String
     let action: () -> Void
@@ -213,16 +465,89 @@ private struct MiniButton: View {
 
     var body: some View {
         Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(title)
+                    .underline(hovering)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Theme.accent)
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .pointerStyle(.link)
+        .fixedSize()
+    }
+}
+
+/// A small icon-only button in the top row (close, back to the big window).
+private struct MiniIconButton: View {
+    let icon: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    init(_ icon: String, help: String, action: @escaping () -> Void) {
+        self.icon = icon
+        self.help = help
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
-                .frame(maxWidth: .infinity, minHeight: 30)
-                .background(hovering ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 7))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(hovering ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(.secondary))
+                .frame(width: 24, height: 24)
+                .background(Theme.ink.opacity(hovering ? 0.09 : 0), in: RoundedRectangle(cornerRadius: 6))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(title)
-        .accessibilityLabel(title)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// One bottom button: an icon with its name under it.
+private struct MiniButton: View {
+    let title: String
+    let icon: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    init(_ title: String, _ icon: String, help: String, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.help = help
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(height: 15)
+                Text(title)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(Theme.ink.opacity(hovering && isEnabled ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 8))
+            .opacity(isEnabled ? 1 : 0.4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        .accessibilityLabel(help)
     }
 }
 

@@ -489,7 +489,7 @@ final class LineDraft {
 /// The text field of the line being edited. It keeps its own copy of the
 /// text, so typing redraws this field only. Before, every key press redrew
 /// the whole transcript, and typing got slow in a long recording.
-private struct LineEditor: View {
+struct LineEditor: View {
     let draft: LineDraft
     var focused: FocusState<Bool>.Binding
     let font: Font
