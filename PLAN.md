@@ -268,7 +268,9 @@ gear menu, notes, diagnostics) and `claude/mini-window-crash` are in main.
   window sizes itself after layout (`MiniWindow.contentResized`), content is
   `.fixedSize` vertically, only the top-left spot is saved
   (`MiniWindowTopLeft`), the old key is removed. Smoke test seeds the old
-  key. Ryan tested 0.1.153: good.
+  key. Ryan tested 0.1.153: good. BUT the old code with the old key did
+  NOT crash on the CI Mac (repro run 47), so the trigger is not proven;
+  the loop is gone either way. If it crashes again, get the report.
 - Recording freeze FIXED (Ryan, 0.1.153: "smooth now no freeze"). Cause
   and rule in `DECISIONS.md` ("Nothing that moves while recording...").
 - Connector works only in the Claude desktop app on Ryan's Mac. Ryan
