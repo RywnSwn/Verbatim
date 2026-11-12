@@ -86,9 +86,41 @@ JSON
  "audioDeletedAt":"2026-11-0${i}T04:00:00Z","groupID":$group}
 JSON
   done
+  # One transcript, so the Claude connector has something to read.
+  cat > "$base/Recordings/aaaaaaaa-aaaa-4aaa-8aaa-000000000001/live.json" <<JSON
+{"formatVersion":1,"engines":["Parakeet"],"voiceNames":{"0":"Mr. Yurt"},"lines":[
+ {"start":1.0,"end":4.0,"text":"Okay, books open to page forty one please.","voice":0},
+ {"start":5.0,"end":9.0,"text":"Today we carry on with Anansi and the sky god.","voice":0},
+ {"start":10.0,"end":14.0,"text":"Is the quiz on Friday?","voice":1}]}
+JSON
+}
+
+# The Claude connector: Verbatim started with --mcp answers Claude's questions
+# on stdin/stdout (see Sources/Verbatim/Connector). No window, read only.
+mcp_check() {
+  printf '%s\n' \
+    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}' \
+    '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+    '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_recordings","arguments":{}}}' \
+    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"read_transcript","arguments":{"recording":"part 1"}}}' \
+    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search_transcripts","arguments":{"query":"QUIZ friday"}}}' \
+    '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"read_transcript","arguments":{"recording":"anansi"}}}' \
+    '{"jsonrpc":"2.0","id":7,"method":"nope"}' \
+    | "$BIN" --mcp > "$OUT/mcp.txt" 2> "$OUT/mcp-err.txt"
+  echo "----- connector answers -----"; cut -c1-900 "$OUT/mcp.txt"; cat "$OUT/mcp-err.txt"
+  local lines; lines="$(wc -l < "$OUT/mcp.txt" | tr -d ' ')"
+  if [ "$lines" != "7" ]; then echo "::error::Connector gave $lines answers, wanted 7"; FAILED=1; fi
+  grep -q '"protocolVersion":"2025-06-18"' "$OUT/mcp.txt" || { echo "::error::Connector: no initialize answer"; FAILED=1; }
+  grep -q '"name":"search_transcripts"' "$OUT/mcp.txt" || { echo "::error::Connector: tools missing"; FAILED=1; }
+  grep -q 'Mr. Yurt: Today we carry on with Anansi' "$OUT/mcp.txt" || { echo "::error::Connector: transcript not read"; FAILED=1; }
+  grep -q 'Speaker 1: Is the quiz on Friday' "$OUT/mcp.txt" || { echo "::error::Connector: search found nothing"; FAILED=1; }
+  grep -q '3 recordings match' "$OUT/mcp.txt" || { echo "::error::Connector: unclear name not handled"; FAILED=1; }
+  grep -q '"code":-32601' "$OUT/mcp.txt" || { echo "::error::Connector: unknown method not refused"; FAILED=1; }
 }
 
 seed
+mcp_check
 # No "update ready" bar, so the window can be as short as Ryan's.
 defaults write com.rywnswn.verbatim checkForUpdates -bool false
 osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' || true
@@ -161,6 +193,11 @@ shot "settings-look"
 osascript -e 'tell application "System Events" to key code 125' || true
 sleep 1.5
 shot "settings-transcription"
+osascript -e 'tell application "System Events" to key code 125' || true
+osascript -e 'tell application "System Events" to key code 125' || true
+osascript -e 'tell application "System Events" to key code 125' || true
+sleep 1.5
+shot "settings-claude"
 osascript -e 'tell application "System Events" to keystroke "w" using {command down}' || true
 sleep 1
 

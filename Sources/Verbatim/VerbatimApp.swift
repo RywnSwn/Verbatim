@@ -1,7 +1,19 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Where Verbatim starts. Claude starts it with `--mcp` to use it as a tool
+/// (no window, only reads transcripts, see `MCPServer`); otherwise it's the app.
 @main
+enum Launch {
+    @MainActor static func main() {
+        if CommandLine.arguments.contains("--mcp") {
+            MCPServer.run()
+            return
+        }
+        VerbatimApp.main()
+    }
+}
+
 struct VerbatimApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = RecorderModel.shared

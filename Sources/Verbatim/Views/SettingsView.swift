@@ -33,6 +33,7 @@ struct SettingsView: View {
                 case .transcription: TranscriptionSettings()
                 case .words: WordSettings()
                 case .voices: VoiceSettings()
+                case .claude: ClaudeSettings()
                 case .storage: StorageSettings()
                 case .updates: UpdateSettings()
                 case .shortcuts: ShortcutSettings()
@@ -46,7 +47,7 @@ struct SettingsView: View {
 }
 
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case general, look, transcription, words, voices, storage, updates, shortcuts
+    case general, look, transcription, words, voices, claude, storage, updates, shortcuts
 
     var id: String { rawValue }
 
@@ -57,6 +58,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .transcription: "Transcription"
         case .words: "Words"
         case .voices: "Voices"
+        case .claude: "Claude"
         case .storage: "Storage"
         case .updates: "Updates"
         case .shortcuts: "Shortcuts"
@@ -70,6 +72,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .transcription: "text.word.spacing"
         case .words: "character.book.closed"
         case .voices: "person.wave.2"
+        case .claude: "bubble.left.and.text.bubble.right"
         case .storage: "internaldrive"
         case .updates: "arrow.down.circle"
         case .shortcuts: "keyboard"
@@ -416,6 +419,107 @@ struct UpdateSettings: View {
             guard let last = updater.lastChecked else { return "" }
             return "You have the newest version. Last checked \(last.formatted(date: .omitted, time: .shortened))"
         }
+    }
+}
+
+/// Settings > Claude: lets the Claude desktop app read transcripts by itself
+/// (a tool call, not copy and paste). One button; see `ClaudeConnector`.
+struct ClaudeSettings: View {
+    @State private var state = ClaudeConnector.state()
+    @State private var problem: String?
+    @State private var copied: String?
+
+    private static let examples = [
+        "What did the teacher say about the quiz in my latest Verbatim recording?",
+        "Summarise today's English class from Verbatim, with the marked parts first.",
+        "Search my Verbatim transcripts for Anansi and tell me which classes talked about him.",
+    ]
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent {
+                    switch state {
+                    case .noClaude:
+                        Button("Get Claude") { NSWorkspace.shared.open(ClaudeConnector.downloadURL) }
+                    case .notConnected:
+                        Button("Connect to Claude") { run { try ClaudeConnector.connect() } }
+                            .buttonStyle(.borderedProminent)
+                    case .moved:
+                        Button("Reconnect") { run { try ClaudeConnector.connect() } }
+                            .buttonStyle(.borderedProminent)
+                    case .connected:
+                        Button("Disconnect") { run { try ClaudeConnector.disconnect() } }
+                    }
+                } label: {
+                    Text(title)
+                    Text(problem ?? help)
+                }
+            } header: {
+                PageHeader(lede: "Let the Claude app read your transcripts by itself, so you don't copy and paste. You ask Claude a question, Claude asks Verbatim. Nothing leaves this Mac until Claude reads a transcript in a chat.")
+            }
+
+            Section("What Claude can do") {
+                Label("See the list of your recordings", systemImage: "list.bullet")
+                Label("Read a transcript, with speaker names and your markers", systemImage: "text.alignleft")
+                Label("Search every transcript for a word", systemImage: "magnifyingglass")
+                Label("Read the class being recorded right now", systemImage: "waveform")
+                Label {
+                    Text("It can't record, change or delete anything")
+                    Text("What Claude reads becomes part of your chat with Claude, like text you paste there. Claude asks you before it uses Verbatim the first time.")
+                } icon: {
+                    Image(systemName: "lock")
+                }
+            }
+
+            Section("Try asking Claude") {
+                ForEach(Self.examples, id: \.self) { example in
+                    LabeledContent {
+                        Button(copied == example ? "Copied" : "Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(example, forType: .string)
+                            copied = example
+                        }
+                    } label: {
+                        Text(example)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .onAppear { state = ClaudeConnector.state() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            state = ClaudeConnector.state()
+        }
+    }
+
+    private var title: String {
+        switch state {
+        case .noClaude: "The Claude app isn't on this Mac"
+        case .notConnected: "Not connected"
+        case .moved: "Claude can't find Verbatim"
+        case .connected: "Connected to Claude"
+        }
+    }
+
+    private var help: String {
+        switch state {
+        case .noClaude: "This works with the Claude desktop app (not the website). Get it, open it once, then come back here."
+        case .notConnected: "One click. You can disconnect any time."
+        case .moved: "Verbatim was moved since you connected. Reconnect to fix it."
+        case .connected: "If Claude is open, quit it (\u{2318}Q) and open it again. Then Verbatim shows under Connectors in Claude's chat box."
+        }
+    }
+
+    private func run(_ action: () throws -> Void) {
+        do {
+            try action()
+            problem = nil
+        } catch {
+            problem = error.localizedDescription
+        }
+        state = ClaudeConnector.state()
     }
 }
 
