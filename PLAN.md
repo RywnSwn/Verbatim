@@ -151,6 +151,24 @@ each change is a round trip to macOS. 0.1.148 feeds it `menuBars` and
 `menuClock` (2 changes a second at most). 0.1.148 also prints the main
 thread's stack from the saved sample (`Diagnostics/stall.txt`), even after
 a relaunch: get that paste to confirm or kill this suspect.
+CAUSE FOUND (stall sample from 0.1.146, pasted on 0.1.148; the menu bar
+change did not help): 70% of the main thread's time was in
+`CA::Transaction::commit > -[RBLayer display] >
+RB::SharedSurfaceGroup::add_subsurface > wait_for_allocations >
+-[CAContext waitForCommitId:timeout:] > mach_msg`. So SwiftUI's renderer
+(RenderBox, macOS 26) blocks the main thread inside a commit, waiting for
+the screen to show earlier drawing before it hands out another drawing
+surface. Ryan also saw it run smoothly for a moment whenever something
+else redrew the window (⌃⌘L's message bar). What made so many surfaces:
+`Waveform` was 40 shapes switching between Circle and Capsule 20 times a
+second, the timers had `.contentTransition(.numericText())` with an
+animation every second, the sidebar's live row had a repeating
+`.symbolEffect`. 0.1.149: Waveform is one Canvas, no rolling digits, no
+repeating symbol effect. NOT confirmed by Ryan yet. If it still freezes:
+get a new sample (⌃⌘L after a freeze) and look at what is under
+`-[RBLayer display]`; next things to try: `.drawingGroup()` on the bottom
+bar, fewer text updates (timer once a second), the transcript's scroll
+animation.
 Lag numbers: `Model/HitchMeter.swift` checks ten times a second how long
 the main thread takes to answer. ⌃⌘L (Copy Layout Details) now ends with
 "MAIN THREAD ... while recording: N checks, N slower than 0.1 s, worst

@@ -51,8 +51,7 @@ struct BottomBar: View {
                 // window); the waveform gives up room instead, keeping the newest bars.
                 Text(RecorderModel.clock(model.elapsed))
                     .font(.system(size: 17, weight: .medium).monospacedDigit())
-                    .contentTransition(.numericText()) // digits roll, like a counter
-                    .animation(.snappy(duration: 0.3), value: Int(model.elapsed))
+                    // No rolling digits here (see the note on Waveform).
                     .foregroundStyle(paused ? .secondary : .primary)
                     .lineLimit(1)
                     .fixedSize()
@@ -157,25 +156,36 @@ struct BottomBar: View {
 }
 
 /// The signature waveform: grey bars when someone talks, grey dots when quiet. No color.
+///
+/// Drawn as ONE picture (a Canvas). It used to be 40 separate shapes that
+/// each changed 20 times a second, plus rolling digits on the timers. On
+/// macOS 26 every changing piece is its own drawing surface, and when many
+/// change at once the app's main thread waits for the screen to catch up
+/// (RenderBox: SharedSurfaceGroup add_subsurface, wait_for_allocations).
+/// That froze the timer, the bars and live text until Pause: the real cause
+/// of "lag while recording" (found 2026-11-12 with Ryan's stall sample).
+/// Rule: anything that moves while recording is one Canvas or plain text.
+/// No shape per bar, no `.contentTransition(.numericText())`, no
+/// `.symbolEffect` that repeats.
 struct Waveform: View {
     let levels: [Float]
     let paused: Bool
 
     var body: some View {
-        HStack(spacing: 3) {
-            ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
-                if paused || level < 0.15 {
-                    Circle()
-                        .fill(.tertiary)
-                        .frame(width: 3, height: 3)
+        Canvas { context, size in
+            for (i, level) in levels.enumerated() {
+                let quiet = paused || level < 0.15
+                let height: CGFloat = quiet ? 3 : 3 + CGFloat(level) * 24
+                let rect = CGRect(x: CGFloat(i) * 6, y: (size.height - height) / 2, width: 3, height: height)
+                let path = Path(roundedRect: rect, cornerRadius: 1.5)
+                if quiet {
+                    context.fill(path, with: .style(.tertiary))
                 } else {
-                    Capsule()
-                        .fill(.secondary)
-                        .frame(width: 3, height: 3 + CGFloat(level) * 24)
+                    context.fill(path, with: .style(.secondary))
                 }
             }
         }
-        .frame(height: 28)
+        .frame(width: max(3, CGFloat(levels.count) * 6 - 3), height: 28)
         .accessibilityElement()
         .accessibilityLabel(paused ? "Paused, not listening" : "Listening")
     }

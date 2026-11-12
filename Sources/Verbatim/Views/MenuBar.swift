@@ -148,8 +148,6 @@ struct MenuBarPanel: View {
                 Spacer()
                 Text(RecorderModel.clock(model.elapsed))
                     .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.3), value: Int(model.elapsed))
             }
             .font(.caption)
             .foregroundStyle(.secondary)

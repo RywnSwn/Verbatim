@@ -202,7 +202,6 @@ private struct MiniClock: View {
         Text(RecorderModel.clock(model.elapsed))
             .font(.system(size: 13, weight: .medium).monospacedDigit())
             .foregroundStyle(paused ? .secondary : .primary)
-            .contentTransition(.numericText())
     }
 }
 

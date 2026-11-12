@@ -124,8 +124,6 @@ private struct HeaderMeta: View {
             .font(.callout)
             .foregroundStyle(.secondary)
             .monospacedDigit()
-            .contentTransition(.numericText())
-            .animation(.snappy, value: meta)
     }
 
     /// "10:05 to 10:52, 47 min. 2 markers." Imported files have no clock time.

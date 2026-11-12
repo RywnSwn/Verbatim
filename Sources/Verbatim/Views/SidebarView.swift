@@ -586,7 +586,6 @@ struct SidebarRow: View {
             if isLive {
                 Image(systemName: "waveform")
                     .font(.system(size: 11, weight: .semibold))
-                    .symbolEffect(.variableColor.iterative, options: .repeating)
                     .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
                     .accessibilityHidden(true)
             } else if let icon = info.icon {
