@@ -108,22 +108,19 @@ for size in "800 600" "700 520" "700 420"; do
   resize 1200 780;   check "grow with sidebar open from $tag"; shot "$tag-grown"
 done
 
-# Sweep the window height through the point where the start screen switches
-# between "fits" and "scrolls", toggling the sidebar at each step.
-for w in 900 1000 760; do
-  h=380
-  while [ "$h" -le 600 ]; do
+# Sweep the window width through the range where the sidebar hides itself,
+# opening and closing it by hand at each step (Ryan's crash on 0.1.102).
+for h in 520 650; do
+  w=680
+  while [ "$w" -le 870 ]; do
     RESIZE_WAIT=1 resize "$w" "$h" > /dev/null;  check "sweep resize ${w}x${h}"
-    if [ "$w" -ge 860 ]; then
-      hide_sidebar; check "sweep hide sidebar at ${w}x${h}"
-      show_sidebar; check "sweep show sidebar at ${w}x${h}"
-    else
-      show_sidebar; check "sweep show sidebar at ${w}x${h}"
-      hide_sidebar; check "sweep hide sidebar at ${w}x${h}"
-    fi
-    h=$((h + 5))
+    show_sidebar; check "sweep show sidebar at ${w}x${h}"
+    hide_sidebar; check "sweep hide sidebar at ${w}x${h}"
+    show_sidebar; check "sweep show sidebar again at ${w}x${h}"
+    if [ $((w % 30)) -eq 0 ]; then shot "sweep-${w}x${h}-shown"; fi
+    hide_sidebar; check "sweep hide sidebar again at ${w}x${h}"
+    w=$((w + 5))
   done
-  shot "sweep-$w-done"
 done
 
 # A recording open in the main area (click the first row), then the sidebar button.
