@@ -423,7 +423,10 @@ struct UpdateSettings: View {
 /// forget it. Nothing to set up: renaming a speaker adds it.
 struct VoiceSettings: View {
     private var library: VoiceLibrary { .shared }
+    private var names: SpeakerNames { .shared }
     @State private var confirmForget: VoiceLibrary.Voice?
+    /// The last name removed from the speaker menu list, for Undo.
+    @State private var removedName: (name: String, index: Int, id: UUID)?
 
     var body: some View {
         let voices = library.voices.sorted { $0.savedAt > $1.savedAt }
@@ -445,6 +448,55 @@ struct VoiceSettings: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            Section {
+                if names.recent.isEmpty {
+                    Text("None yet. Names you type for a speaker show up here.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(names.recent, id: \.self) { name in
+                    HStack {
+                        Text(name)
+                        Spacer()
+                        Button {
+                            guard let i = Speakers.forget(name) else { return }
+                            let r = (name: name, index: i, id: UUID())
+                            removedName = r
+                            Task {
+                                try? await Task.sleep(for: .seconds(10))
+                                if removedName?.id == r.id { removedName = nil }
+                            }
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                                .frame(width: 24, height: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .help("Stop offering \(name)")
+                        .accessibilityLabel("Remove \(name)")
+                    }
+                }
+                if let removed = removedName {
+                    HStack(spacing: 8) {
+                        Text("Removed \(removed.name).").font(.callout)
+                        Button("Undo") {
+                            Speakers.restore(removed.name, at: removed.index)
+                            removedName = nil
+                        }
+                        .buttonStyle(.link)
+                        .fontWeight(.medium)
+                        Spacer()
+                    }
+                }
+            } header: {
+                Text("Names offered in the speaker menu")
+            } footer: {
+                Text("The last 8 names you typed for a speaker, offered in every recording. Removing one only stops it being offered. Transcripts keep their names.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .alert("Forget \(confirmForget?.name ?? "")'s voice?", isPresented: Binding(

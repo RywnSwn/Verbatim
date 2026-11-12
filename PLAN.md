@@ -540,6 +540,12 @@ Ask Mr. Yurt before recording class.
   confirmed by Ryan yet. If it still lags: ask which version, whether it's
   only the first minute, and try with Speaker labels' model missing.
 
+- Speaker names (same day, Ryan: one-time names piled up in the speaker
+  menu, no way to remove them): `SpeakerNames` (observable, UserDefaults
+  `recentSpeakerNames`, last 8). Remove from Settings > Voices ("Names
+  offered in the speaker menu", X buttons, Undo) or the speaker menu's
+  "Forget a Name" submenu (Undo in the bottom bar). Transcripts keep names.
+
 ## Design pass test list for Ryan
 1. Recordings each sit on a light box. Pointer over one: darker. The open
    one: darkest, name bolder.
@@ -553,6 +559,10 @@ Ask Mr. Yurt before recording class.
 6. Click a recording, then ↑ / ↓ keys move through the list. Right-click
    still has Rename, Move to Group, Delete.
 7. Look through every Settings page. Anything cut off or odd?
+8. Settings > Voices: remove an old speaker name with its X, then Undo.
+   Click a speaker name in a transcript: "Forget a Name" works too.
+9. Record 2 to 3 minutes: timer, waveform and text stay smooth?
+10. Icon picker: Color on one line, Remove Icon and Done fit.
 
 ## How transcript tools work (step 6)
 - `Model/TranscriptTools.swift`: `shownLines(id)` = checked lines + live

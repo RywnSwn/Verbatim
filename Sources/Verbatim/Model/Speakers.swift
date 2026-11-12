@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Speaker labels (step 7). The speaker model only tells voices apart, so
 /// voices show as "Speaker 1", "Speaker 2"... (1 = talks the most), for a
@@ -17,12 +18,30 @@ enum Speakers {
     /// Names Ryan typed, newest first, offered in every recording.
     static let recentKey = "recentSpeakerNames"
 
-    static var recentNames: [String] { UserDefaults.standard.stringArray(forKey: recentKey) ?? [] }
+    static var recentNames: [String] { SpeakerNames.shared.recent }
 
     static func remember(_ name: String) {
         var names = recentNames.filter { $0.caseInsensitiveCompare(name) != .orderedSame }
         names.insert(name, at: 0)
-        UserDefaults.standard.set(Array(names.prefix(8)), forKey: recentKey)
+        SpeakerNames.shared.set(Array(names.prefix(8)))
+    }
+
+    /// Stops offering a name (Ryan: one-time names piled up with no way to
+    /// remove them). Transcripts that use it keep it. Returns where it was,
+    /// for Undo.
+    @discardableResult
+    static func forget(_ name: String) -> Int? {
+        var names = recentNames
+        guard let i = names.firstIndex(of: name) else { return nil }
+        names.remove(at: i)
+        SpeakerNames.shared.set(names)
+        return i
+    }
+
+    static func restore(_ name: String, at i: Int) {
+        var names = recentNames.filter { $0 != name }
+        names.insert(name, at: min(i, names.count))
+        SpeakerNames.shared.set(Array(names.prefix(8)))
     }
 
     static func token(_ voice: Int) -> String { "#v\(voice)" }
@@ -231,5 +250,19 @@ extension RecorderModel {
                 VoiceLibrary.shared.forget(named: choice, savedAfter: started)
             }
         }
+    }
+}
+
+/// The names offered in the speaker menu, saved in UserDefaults. Observable,
+/// so the menu and Settings > Voices update when one is forgotten.
+@Observable
+final class SpeakerNames {
+    static let shared = SpeakerNames()
+
+    private(set) var recent: [String] = UserDefaults.standard.stringArray(forKey: Speakers.recentKey) ?? []
+
+    func set(_ names: [String]) {
+        recent = names
+        UserDefaults.standard.set(names, forKey: Speakers.recentKey)
     }
 }
