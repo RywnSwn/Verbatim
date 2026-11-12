@@ -30,7 +30,10 @@ struct TranscriptList: View {
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
     @State private var editing: EditKey?
-    @State private var draft = ""
+    /// What's typed into the line being edited. Not watched on purpose: the
+    /// typing lives in `LineEditor`, so a key press redraws that one line and
+    /// not the whole transcript.
+    @State private var draft = LineDraft()
     @FocusState private var fieldFocused: Bool
     /// Last time you scrolled by hand, so playing audio doesn't yank the view away.
     @State private var lastUserScroll = Date.distantPast
@@ -97,31 +100,36 @@ struct TranscriptList: View {
                 RecordingHeader(info: info, lines: checked + live, isLive: isLive)
                     .padding(.bottom, 10)
                 ForEach(rows) { row in
-                    switch row {
-                    case .line(let line, let source):
-                        lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil,
-                                name: source == .live ? labels.name(line) : nil, options: options,
-                                marked: marked.contains(line.start))
-                        if let offer = model.fixOffer, offer.recordingID == info.id, offer.start == line.start {
-                            fixOfferRow(offer.fix)
-                        }
-                    case .checkedUpTo(let seconds):
-                        HStack(spacing: 10) {
-                            Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
-                                .font(.system(size: 13, design: .serif).italic())
-                                .foregroundStyle(.secondary)
-                            Rectangle().fill(Theme.line).frame(height: 1)
-                        }
-                        .padding(.leading, 70)
-                        .padding(.vertical, 4)
-                    case .volatile(let text):
-                        HStack(alignment: .firstTextBaseline, spacing: 18) {
-                            Color.clear.frame(width: 52, height: 1)
-                            Text(text)
-                                .font(Theme.transcript(textSize))
-                                .lineSpacing(Theme.transcriptLineSpacing)
-                                .foregroundStyle(Theme.ink.opacity(0.45))
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                    // One view per row, always. With a different number of views
+                    // per row, the lazy stack has to build every row of the whole
+                    // transcript on each change to know what is where.
+                    VStack(alignment: .leading, spacing: Theme.lineGap) {
+                        switch row {
+                        case .line(let line, let source):
+                            lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil,
+                                    name: source == .live ? labels.name(line) : nil, options: options,
+                                    marked: marked.contains(line.start))
+                            if let offer = model.fixOffer, offer.recordingID == info.id, offer.start == line.start {
+                                fixOfferRow(offer.fix)
+                            }
+                        case .checkedUpTo(let seconds):
+                            HStack(spacing: 10) {
+                                Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
+                                    .font(.system(size: 13, design: .serif).italic())
+                                    .foregroundStyle(.secondary)
+                                Rectangle().fill(Theme.line).frame(height: 1)
+                            }
+                            .padding(.leading, 70)
+                            .padding(.vertical, 4)
+                        case .volatile(let text):
+                            HStack(alignment: .firstTextBaseline, spacing: 18) {
+                                Color.clear.frame(width: 52, height: 1)
+                                Text(text)
+                                    .font(Theme.transcript(textSize))
+                                    .lineSpacing(Theme.transcriptLineSpacing)
+                                    .foregroundStyle(Theme.ink.opacity(0.45))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
                     }
                 }
@@ -303,18 +311,8 @@ struct TranscriptList: View {
                     }
                 }
             if isEditing {
-                TextField("Line", text: $draft, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(Theme.transcript(textSize))
-                    .lineSpacing(Theme.transcriptLineSpacing)
-                    .focused($fieldFocused)
-                    .onSubmit { save() }
-                    .onExitCommand { cancel() }
-                    .padding(.vertical, 2)
-                    .overlay(alignment: .bottom) {
-                        Rectangle().fill(Theme.accent).frame(height: 1).offset(y: 3)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                LineEditor(draft: draft, focused: $fieldFocused, font: Theme.transcript(textSize),
+                           onSave: { save() }, onCancel: { cancel() })
             } else {
                 Group {
                     if !query.isEmpty {
@@ -442,7 +440,7 @@ struct TranscriptList: View {
 
     private func begin(_ line: Transcript.Line, _ source: LineSource) {
         if editing != nil { save() }
-        draft = line.text
+        draft.text = line.text
         editing = EditKey(source: source, start: line.start)
         if source == .live { liveTranscriber.editing = (info.id, line.start) }
         Task { @MainActor in fieldFocused = true }
@@ -451,7 +449,7 @@ struct TranscriptList: View {
     private func save() {
         guard let key = editing else { return }
         finish()
-        model.editLine(info.id, key.source, start: key.start, text: draft)
+        model.editLine(info.id, key.source, start: key.start, text: draft.text)
     }
 
     private func cancel() {
@@ -479,6 +477,56 @@ extension RecordingInfo {
                 : String(format: "%d:%02d", s / 60, s % 60)
         }
         return wallTime(atSecond: seconds).formatted(.dateTime.hour().minute())
+    }
+}
+
+/// The text of the line being edited, shared between the list (which saves
+/// it) and `LineEditor` (which types into it). A plain box, not watched.
+final class LineDraft {
+    var text = ""
+}
+
+/// The text field of the line being edited. It keeps its own copy of the
+/// text, so typing redraws this field only. Before, every key press redrew
+/// the whole transcript, and typing got slow in a long recording.
+private struct LineEditor: View {
+    let draft: LineDraft
+    var focused: FocusState<Bool>.Binding
+    let font: Font
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    @State private var text: String
+
+    init(draft: LineDraft, focused: FocusState<Bool>.Binding, font: Font,
+         onSave: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.draft = draft
+        self.focused = focused
+        self.font = font
+        self.onSave = onSave
+        self.onCancel = onCancel
+        _text = State(initialValue: draft.text)
+    }
+
+    var body: some View {
+        let typed = Binding<String>(
+            get: { text },
+            set: {
+                text = $0
+                draft.text = $0
+            }
+        )
+        TextField("Line", text: typed, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(font)
+            .lineSpacing(Theme.transcriptLineSpacing)
+            .focused(focused)
+            .onSubmit { onSave() }
+            .onExitCommand { onCancel() }
+            .padding(.vertical, 2)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(Theme.accent).frame(height: 1).offset(y: 3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

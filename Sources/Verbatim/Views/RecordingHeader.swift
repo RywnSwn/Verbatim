@@ -20,12 +20,7 @@ struct RecordingHeader: View {
         VStack(alignment: .leading, spacing: 6) {
             eyebrow
             title
-            Text(meta)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .animation(.snappy, value: meta)
+            HeaderMeta(info: info, isLive: isLive)
             if let who = speakersText {
                 Text(who)
                     .font(.callout)
@@ -90,25 +85,6 @@ struct RecordingHeader: View {
         renaming = false
     }
 
-    /// "10:05 to 10:52, 47 min. 2 markers." Imported files have no clock time.
-    private var meta: String {
-        let t = Date.FormatStyle(date: .omitted, time: .shortened)
-        var parts: [String] = []
-        if isLive {
-            let len = RecorderModel.minutesText(model.elapsed)
-            parts.append("Started \(info.createdAt.formatted(t)), \(len) so far")
-        } else if let name = info.importedFrom {
-            parts.append("From \(name), \(RecorderModel.minutesText(info.duration))")
-        } else {
-            let day = info.createdAt.formatted(.dateTime.weekday(.wide).day().month(.wide))
-            let end = info.endedAt.map { " to \($0.formatted(t))" } ?? ""
-            parts.append("\(day), \(info.createdAt.formatted(t))\(end), \(RecorderModel.minutesText(info.duration))")
-        }
-        let markers = info.markers?.count ?? 0
-        if markers > 0 { parts.append(markers == 1 ? "1 marker" : "\(markers) markers") }
-        return parts.joined(separator: ". ") + "."
-    }
-
     /// "Mr. Yurt, Speaker 2 and Speaker 3 spoke." Most words first, up to four.
     private var speakersText: String? {
         let labels = Speakers.labeler(info.id)
@@ -130,5 +106,44 @@ struct RecordingHeader: View {
             list = shown.dropLast().joined(separator: ", ") + " and " + shown.last!
         }
         return list + " spoke."
+    }
+}
+
+/// "Started 10:05, 12 min so far. 2 markers." Its own view, because it reads
+/// the ticking clock while recording: the clock then redraws only this line.
+/// (Inside RecordingHeader it made the whole header count every word of the
+/// transcript 20 times a second, which got slower the longer the class ran.)
+private struct HeaderMeta: View {
+    @Environment(RecorderModel.self) private var model
+    let info: RecordingInfo
+    let isLive: Bool
+
+    var body: some View {
+        let meta = self.meta
+        Text(meta)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+            .contentTransition(.numericText())
+            .animation(.snappy, value: meta)
+    }
+
+    /// "10:05 to 10:52, 47 min. 2 markers." Imported files have no clock time.
+    private var meta: String {
+        let t = Date.FormatStyle(date: .omitted, time: .shortened)
+        var parts: [String] = []
+        if isLive {
+            let len = RecorderModel.minutesText(model.elapsed)
+            parts.append("Started \(info.createdAt.formatted(t)), \(len) so far")
+        } else if let name = info.importedFrom {
+            parts.append("From \(name), \(RecorderModel.minutesText(info.duration))")
+        } else {
+            let day = info.createdAt.formatted(.dateTime.weekday(.wide).day().month(.wide))
+            let end = info.endedAt.map { " to \($0.formatted(t))" } ?? ""
+            parts.append("\(day), \(info.createdAt.formatted(t))\(end), \(RecorderModel.minutesText(info.duration))")
+        }
+        let markers = info.markers?.count ?? 0
+        if markers > 0 { parts.append(markers == 1 ? "1 marker" : "\(markers) markers") }
+        return parts.joined(separator: ". ") + "."
     }
 }

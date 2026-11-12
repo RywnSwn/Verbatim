@@ -86,14 +86,7 @@ struct MiniView: View {
         VStack(alignment: .leading, spacing: 0) {
             if model.isBusy, let info = model.current {
                 HStack(spacing: 8) {
-                    Waveform(levels: Array(model.levels.suffix(12)), paused: paused)
-                        .frame(height: 22)
-                        .scaleEffect(0.8, anchor: .leading)
-                        .frame(width: 60, alignment: .leading)
-                    Text(RecorderModel.clock(model.elapsed))
-                        .font(.system(size: 13, weight: .medium).monospacedDigit())
-                        .foregroundStyle(paused ? .secondary : .primary)
-                        .contentTransition(.numericText())
+                    MiniClock(paused: paused)
                     if paused {
                         Text("Paused").font(.caption.weight(.medium)).foregroundStyle(.secondary)
                     }
@@ -139,6 +132,24 @@ struct MiniView: View {
         .foregroundStyle(Theme.ink)
         .background(Theme.paper)
         .animation(.snappy(duration: 0.25), value: model.status?.id)
+    }
+}
+
+/// The moving bars and the timer. Its own view, so the clock (20 ticks a
+/// second) redraws only this, not the whole mini window.
+private struct MiniClock: View {
+    @Environment(RecorderModel.self) private var model
+    let paused: Bool
+
+    var body: some View {
+        Waveform(levels: Array(model.levels.suffix(12)), paused: paused)
+            .frame(height: 22)
+            .scaleEffect(0.8, anchor: .leading)
+            .frame(width: 60, alignment: .leading)
+        Text(RecorderModel.clock(model.elapsed))
+            .font(.system(size: 13, weight: .medium).monospacedDigit())
+            .foregroundStyle(paused ? .secondary : .primary)
+            .contentTransition(.numericText())
     }
 }
 

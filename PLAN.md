@@ -73,6 +73,46 @@ whenever something is in the wrong place. His menu bar hides Help behind
 the notch, so tell him the shortcut. Ryan confirmed it ("finally") and asked to merge: step 10 and these fixes
 are on `main` since 2026-11-12 (RywnSwn/Verbatim#19 into #18 into main).
 
+Lag while recording (2026-11-12, branch `claude/fix-recording-lag`, not
+tested by Ryan yet, not merged): Ryan said recording lags and that it
+defeats the point (fixing lines live). Found in code, could not be measured
+(no Mac here):
+1. `RecordingHeader` read `model.elapsed`, so 20 times a second the header
+   counted every word of the transcript ("X and Y spoke"). Slower the longer
+   the class ran. Now the ticking line is its own view, `HeaderMeta`.
+2. Typing in a line being edited changed `@State draft` of `TranscriptList`,
+   so every key press redrew the whole transcript. Now `LineEditor` keeps
+   its own text and writes it to a plain box (`LineDraft`) that the list
+   reads when saving.
+3. Each row of the transcript's `ForEach` now makes exactly one view (a
+   `VStack`). With a different number per row, the lazy stack builds every
+   row on each change. Keep it one view per row.
+4. `MiniView` read `elapsed` and `levels`; that part is now `MiniClock`.
+Not touched: `MenuBarLabel` still redraws 20 times a second (it draws the
+moving bars in the menu bar). If Ryan still sees lag, ask WHICH lag: words
+showing up late after they're said (Parakeet is about 2 s behind by design),
+the app stuttering, or typing being slow, and whether it gets worse the
+longer the recording runs. Then look at `MenuBarLabel` and at
+`LiveTranscriber.apply` (it changes `texts`, which every transcript view
+reads) and the pretty-printed live.json save every 10 s on the main thread.
+
+Mini window goals (Ryan, 2026-11-12, with a screenshot of the idle mini
+window; nothing built yet, mockup first with the ux-planner skill):
+1. It looks bare, most of all when not recording (just "Not recording" and
+   two icons). Give it a real design.
+2. A close button inside it.
+3. A weird empty margin at the top, recording or not. Likely cause: the
+   panel has a hidden title bar (`.titled` + `.fullSizeContentView`) and
+   the SwiftUI content stays out of the title bar's safe area. Try
+   `.ignoresSafeArea()` on `MiniView`, or a borderless panel, and add the
+   mini window to the smoke test screenshots to check.
+4. Text can be edited in the mini window too. Open question Ryan raised:
+   what happens when new words come in while he is still editing. In the
+   big window the edited line is locked and new words start a new line
+   (`LiveTranscriber.editing`); the mini window shows only the last 2
+   lines, so decide what it shows while one is being edited (for example:
+   the edited line stays put and new lines keep coming under it).
+
 Ryan's asks on 2026-11-12 for the NEXT chat (design pass, mockup first,
 use the ux-planner skill; nothing built yet):
 1. Sidebar can be opaque: a Settings choice, glass or solid.
