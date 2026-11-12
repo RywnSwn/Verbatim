@@ -116,11 +116,31 @@ for size in "1000 400" "1000 540" "1000 600" "940 400"; do
   end tell' | head -40
 done
 
-# The app's own layout report (Help > Copy Layout Details), to compare with Ryan's.
-resize 1000 560
-osascript -e 'tell application "System Events" to keystroke "l" using {control down, command down}' || true
-sleep 2
-echo "----- layout details -----"; grep -A200 "^Verbatim " "$OUT/app.log" | head -150
+# The app's own layout report (Help > Copy Layout Details). The split view
+# (sidebar + main area) must be exactly as tall as the window. On Ryan's Mac
+# it was 692 pt in a 552 pt window. Checked right away and again once the
+# "copied" message bar is showing, at two window heights.
+layout_check() {
+  : > "$OUT/app.log"
+  osascript -e 'tell application "System Events" to keystroke "l" using {control down, command down}' || true
+  sleep 2
+  local win split
+  win="$(grep -m1 "^  frame=" "$OUT/app.log" | sed -E 's/.* h([0-9]+) contentLayoutRect.*/\1/')"
+  split="$(grep -m1 "NavigationSplitRepresentable" "$OUT/app.log" | sed -E 's/.* h([0-9]+) .*/\1/')"
+  echo "layout check ($1): window height $win, split view height $split"
+  grep -E "NavigationSplitRepresentable|HostingScrollView|OutlineListRepresentable|DraggingDestinationView" "$OUT/app.log" | cut -c1-170
+  if [ -z "$win" ] || [ "$win" != "$split" ]; then
+    echo "::error::Split view is not the window's height ($1): window $win, split $split"
+    FAILED=1
+  fi
+}
+for size in "1000 400" "960 620"; do
+  set -- $size
+  resize "$1" "$2"
+  layout_check "$1x$2"
+  layout_check "$1x$2 with the message bar"
+  shot "layout-$1x$2-with-bar"
+done
 
 # A window that comes back shorter than the app's minimum (a frame saved by an
 # older build, or macOS tiling). Ryan's window was like this: about 490 tall.
