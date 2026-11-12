@@ -108,6 +108,20 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
   control right). Look holds sidebar (glass/solid), recordings (soft
   boxes/paper cards), text size, times, times in copies.
 
+## Next asks from Ryan (2026-11-12), one new chat each, after the design pass
+1. **Notes on lines.** Right-click a line > Add note (and a shortcut),
+   for things like "Mr. Yurt wrote x on the board". Shown under the line,
+   small, with a nice UI (ux-planner, mockup first). Notes ARE included in
+   Copy and Export (Ryan picked this), so Claude sees them. Store like
+   markers (per line start, in recording.json), editable and deletable
+   with Undo.
+2. **Claude connection as a tool call.** Ryan wants Claude to call
+   Verbatim itself (not copy and paste): a local MCP server so the Claude
+   desktop app can list recordings, read a transcript (with notes and
+   markers) and search. Claude first, ChatGPT later (it can use MCP too).
+   Everything stays on the Mac. Note DECISIONS.md "no AI chat inside the
+   app": this is Verbatim as a tool for Claude, not chat in Verbatim.
+
 ## Build order (one milestone per chat)
 
 Order is chosen so Ryan can test real accuracy at home early, before any
