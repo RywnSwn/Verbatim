@@ -349,55 +349,67 @@ final class SidebarDrag {
 }
 
 /// A group (or Recents) as a drop zone. Proposes "move", so macOS shows no
-/// green plus inside Verbatim (the plus means "copy").
+/// green plus inside Verbatim (the plus means "copy"). The methods are
+/// nonisolated and step onto the main actor themselves, which works whether
+/// or not the SDK marks DropDelegate as main-actor (drops arrive on main).
 struct SidebarDropDelegate: DropDelegate {
     let spot: SidebarSpot
     let model: RecorderModel
     let drag: SidebarDrag
 
     /// The held recording isn't already here.
-    private var isNewPlace: Bool {
+    @MainActor private func isNewPlace() -> Bool {
         guard let id = drag.id ?? drag.lastID, let info = model.info(id) else { return false }
         return GroupStore.shared.group(info.groupID)?.id != spot.groupID
     }
 
-    func validateDrop(info: DropInfo) -> Bool {
+    nonisolated func validateDrop(info: DropInfo) -> Bool {
         info.hasItemsConforming(to: [.verbatimRecording])
     }
 
-    func dropEntered(info: DropInfo) {
-        guard isNewPlace else { return }
-        drag.target = spot
-        if let id = spot.groupID, GroupStore.shared.group(id)?.collapsed == true {
-            drag.springLoad(id)
+    nonisolated func dropEntered(info: DropInfo) {
+        MainActor.assumeIsolated {
+            guard isNewPlace() else { return }
+            drag.target = spot
+            if let id = spot.groupID, GroupStore.shared.group(id)?.collapsed == true {
+                drag.springLoad(id)
+            }
         }
     }
 
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        if isNewPlace, drag.target != spot { drag.target = spot }
-        return DropProposal(operation: isNewPlace ? .move : .forbidden)
-    }
-
-    func dropExited(info: DropInfo) {
-        if drag.target == spot {
-            drag.target = nil
-            drag.stopSpring()
+    nonisolated func dropUpdated(info: DropInfo) -> DropProposal? {
+        MainActor.assumeIsolated {
+            let fresh = isNewPlace()
+            if fresh, drag.target != spot { drag.target = spot }
+            return DropProposal(operation: fresh ? .move : .forbidden)
         }
     }
 
-    func performDrop(info: DropInfo) -> Bool {
-        defer { drag.end() }
-        guard isNewPlace, let id = drag.id ?? drag.lastID, let rec = model.info(id) else { return false }
-        let before = GroupStore.shared.group(rec.groupID)?.id
-        withAnimation(.snappy(duration: 0.25)) {
-            model.moveRecording(id, to: spot.groupID)
-            if let g = spot.groupID { GroupStore.shared.update(g) { $0.collapsed = false } }
+    nonisolated func dropExited(info: DropInfo) {
+        MainActor.assumeIsolated {
+            if drag.target == spot {
+                drag.target = nil
+                drag.stopSpring()
+            }
         }
-        let place = spot.groupID.flatMap { GroupStore.shared.group($0)?.name } ?? "Recents"
-        model.offerLineUndo("Moved \(rec.title) to \(place).") { [model] in
-            withAnimation(.snappy(duration: 0.25)) { model.moveRecording(id, to: before) }
+    }
+
+    nonisolated func performDrop(info: DropInfo) -> Bool {
+        MainActor.assumeIsolated {
+            defer { drag.end() }
+            guard isNewPlace(), let id = drag.id ?? drag.lastID, let rec = model.info(id) else { return false }
+            let before = GroupStore.shared.group(rec.groupID)?.id
+            let model = model
+            withAnimation(.snappy(duration: 0.25)) {
+                model.moveRecording(id, to: spot.groupID)
+                if let g = spot.groupID { GroupStore.shared.update(g) { $0.collapsed = false } }
+            }
+            let place = spot.groupID.flatMap { GroupStore.shared.group($0)?.name } ?? "Recents"
+            model.offerLineUndo("Moved \(rec.title) to \(place).") {
+                withAnimation(.snappy(duration: 0.25)) { model.moveRecording(id, to: before) }
+            }
+            return true
         }
-        return true
     }
 }
 
