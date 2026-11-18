@@ -233,13 +233,11 @@ shot "mini-idle"
 osascript -e 'tell application "System Events" to keystroke "m" using {shift down, command down}' || true
 sleep 1
 
-# Open a recording with ⌘K (texts are read when opened, not at launch): its
-# lines must show.
-osascript -e 'tell application "System Events" to keystroke "k" using {command down}' || true
-sleep 1
-osascript -e 'tell application "System Events" to keystroke "sky god part 1"' || true
-sleep 1
-osascript -e 'tell application "System Events" to key code 36' || true
+# Open a recording (texts are read when opened, not at launch): its lines
+# must show. Click "Anansi and the sky god, part 1", the first row in the
+# sidebar (window is 960x620 at 20,40 here). Typing into ⌘K didn't arrive
+# on the CI Mac.
+click_at 160 218
 sleep 2
 check "open a recording"
 shot "opened-recording"

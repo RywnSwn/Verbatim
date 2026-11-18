@@ -1403,8 +1403,15 @@ Last commit hunted: none yet (first hunt covers the whole app).
 ## Faster start-up: DONE 2026-11-18 (branch `claude/faster-startup`)
 Measured with the smoke test: 200 old classes with ~330 KB live.json each
 (about 66 MB of text) in a folded group, plus the usual 3.
-Before (4a18d3c): recordings read AFTER_A, window shown AFTER_B.
-After (e1191bd): AFTER_C.
+Seconds after the app started (first launch / second launch):
+- Before (4a18d3c): saved classes read 2.24 / 2.01 (2.12 / 1.98 of it
+  with the main thread blocked), window shown 3.86 / 2.81.
+- After (e1191bd): saved classes read 0.35 / 0.41 (0.27 / 0.36 blocked),
+  window shown 1.42 / 2.01. First launch read the 201 texts in the
+  background, done at 2.62 s. Second launch had nothing to check.
+- What's left on the main thread (~0.3 s) is reading the 203
+  recording.json files.
+The answers Claude gets (MCP) were the same before and after.
 How it works now:
 - `Live/TextIndex.swift`: `text-index.json` (next to the Recordings
   folder) keeps `TextFacts` per recording (has lines, file pass finished
