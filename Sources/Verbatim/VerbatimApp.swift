@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 @main
 enum Launch {
     @MainActor static func main() {
+        _ = LaunchTimer.shared
         if CommandLine.arguments.contains("--mcp") {
             MCPServer.run()
             return
@@ -190,6 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
             if RecorderModel.shared.isBusy { RecorderModel.shared.stop() }
+            LiveTranscriber.shared.saveIndexNow()
         }
     }
 }

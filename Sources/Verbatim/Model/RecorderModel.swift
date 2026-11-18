@@ -131,8 +131,10 @@ final class RecorderModel {
     var isBusy: Bool { phase != .idle }
 
     private init() {
-        recoverUnfinished()
-        recordings = RecordingStore.loadAll()
+        let began = Date()
+        var all = RecordingStore.loadAll()
+        recoverUnfinished(&all)
+        recordings = all
         refreshMicName()
         wirePipeline()
         observeSystem()
@@ -143,6 +145,7 @@ final class RecorderModel {
             AudioSquash.shared.run()
             AudioCleanup.start()
         }
+        LaunchTimer.shared.mark("recordings read", detail: String(format: "%ld recordings, %.3f s on the main thread", recordings.count, Date().timeIntervalSince(began)))
     }
 
     // MARK: - Start / Pause / Stop
@@ -981,9 +984,9 @@ final class RecorderModel {
 
     /// Anything still marked as recording when the app starts was cut off by a
     /// crash or power loss. Fix the audio file and mark it stopped.
-    private func recoverUnfinished() {
+    private func recoverUnfinished(_ all: inout [RecordingInfo]) {
         var notices: [String] = []
-        for var info in RecordingStore.loadAll() where info.isActive {
+        for (i, var info) in all.enumerated() where info.isActive {
             let audio = RecordingStore.wavURL(info.id)
             let samples = (try? WavWriter.repair(audio)) ?? info.samples
             let modified = (try? audio.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
@@ -993,6 +996,7 @@ final class RecorderModel {
             info.endedAt = endedAt
             info.events.append(.init(kind: .recovered, at: Date(), sample: samples))
             try? RecordingStore.save(info)
+            all[i] = info
             let time = endedAt.formatted(date: .omitted, time: .shortened)
             notices.append("Verbatim quit during \(info.title) at \(time). The audio up to then was saved.")
         }

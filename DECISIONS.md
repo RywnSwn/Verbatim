@@ -274,3 +274,14 @@ menu bar icon's bars stay still (only its timer moves, once a second).
 Views that read `elapsed`, `levels` or `Playback.time` stay tiny views of
 their own. Wrong guesses made first, don't retry them: speaker model compute
 units, memory, header recount.
+
+## Text facts in their own index file (2026-11-18, faster start-up)
+Launch needs a few facts per recording (has lines, file pass unfinished,
+speakers found...) but used to read every full live.json to get them.
+The facts now live in one `text-index.json`, not in each recording.json:
+they change whenever the live text is saved (every 10 s while recording),
+and recording.json is Ryan's names, notes and markers, which an older
+Verbatim would also rewrite without them. Each entry keeps the live.json's
+size and date, so an entry that doesn't match is simply worked out again
+in the background (safe after a crash, Put Back or an older build).
+Full texts load the first time something needs them.

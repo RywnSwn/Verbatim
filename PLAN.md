@@ -296,6 +296,9 @@ Order to do them in, one chat each:
    paths/saving/download copies, Shortcuts page missing ⇧⌘E ⌥⌘P ⌘G,
    speaker counting copied (RecordingHeader + Speakers), Swift 6 mode,
    trim this file (old "how step N works" notes to docs/).
+7. Faster start-up: DONE 2026-11-18 (see "Faster start-up" at the end).
+   Left over: app activation re-reads every recording.json, and the live
+   text save every 10 s runs on the main thread (do with item 3).
 How the quick fixes were done (2026-11-18):
 - `RecorderModel.finishStopped()` ends Undo Stop for good (recordingFinal +
   AutoName). Called by the 10 s timer, by `start()` and when Undo Stop fails.
@@ -1397,23 +1400,48 @@ it off or change it in the claude.ai scheduled tasks list. It costs a fair
 amount of usage each time it finds new code, nothing when there is none.
 Last commit hunted: none yet (first hunt covers the whole app).
 
-## Faster start-up (Ryan asked 2026-11-18, next chat)
-Build it on top of `claude/quick-fixes` (or after RywnSwn/Verbatim#22 is
-merged): that branch changed how `LiveTranscriber.texts` works (one
-`LiveBox` per recording, writes through `put`), and this work touches the
-same code. Measure first, then change.
-What happens at launch now (read in the quick fixes chat):
-- `RecorderModel.init`: `RecordingStore.loadAll()` reads every
-  recording.json, then `LiveTranscriber.start(with:)` reads EVERY live.json
-  (the full text of every class) and `Transcriber.start(with:)` reads every
-  transcript.json. All on the main thread, before the window shows.
-- Transcriber then looks at each text only for small facts: is a file pass
-  unfinished, are there no lines, were speakers found. So it doesn't need
-  the full text.
-Idea: keep a few small facts per recording (pass unfinished, has lines,
-speakers found, made with backup engine) in recording.json or a small
-index file, and load a recording's full text only when it's opened, copied,
-exported, searched, or handed to Claude (MCP). Old recordings without the
-facts: work them out once in the background and save them.
-Measure: make the smoke test create about 200 fake recordings with long
-live.json files and log how long launch takes before and after.
+## Faster start-up: DONE 2026-11-18 (branch `claude/faster-startup`)
+Measured with the smoke test: 200 old classes with ~330 KB live.json each
+(about 66 MB of text) in a folded group, plus the usual 3.
+Seconds after the app started (first launch / second launch):
+- Before (4a18d3c): saved classes read 2.24 / 2.01 (2.12 / 1.98 of it
+  with the main thread blocked), window shown 3.86 / 2.81.
+- After (e1191bd): saved classes read 0.35 / 0.41 (0.27 / 0.36 blocked),
+  window shown 1.42 / 2.01. First launch read the 201 texts in the
+  background, done at 2.62 s. Second launch had nothing to check.
+- What's left on the main thread (~0.3 s) is reading the 203
+  recording.json files.
+The answers Claude gets (MCP) were the same before and after.
+How it works now:
+- `Live/TextIndex.swift`: `text-index.json` (next to the Recordings
+  folder) keeps `TextFacts` per recording (has lines, file pass finished
+  or not, stopped by Ryan, speakers found, has voices, backup engine) plus
+  the size and date of the live.json they came from.
+- `LiveTranscriber.start(with:)` reads that one file and checks each
+  live.json's size and date. Entries that don't match (first launch after
+  this update, a quit between saves, Put Back, an older Verbatim) are read
+  off the main thread one at a time (`checkInBackground`), then
+  `Transcriber.textChecked(id)` picks up unfinished work for that one.
+- `texts[id]` reads the live.json the first time something asks for it
+  (opening, copying, exporting, finding speakers, MCP). Old Whisper
+  transcripts (`Transcriber.transcripts[id]`) the same way.
+- `facts(id)`: nil = still being checked. Old audio cleanup skips those.
+- The index is saved 2 s after a change and at quit.
+- recording.json files are read once at launch, not twice.
+- `Model/LaunchTimer.swift`: "LAUNCH: ..." lines in the log and in ⌃⌘L
+  (seconds after the app process started).
+Faster start-up test list (for Ryan):
+1. First launch after the update: the app opens, and within a few seconds
+   everything looks as before (old classes, their names, checked text).
+2. Open an old class: its text shows right away. Copy it, export it: same.
+3. Quit and open again: should open a bit faster. Press ⌃⌘L and paste the
+   "LAUNCH" line to Claude.
+4. Record a short class, Stop, quit within a few seconds, open again:
+   the class and its text are all there.
+Not done (found here, for later):
+- Every time the app becomes active (`didBecomeActive`), `reload()` reads
+  every recording.json again on the main thread. Small now, grows with a
+  year of classes. Only reload when something changed.
+- While recording, the whole live text is encoded and saved every 10 s on
+  the main thread. A long class could make that a small hitch. Save off
+  the main thread (fits item 3, protect data).

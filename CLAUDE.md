@@ -14,10 +14,9 @@ UX matters a lot to him. He hates apps that don't consider the user.
 Steps 1 to 11 merged, plus the in-app player, audio shrink after Stop, the
 live text delay fix and the new start screen (2026-11-18, untested by Ryan)
 (5c, 6, 7, 7b, 7c, 8, 9, 10 and 2b also not fully tested by Ryan yet).
-Code health quick fixes (item 2) merged 2026-11-18 (RywnSwn/Verbatim#22),
-not tested by Ryan yet (test list in `PLAN.md`). Faster start-up is being
-built on `claude/faster-startup`. Next: the other code health items in
-`PLAN.md`, one chat each.
+Code health quick fixes (item 2, RywnSwn/Verbatim#22) and faster start-up
+(RywnSwn/Verbatim#23) merged 2026-11-18, not tested by Ryan yet (test lists
+in `PLAN.md`). Next: the other code health items in `PLAN.md`, one chat each.
 Design pass (sidebar boxes, drag, glass or solid, Settings pages) built on
 `claude/design-pass`, waiting for Ryan's test. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build

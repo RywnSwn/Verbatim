@@ -1,6 +1,13 @@
 import Foundation
 import Observation
 
+/// Read-only access to the old Whisper transcripts: `transcriber.transcripts[id]`.
+@MainActor
+struct OldTranscripts {
+    fileprivate let owner: Transcriber
+    subscript(id: UUID) -> Transcript? { owner.old(id) }
+}
+
 /// Turns audio files into text with Parakeet (step 5c: Whisper is gone).
 /// Used for imported files, "Transcribe again", and recordings made while
 /// Parakeet wasn't ready. Recordings made with Parakeet need nothing: their
@@ -33,8 +40,13 @@ final class Transcriber {
     private(set) var speakerQueue: [UUID] = []
     private(set) var active: Job?
     private(set) var importing: Set<UUID> = []
-    /// Old Whisper transcripts (transcript.json), from before step 5c.
-    private(set) var transcripts: [UUID: Transcript] = [:]
+    /// Old Whisper transcripts (transcript.json), from before step 5c, read
+    /// as `transcripts[id]`. Read from disk the first time they're asked for.
+    var transcripts: OldTranscripts { OldTranscripts(owner: self) }
+    /// Goes up when an old transcript changes (rare: only old recordings).
+    private var oldChanged = 0
+    /// .some(nil) = there is no transcript.json.
+    @ObservationIgnored private var oldCache: [UUID: Transcript?] = [:]
     private(set) var errors: [UUID: String] = [:]
     /// Recordings still getting audio (recording, paused, or in the 10 s Undo
     /// Stop window). Files wait while there is one.
@@ -52,24 +64,33 @@ final class Transcriber {
 
     private init() {}
 
-    /// Called once at launch, after LiveTranscriber has loaded the live texts.
+    /// Called once at launch, after LiveTranscriber has read its index. Only
+    /// looks at `TextFacts`, never a whole text. Recordings whose facts
+    /// aren't known yet come in later through `textChecked`.
     func start(with recordings: [RecordingInfo]) {
         Self.removeWhisperModel()
-        for r in recordings {
-            if let t = TranscriptStore.load(r.id) { transcripts[r.id] = t }
-        }
-        // Pick up anything left unfinished (quit, crash), and old recordings
-        // that never got any text.
-        for r in recordings.reversed() where !r.isActive && r.hasAudio {
-            let text = live.texts[r.id]
-            if let pass = text?.pass {
-                if !pass.finished, !pass.stoppedByUser { enqueue(r.id) }
-            } else if text?.lines.isEmpty ?? true {
-                let old = transcripts[r.id]
-                if old == nil || (old?.finished == false && old?.stoppedByUser == false) { enqueue(r.id) }
-            }
-        }
+        for r in recordings.reversed() { pickUp(r) }
         queueSpeakers(recordings)
+    }
+
+    /// The facts about this recording's text are known now (checked in the
+    /// background after launch).
+    func textChecked(_ id: UUID) {
+        guard let r = RecorderModel.shared.info(id) else { return }
+        pickUp(r)
+        if SpeakerModel.shared.isReady, !r.isActive, r.hasAudio, needsSpeakers(id) { findSpeakers(id) }
+    }
+
+    /// Picks up anything left unfinished (quit, crash), and old recordings
+    /// that never got any text.
+    private func pickUp(_ r: RecordingInfo) {
+        guard !r.isActive, r.hasAudio, let facts = live.facts(r.id) else { return }
+        if facts.passFinished != nil {
+            if facts.passUnfinished, !facts.passStoppedByUser { enqueue(r.id) }
+        } else if !facts.hasLines {
+            let old = transcripts[r.id]
+            if old == nil || (old?.finished == false && old?.stoppedByUser == false) { enqueue(r.id) }
+        }
     }
 
     /// The speaker model finished downloading: label what's already there.
@@ -87,9 +108,9 @@ final class Transcriber {
     }
 
     private func needsSpeakers(_ id: UUID) -> Bool {
-        guard let t = live.texts[id], t.speakersFound != true, !t.lines.isEmpty else { return false }
-        if let pass = t.pass, !pass.finished { return false } // gets them while being transcribed
-        return !t.lines.contains { $0.voice != nil }
+        guard let f = live.facts(id), !f.speakersFound, f.hasLines else { return false }
+        if f.passUnfinished { return false } // gets them while being transcribed
+        return !f.hasVoices
     }
 
     /// Goes over the file with the speaker model only, keeping the text. Also
@@ -132,8 +153,8 @@ final class Transcriber {
         guard active?.id != id, !growing.contains(id) else { return }
         queue.removeAll { $0 == id }
         speakerQueue.removeAll { $0 == id } // the new pass finds speakers as it goes
-        transcripts[id] = nil
         try? FileManager.default.removeItem(at: TranscriptStore.url(id))
+        setOld(nil, id)
         let old = live.texts[id]
         // Edited lines are kept with the speaker they show now (their voice
         // numbers mean nothing to the new pass).
@@ -173,12 +194,13 @@ final class Transcriber {
         queue.removeAll { $0 == id }
         speakerQueue.removeAll { $0 == id }
         growing.remove(id)
-        transcripts[id] = nil
+        oldCache[id] = nil // read again if it's put back
+        oldChanged += 1
         errors[id] = nil
     }
 
     func reload(_ id: UUID) {
-        transcripts[id] = TranscriptStore.load(id)
+        setOld(TranscriptStore.load(id), id)
     }
 
     func setImporting(_ id: UUID, _ on: Bool) {
@@ -191,8 +213,7 @@ final class Transcriber {
 
     /// The file is still being gone over (queued, running, or stopped halfway).
     func isUnfinished(_ id: UUID) -> Bool {
-        if let pass = live.texts[id]?.pass { return !pass.finished }
-        return false
+        live.facts(id)?.passUnfinished ?? false
     }
 
     // MARK: - While recording
@@ -244,8 +265,22 @@ final class Transcriber {
     }
 
     private func commit(_ t: Transcript, _ id: UUID) {
-        transcripts[id] = t
+        setOld(t, id)
         try? TranscriptStore.save(t, for: id)
+    }
+
+    private func setOld(_ t: Transcript?, _ id: UUID) {
+        oldCache[id] = .some(t)
+        oldChanged += 1
+    }
+
+    fileprivate func old(_ id: UUID) -> Transcript? {
+        _ = oldChanged // watch for changes
+        if let cached = oldCache[id] { return cached }
+        // First time: read it now (not a change anyone needs to hear about).
+        let t = TranscriptStore.load(id)
+        oldCache[id] = .some(t)
+        return t
     }
 
     // MARK: - Running

@@ -15,6 +15,9 @@ launch() {
   "$BIN" > "$OUT/app.log" 2>&1 &
   APP_PID=$!
   sleep 10
+  # How long launch took (see LaunchTimer), kept for comparing builds.
+  echo "----- launch $1 -----" | tee -a "$OUT/launch.txt"
+  grep -a "^LAUNCH:" "$OUT/app.log" | tee -a "$OUT/launch.txt"
   osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is '"$APP_PID"') to true' || true
   sleep 1
 }
@@ -57,7 +60,7 @@ check() {
     sleep 8
     REPORT="$(ls -t ~/Library/Logs/DiagnosticReports/Verbatim* 2>/dev/null | head -1)"
     if [ -n "$REPORT" ]; then echo "----- $REPORT -----"; head -c 6000 "$REPORT"; fi
-    launch
+    launch "after a crash"
   fi
 }
 
@@ -95,6 +98,49 @@ JSON
 JSON
 }
 
+# 200 old classes with long transcripts (about 500 lines each, like a long
+# lesson), in a folded group, to measure how launch copes with a full year.
+# No audio, so nothing gets transcribed or shrunk.
+seed_many() {
+  local base="$HOME/Library/Application Support/Verbatim"
+  python3 - "$base" <<'PY'
+import json, os, random, sys, uuid
+base = sys.argv[1]
+groups_path = os.path.join(base, "groups.json")
+groups = json.load(open(groups_path))
+gid = "55555555-5555-4555-8555-555555555555"
+groups["groups"].append({"id": gid, "name": "Old classes", "icon": "archivebox", "color": "ink", "collapsed": True})
+json.dump(groups, open(groups_path, "w"))
+random.seed(7)
+vocab = ("the story tells us how a small spider became the keeper of every tale in the village and why "
+         "people still listen when the teacher reads it out loud to the class before the bell rings today").split()
+def live():
+    lines, t = [], 0.0
+    for n in range(500):
+        count = random.randint(18, 32)
+        words = [random.choice(vocab) for _ in range(count)]
+        starts = [round(t + k * 0.38, 2) for k in range(count)]
+        end = round(t + count * 0.38, 2)
+        lines.append({"start": round(t, 2), "end": end, "text": " ".join(words).capitalize() + ".",
+                      "words": starts, "voice": random.choice([0, 0, 0, 1, 2])})
+        t = end + 0.6
+    return {"formatVersion": 1, "engines": ["Parakeet"], "lines": lines, "speakersFound": True}
+for i in range(200):
+    rid = str(uuid.UUID(int=0xbbbbbbbb_bbbb_4bbb_8bbb_000000000000 + i))
+    folder = os.path.join(base, "Recordings", rid.upper())
+    os.makedirs(folder, exist_ok=True)
+    day = 1 + i % 28
+    info = {"formatVersion": 1, "id": rid.upper(), "title": "Old class %d" % (i + 1),
+            "createdAt": "2026-%02d-%02dT03:05:00Z" % (1 + i // 28, day),
+            "endedAt": "2026-%02d-%02dT03:52:00Z" % (1 + i // 28, day),
+            "state": "stopped", "sampleRate": 16000, "samples": 45120000, "events": [],
+            "audioDeletedAt": "2026-%02d-%02dT04:00:00Z" % (1 + i // 28, day), "groupID": gid}
+    json.dump(info, open(os.path.join(folder, "recording.json"), "w"))
+    json.dump(live(), open(os.path.join(folder, "live.json"), "w"), indent=2, sort_keys=True)
+PY
+  echo "seeded 200 old classes: $(du -sh "$base/Recordings" | cut -f1) in Recordings"
+}
+
 # The Claude connector: Verbatim started with --mcp answers Claude's questions
 # on stdin/stdout (see Sources/Verbatim/Connector). No window, read only.
 mcp_check() {
@@ -122,13 +168,14 @@ mcp_check() {
 
 seed
 mcp_check
+seed_many
 # No "update ready" bar, so the window can be as short as Ryan's.
 defaults write com.rywnswn.verbatim checkForUpdates -bool false
 # A mini window size saved by an older build, like on Ryan's Mac. 0.1.150
 # crashed opening the mini window with this (sizes fought until it crashed).
 defaults write com.rywnswn.verbatim "NSWindow Frame VerbatimMiniWindow" "16 560 330 300 0 0 1440 875 "
 osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' || true
-launch
+launch "first"
 check "at launch"
 osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose unix id is '"$APP_PID"')' || echo "no accessibility access"
 
@@ -186,6 +233,15 @@ shot "mini-idle"
 osascript -e 'tell application "System Events" to keystroke "m" using {shift down, command down}' || true
 sleep 1
 
+# Open a recording (texts are read when opened, not at launch): its lines
+# must show. Click "Anansi and the sky god, part 1", the first row in the
+# sidebar (window is 960x620 at 20,40 here). Typing into ⌘K didn't arrive
+# on the CI Mac.
+click_at 160 218
+sleep 2
+check "open a recording"
+shot "opened-recording"
+
 # Design pass: the Settings window (pages down the left), General then Look.
 osascript -e 'tell application "System Events" to keystroke "," using {command down}' || true
 sleep 3
@@ -210,6 +266,13 @@ sleep 1
 osascript -e 'tell application "System Events" to keystroke "q" using {command down}' || true
 sleep 3
 kill "$APP_PID" 2>/dev/null || true
+echo "----- text index -----" | tee -a "$OUT/launch.txt"
+INDEX="$HOME/Library/Application Support/Verbatim/text-index.json"
+if [ -f "$INDEX" ]; then
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); e=d["entries"]; print("%d entries, %d with lines, %d bytes" % (len(e), sum(1 for v in e.values() if v["facts"]["hasLines"]), len(open(sys.argv[1]).read())))' "$INDEX" | tee -a "$OUT/launch.txt"
+else
+  echo "no text-index.json" | tee -a "$OUT/launch.txt"
+fi
 echo "----- saved window frames -----"
 defaults read com.rywnswn.verbatim | grep "NSWindow Frame" || echo "none saved"
 defaults read com.rywnswn.verbatim | grep "NSWindow Frame" | sed -E 's/^ *"([^"]+)" = "([^"]+)";/\1|\2/' | while IFS='|' read -r key value; do
@@ -220,7 +283,7 @@ defaults read com.rywnswn.verbatim | grep "NSWindow Frame" || true
 # Design pass: the other look (solid sidebar, paper cards) on the relaunch.
 defaults write com.rywnswn.verbatim sidebarLook -string solid
 defaults write com.rywnswn.verbatim rowLook -string cards
-launch
+launch "second"
 check "relaunch with a short saved frame"
 osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose unix id is '"$APP_PID"')' || true
 shot "restored-short"
