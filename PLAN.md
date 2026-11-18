@@ -321,6 +321,12 @@ Done (not tested by Ryan yet):
    E2 first time (download + "Make a group" link), E3 recording,
    E4 group menu open. Next: Ryan picks the color, then build it in
    `StartView.swift` (and the recording view's header to match E3).
+   Ryan then: "right direction but looks weird", links look weird, what
+   about dark mode. Cause: the mockup's sidebar didn't match the real app
+   (CI screenshots: dark mode, floating glass sidebar, group icons,
+   recording cards). Redrew E in the real look, dark and light, with no
+   underlined links (last-class link dropped, Pause is a small button).
+   Mockup row "E, in the real app's look". Waiting for his reaction.
 
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,
