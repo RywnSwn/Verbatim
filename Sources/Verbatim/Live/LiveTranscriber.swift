@@ -168,6 +168,21 @@ final class LiveFeed: @unchecked Sendable {
     }
 }
 
+/// One recording's text, watched on its own (see `LiveTranscriber.texts`).
+@MainActor
+@Observable
+final class LiveBox {
+    var text: LiveText
+    init(_ text: LiveText) { self.text = text }
+}
+
+/// Read-only access to the texts: `live.texts[id]`.
+@MainActor
+struct LiveTexts {
+    fileprivate let owner: LiveTranscriber
+    subscript(id: UUID) -> LiveText? { owner.text(id) }
+}
+
 /// Live text while recording: the Parakeet download, which engine is listening,
 /// and the lines so far (saved to live.json as it goes).
 @MainActor
@@ -192,7 +207,15 @@ final class LiveTranscriber {
 
     private(set) var modelState: ModelState = .downloading(fraction: 0, secondsLeft: nil)
     private(set) var status: Status?
-    private(set) var texts: [UUID: LiveText] = [:]
+    /// Each recording's text, read as `texts[id]`. Each one is watched on
+    /// its own: a new live word redraws only views showing that recording,
+    /// not every view that reads any text (it used to be one dictionary, so
+    /// every word redrew most of the window).
+    var texts: LiveTexts { LiveTexts(owner: self) }
+    @ObservationIgnored private var boxes: [UUID: LiveBox] = [:]
+    /// Goes up when a recording's text is added or removed (not when it
+    /// changes), so a view waiting for a text that isn't there yet hears of it.
+    private var added = 0
     /// Words Apple's engine is still working out. Shown after the last line.
     private(set) var volatile = ""
     /// Live text is more than a few seconds behind the mic (the models were
@@ -224,7 +247,7 @@ final class LiveTranscriber {
     /// Called once at launch with the saved recordings.
     func start(with recordings: [RecordingInfo]) {
         for r in recordings {
-            if let t = LiveStore.load(r.id) { texts[r.id] = t }
+            if let t = LiveStore.load(r.id) { put(t, r.id) }
         }
         if UserDefaults.standard.bool(forKey: Self.preparedKey) {
             modelState = .ready
@@ -249,7 +272,7 @@ final class LiveTranscriber {
         activeID = id
         volatile = ""
         status = .starting
-        if texts[id] == nil { texts[id] = LiveText() }
+        if texts[id] == nil { put(LiveText(), id) }
         generation += 1
         let run = generation
         catchingUp = false
@@ -274,7 +297,7 @@ final class LiveTranscriber {
 
     func lines(_ id: UUID) -> [Transcript.Line] { texts[id]?.lines ?? [] }
 
-    func forget(_ id: UUID) { texts[id] = nil }
+    func forget(_ id: UUID) { put(nil, id) }
 
     // MARK: - Editing lines
 
@@ -305,11 +328,30 @@ final class LiveTranscriber {
     }
 
     private func commit(_ t: LiveText, _ id: UUID) {
-        texts[id] = t
+        put(t, id)
         try? LiveStore.save(t, for: id)
     }
 
-    func reload(_ id: UUID) { texts[id] = LiveStore.load(id) }
+    func reload(_ id: UUID) { put(LiveStore.load(id), id) }
+
+    /// The one place texts change. nil removes it.
+    private func put(_ t: LiveText?, _ id: UUID) {
+        if let t {
+            if let box = boxes[id] {
+                box.text = t
+            } else {
+                boxes[id] = LiveBox(t)
+                added += 1
+            }
+        } else if boxes.removeValue(forKey: id) != nil {
+            added += 1
+        }
+    }
+
+    fileprivate func text(_ id: UUID) -> LiveText? {
+        _ = added // watch for this text being added or removed
+        return boxes[id]?.text
+    }
 
     // MARK: - Speakers (step 7)
 
@@ -452,7 +494,8 @@ final class LiveTranscriber {
         }
         fix(&t, id, spotted: out.fixes, newWords: !out.finals.isEmpty)
         if !out.finals.isEmpty, t.engines.last != engine { t.engines.append(engine) }
-        texts[id] = t
+        // Only "words still being worked out" changed: the lines didn't.
+        if !out.finals.isEmpty || !out.fixes.isEmpty { put(t, id) }
         if run == generation, let v = out.volatile { volatile = v }
         if Date().timeIntervalSince(lastSave) > 10 { save(id) }
     }

@@ -146,8 +146,7 @@ struct MenuBarPanel: View {
                 Text(groups.group(info.groupID).map { "\($0.name), \(paused ? "paused" : "recording")" }
                      ?? (paused ? "Paused" : "Recording"))
                 Spacer()
-                Text(RecorderModel.clock(model.elapsed))
-                    .monospacedDigit()
+                PanelClock()
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -163,7 +162,7 @@ struct MenuBarPanel: View {
             if model.isBusy {
                 BigButton("Copy new", "doc.on.doc") { model.copy(.new, from: model.currentID) }
                 BigButton("Marker", "flag") { model.addMarker() }
-                    .disabled(model.markerTarget == nil || paused)
+                    .disabled(!model.canMark || paused) // canMark: doesn't read the clock
                 BigButton(paused ? "Resume" : "Pause", paused ? "play.fill" : "pause.fill") { model.togglePause() }
                 BigButton("Stop", "stop.fill") { model.stop() }
             } else {
@@ -212,6 +211,17 @@ struct MenuBarPanel: View {
     /// Closes the menu bar window (it's the key window while open).
     private func close() {
         NSApp.keyWindow?.close()
+    }
+}
+
+/// The panel's timer. Its own view, so the clock (20 ticks a second)
+/// redraws only this text, not the whole panel.
+private struct PanelClock: View {
+    @Environment(RecorderModel.self) private var model
+
+    var body: some View {
+        Text(RecorderModel.clock(model.elapsed))
+            .monospacedDigit()
     }
 }
 

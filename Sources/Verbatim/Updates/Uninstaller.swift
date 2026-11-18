@@ -30,13 +30,19 @@ enum Uninstaller {
         alert.messageText = "Remove Verbatim and its data?"
         alert.informativeText = """
         This moves Verbatim, all recordings and transcripts, the speech model and settings \
-        (\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)) in total) to the Trash. \
+        (\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)) in total) to the Trash, \
+        and takes Verbatim out of the Claude app if it's connected. \
         You can still get them back from the Trash until you empty it.
         """
         alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Move to Trash")
         guard alert.runModal() == .alertSecondButtonReturn else { return }
 
+        // Take Verbatim out of Claude's list of tools, or Claude would keep
+        // trying to start an app that's gone. Claude's other tools stay.
+        if [.connected, .moved].contains(ClaudeConnector.state()) {
+            try? ClaudeConnector.disconnect()
+        }
         UserDefaults.standard.removePersistentDomain(forName: bundleID)
         UserDefaults.standard.synchronize()
         for item in dataItems + [Bundle.main.bundleURL] where FileManager.default.fileExists(atPath: item.path) {

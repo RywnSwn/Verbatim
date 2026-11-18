@@ -94,6 +94,9 @@ struct ContentView: View {
                 .frame(minWidth: 0, idealWidth: 400, maxWidth: .infinity,
                        minHeight: 0, idealHeight: 300, maxHeight: .infinity)
         }
+        // Here, not on the sidebar: with the sidebar hidden (narrow window),
+        // New Group… from the start page or ⌘K couldn't show it.
+        .modifier(GroupNameAlert())
         .overlay {
             if model.showCommandMenu {
                 CommandMenuView()
@@ -107,6 +110,34 @@ struct ContentView: View {
             // crash (Ryan's crash on 0.1.98).
             Task { @MainActor in fitSidebar(to: width) }
         }
+    }
+}
+
+/// "Name this group", for a new group or Rename Group…, from anywhere
+/// (sidebar, start page, ⌘K).
+private struct GroupNameAlert: ViewModifier {
+    @Environment(RecorderModel.self) private var model
+    @State private var draft = ""
+    private var store: GroupStore { .shared }
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Name this group", isPresented: Binding(
+                get: { model.renameGroupRequest != nil },
+                set: { if !$0 { model.renameGroupRequest = nil } })
+            ) {
+                TextField("Like English 2026", text: $draft)
+                Button("OK") {
+                    if let id = model.renameGroupRequest { store.rename(id, to: draft) }
+                    model.renameGroupRequest = nil
+                }
+                Button("Cancel", role: .cancel) { model.renameGroupRequest = nil }
+            } message: {
+                Text("One group per class works well. Pick an icon by clicking the one next to its name.")
+            }
+            .onChange(of: model.renameGroupRequest) {
+                if let id = model.renameGroupRequest { draft = store.group(id)?.name ?? "" }
+            }
     }
 }
 

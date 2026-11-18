@@ -264,7 +264,8 @@ against this branch. Only the live text delay item is changed here (the
 fix is on this branch). Everything else is still true on this branch.
 Order to do them in, one chat each:
 1. Test the live text fix and new start screen (main build), report back.
-2. Quick fixes, one chat:
+2. Quick fixes: DONE 2026-11-18 on branch `claude/quick-fixes` (not
+   tested by Ryan yet, see "Quick fixes test list" below). Was:
    - Stop, then start a new recording within 10 s: `start()` clears
      `stoppedNote`, so the old one never gets `Transcriber.recordingFinal`
      / `AutoName.consider`: background work stalls until relaunch
@@ -295,6 +296,34 @@ Order to do them in, one chat each:
    paths/saving/download copies, Shortcuts page missing ⇧⌘E ⌥⌘P ⌘G,
    speaker counting copied (RecordingHeader + Speakers), Swift 6 mode,
    trim this file (old "how step N works" notes to docs/).
+How the quick fixes were done (2026-11-18):
+- `RecorderModel.finishStopped()` ends Undo Stop for good (recordingFinal +
+  AutoName). Called by the 10 s timer, by `start()` and when Undo Stop fails.
+- `AudioSquash.squash`: an m4a already there with the WAV still there is
+  checked (`isWhole`); whole = delete the WAV, else redo it.
+- `Uninstaller.run` calls `ClaudeConnector.disconnect()` when connected.
+- Export Everything: `Transcripts/<group name>/...`, Recents at the top,
+  plus `Data/groups.json`.
+- `ClaudeConnector.readConfig` only treats a MISSING file as empty; one it
+  can't open throws. Connect also refuses an odd "mcpServers" shape.
+- Clocks: `BarClock`/`BarWaveform` (BottomBar), `PanelClock` (MenuBar).
+  Mini window and panel Marker buttons use `canMark`, not `markerTarget`
+  (that one reads `elapsed`). Rule stands: never read `elapsed`, `levels`
+  or `markerTarget` in a big view.
+- `LiveTranscriber.texts` is now `LiveTexts` (read only, `texts[id]`), one
+  `@Observable LiveBox` per recording; writes go through `put`. Only
+  volatile words changing no longer rewrites the lines.
+- "Name this group" alert: `GroupNameAlert` in `ContentView.swift`.
+Test build 0.1.178 (or newer from this branch). CI build and smoke test
+passed, screenshots checked (start screen, mini window, Settings normal).
+Quick fixes test list (for Ryan):
+1. Record a few seconds, Stop, then start a new recording right away (in
+   under 10 s). Stop that too. Both should get their checked text and a
+   name, without reopening the app.
+2. Make the window narrow (sidebar hides), then on the start page use the
+   title menu > New Group…: the "Name this group" box shows.
+3. Settings > Storage > Export Everything: the zip has a folder per group.
+4. While recording, the app should feel at least as smooth as before.
 Live text fix itself (read in this chat): queue + 5 s bites, Parakeet and
 speakers load at once (higher peak memory while loading, worth watching
 on 8 GB), nothing wrong found, not yet tried on Ryan's Mac.

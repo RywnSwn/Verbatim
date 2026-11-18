@@ -168,7 +168,8 @@ extension RecorderModel {
     }
 
     /// Settings > Storage > Export Everything (step 9): a zip with every
-    /// transcript as .md, the raw data files and settings. No audio.
+    /// transcript as .md (in a folder per group, like the sidebar), the raw
+    /// data files and settings. No audio.
     func exportEverything() {
         let panel = NSSavePanel()
         panel.directoryURL = Self.lastExportFolder
@@ -181,10 +182,17 @@ extension RecorderModel {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         // Text is made here (it needs the app's state); files and zip in the background.
-        let readable = recordings.map { info -> (name: String, text: String) in
+        let groups = GroupStore.shared
+        let readable = recordings.map { info -> (folder: String?, name: String, text: String) in
             let lines = shownLines(info.id).map(\.line)
             let body = lines.isEmpty ? "(No text.)" : Self.text(lines, info: info, markdown: true)
-            return (Self.freeName(for: info, format: .markdown, in: URL(filePath: "/nonexistent")), body + "\n")
+            let folder = groups.group(info.groupID).map { group -> String in
+                let name = group.name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+                    .trimmingCharacters(in: .whitespaces)
+                // A name starting with "." would be a hidden folder (or "..").
+                return name.hasPrefix(".") ? "_" + name : name
+            }
+            return (folder, Self.freeName(for: info, format: .markdown, in: URL(filePath: "/nonexistent")), body + "\n")
         }
         let ids = recordings.map(\.id)
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -201,14 +209,22 @@ extension RecorderModel {
                     try fm.createDirectory(at: texts, withIntermediateDirectories: true)
                     var used: Set<String> = []
                     for item in readable {
+                        // A group's transcripts go in a folder named after it;
+                        // Recents ones stay at the top, like the sidebar.
+                        var folder = texts
+                        if let group = item.folder, !group.isEmpty {
+                            folder = texts.appending(path: group, directoryHint: .isDirectory)
+                            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+                        }
+                        let prefix = (item.folder ?? "") + "/"
                         var name = item.name
                         var n = 2
-                        while used.contains(name.lowercased()) {
+                        while used.contains((prefix + name).lowercased()) {
                             name = item.name.replacingOccurrences(of: ".md", with: " (\(n)).md")
                             n += 1
                         }
-                        used.insert(name.lowercased())
-                        try item.text.write(to: texts.appending(path: name), atomically: true, encoding: .utf8)
+                        used.insert((prefix + name).lowercased())
+                        try item.text.write(to: folder.appending(path: name), atomically: true, encoding: .utf8)
                     }
                     // Raw data, so a future Verbatim could read it back.
                     let data = top.appending(path: "Data/Recordings", directoryHint: .isDirectory)
@@ -220,7 +236,8 @@ extension RecorderModel {
                             if fm.fileExists(atPath: from.path) { try fm.copyItem(at: from, to: to.appending(path: file)) }
                         }
                     }
-                    for file in ["words.json", "Voices/voices.json"] {
+                    // groups.json: which group each recording is in, their names, icons and order.
+                    for file in ["words.json", "groups.json", "Voices/voices.json"] {
                         let from = support.appending(path: file)
                         if fm.fileExists(atPath: from.path) {
                             try fm.copyItem(at: from, to: top.appending(path: "Data").appending(path: (file as NSString).lastPathComponent))

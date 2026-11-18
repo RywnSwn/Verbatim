@@ -166,7 +166,7 @@ struct MiniView: View {
                         model.copy(.new, from: model.currentID)
                     }
                     MiniButton("Marker", "flag", help: "Mark this moment") { model.addMarker() }
-                        .disabled(model.markerTarget == nil)
+                        .disabled(!model.canMark) // canMark: doesn't read the clock
                     MiniButton(paused ? "Resume" : "Pause", paused ? "play.fill" : "pause.fill",
                                help: paused ? "Resume recording" : "Pause recording") { model.togglePause() }
                     MiniButton("Stop", "stop.fill", help: "Stop and save") { model.stop() }

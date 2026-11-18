@@ -58,10 +58,24 @@ final class AudioSquash {
     /// Off the main thread. True when the m4a is in place and the WAV is gone.
     nonisolated private static func squash(_ wav: URL, to m4a: URL) -> Bool {
         let temp = m4a.deletingLastPathComponent().appending(path: "audio-shrinking.m4a")
+        // Left over if the app quit or crashed partway through last time.
         try? FileManager.default.removeItem(at: temp)
         do {
             let input = try AVAudioFile(forReading: wav)
             let format = input.processingFormat
+            // Quit or crashed after the new file was put in place but before
+            // the WAV was deleted. If that m4a is whole, just finish the job;
+            // if not, it goes and the WAV is shrunk again. (Before, the move
+            // below failed because the m4a was there, so it never finished
+            // and started over at every launch.)
+            if FileManager.default.fileExists(atPath: m4a.path) {
+                if isWhole(m4a, expected: input.length, rate: format.sampleRate) {
+                    input.close()
+                    try FileManager.default.removeItem(at: wav)
+                    return true
+                }
+                try FileManager.default.removeItem(at: m4a)
+            }
             // 32 kbps is plenty for speech at 16 kHz. If the Mac's encoder
             // won't take it, try lower, then its own default.
             var output: AVAudioFile?
@@ -91,10 +105,7 @@ final class AudioSquash {
             input.close()
 
             // Check the new file before throwing the old one away.
-            let check = try AVAudioFile(forReading: temp)
-            let got = check.length
-            check.close()
-            guard expected == 0 || abs(Double(got - expected)) < Double(expected) * 0.01 + format.sampleRate else {
+            guard isWhole(temp, expected: expected, rate: format.sampleRate) else {
                 try? FileManager.default.removeItem(at: temp)
                 return false
             }
@@ -105,6 +116,17 @@ final class AudioSquash {
             try? FileManager.default.removeItem(at: temp)
             return false
         }
+    }
+}
+
+extension AudioSquash {
+    /// The shrunk file opens and is as long as the WAV (within 1%, plus a
+    /// second for the encoder's padding).
+    nonisolated private static func isWhole(_ url: URL, expected: Int64, rate: Double) -> Bool {
+        guard let check = try? AVAudioFile(forReading: url) else { return false }
+        let got = check.length
+        check.close()
+        return expected == 0 || abs(Double(got - expected)) < Double(expected) * 0.01 + rate
     }
 }
 

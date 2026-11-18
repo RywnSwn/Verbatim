@@ -225,7 +225,10 @@ final class RecorderModel {
             return
         }
 
-        stoppedNote = nil
+        // Undo Stop is over for the recording stopped a moment ago: let its
+        // background work start now (it used to wait for a timer that a
+        // new recording cancelled, so it stalled until relaunch).
+        finishStopped()
         deletedNote = nil
         device = dev
         refreshMicName()
@@ -319,21 +322,27 @@ final class RecorderModel {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(10))
             guard let self, self.stoppedNote == stopped else { return }
-            self.stoppedNote = nil
-            // Undo Stop is no longer possible, so the recording is final. Files
-            // waiting for the recording to end can start now.
-            Transcriber.shared.recordingFinal(id)
-            AutoName.shared.consider(id)
+            self.finishStopped()
         }
+    }
+
+    /// Undo Stop is no longer possible (10 s are over, or a new recording
+    /// started), so the stopped recording is final. Files waiting for the
+    /// recording to end can start now, and it can get a name.
+    private func finishStopped() {
+        guard let note = stoppedNote else { return }
+        stoppedNote = nil
+        Transcriber.shared.recordingFinal(note.recordingID)
+        AutoName.shared.consider(note.recordingID)
     }
 
     /// Continues the recording that was just stopped, in the same audio file.
     func undoStop() {
         guard phase == .idle, let note = stoppedNote,
               let info = recordings.first(where: { $0.id == note.recordingID }) else { return }
-        stoppedNote = nil
         let (dev, fellBack) = Microphones.resolve()
         guard let dev else {
+            finishStopped()
             status = Status(text: "No microphone found, so the recording stayed stopped.")
             return
         }
@@ -346,9 +355,11 @@ final class RecorderModel {
         } catch {
             pipeline.detach()
             LiveTranscriber.shared.recordingStopped()
+            finishStopped()
             status = Status(text: "Couldn't continue the recording: \(error.localizedDescription)")
             return
         }
+        stoppedNote = nil
         currentID = info.id
         selection = info.id
         device = dev
