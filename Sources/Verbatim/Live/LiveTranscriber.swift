@@ -8,12 +8,72 @@ enum LiveInput: Sendable {
     case flush
 }
 
+/// Audio for one run of the live engine (recording start to Stop). The mic
+/// hands over about 47 small bits a second. The runner takes everything that
+/// is waiting at once (up to `LiveRunner.biggestBite`), so when the models
+/// fall behind (loading at the start, a slow moment) they catch up in a few
+/// big steps instead of hundreds of tiny ones, each with its own trip to
+/// every model and to the screen.
+final class LiveQueue: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [LiveInput] = []
+    private var waiting = 0
+    private var closed = false
+    /// One wake-up per batch of new audio (more audio while the runner is
+    /// busy just means "there's more").
+    let wakeups: AsyncStream<Void>
+    private let wake: AsyncStream<Void>.Continuation
+
+    init() {
+        (wakeups, wake) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
+    }
+
+    func put(_ input: LiveInput) {
+        let ok = lock.withLock {
+            guard !closed else { return false }
+            items.append(input)
+            if case .samples(let s) = input { waiting += s.count }
+            return true
+        }
+        if ok { wake.yield() }
+    }
+
+    /// Seconds of audio waiting in this queue.
+    var waitingSeconds: Double { lock.withLock { Double(waiting) / 16_000 } }
+
+    /// The next thing to do: a flush on its own, or all the samples waiting
+    /// before the next flush, joined, up to about `max` samples.
+    func take(max: Int) -> LiveInput? {
+        lock.withLock {
+            guard let first = items.first else { return nil }
+            if case .flush = first {
+                items.removeFirst()
+                return .flush
+            }
+            var joined: [Float] = []
+            var n = 0
+            while n < items.count, joined.count < max, case .samples(let s) = items[n] {
+                joined += s
+                n += 1
+            }
+            items.removeFirst(n)
+            waiting -= joined.count
+            return .samples(joined)
+        }
+    }
+
+    func close() {
+        lock.withLock { closed = true }
+        wake.finish()
+    }
+}
+
 /// Hands samples from the audio thread to the live engine, in order.
 final class LiveFeed: @unchecked Sendable {
     /// The one feed, reachable from any thread.
     static let shared = LiveFeed()
     private let lock = NSLock()
-    private var continuation: AsyncStream<LiveInput>.Continuation?
+    private var queue: LiveQueue?
     /// Samples handed over, and samples the engines are done with. The gap
     /// is how far live text is behind the mic (shown by `HitchMeter`).
     private var given: Int64 = 0
@@ -23,24 +83,29 @@ final class LiveFeed: @unchecked Sendable {
     /// (should be far under a second; long = the mic side stalled).
     private var lastAt: UInt64 = 0
     private var worstGap: UInt64 = 0
+    /// How the last start went (seconds after Start): shown by `HitchMeter`.
+    private var openedAt: UInt64 = 0
+    private var startTimes: [(String, Double)] = []
 
-    func open() -> AsyncStream<LiveInput> {
-        let (stream, c) = AsyncStream<LiveInput>.makeStream()
+    func open() -> LiveQueue {
+        let q = LiveQueue()
         lock.withLock {
-            continuation?.finish()
-            continuation = c
+            queue?.close()
+            queue = q
             given = 0
             done = 0
             lastAt = 0
+            openedAt = DispatchTime.now().uptimeNanoseconds
+            startTimes = []
         }
-        return stream
+        return q
     }
 
-    var isOpen: Bool { lock.withLock { continuation != nil } }
+    var isOpen: Bool { lock.withLock { queue != nil } }
 
     func yield(_ input: LiveInput) {
-        lock.withLock {
-            guard let continuation else { return }
+        let q: LiveQueue? = lock.withLock {
+            guard let queue else { return nil }
             if case .samples(let s) = input {
                 let now = DispatchTime.now().uptimeNanoseconds
                 if lastAt != 0 { worstGap = max(worstGap, now - lastAt) }
@@ -48,13 +113,31 @@ final class LiveFeed: @unchecked Sendable {
                 given += Int64(s.count)
                 worstBehind = max(worstBehind, given - done)
             }
-            continuation.yield(input)
+            return queue
         }
+        q?.put(input)
     }
 
     /// The engines finished this many samples.
     func finished(_ samples: Int) {
         lock.withLock { done += Int64(samples) }
+    }
+
+    /// Something got ready during this recording's start ("Parakeet
+    /// listening", "first words"). Only the first time each.
+    func mark(_ what: String) {
+        lock.withLock {
+            guard openedAt != 0, !startTimes.contains(where: { $0.0 == what }) else { return }
+            startTimes.append((what, Double(DispatchTime.now().uptimeNanoseconds - openedAt) / 1e9))
+        }
+    }
+
+    /// "Parakeet listening 3.1 s, speakers 4.0 s, first words 6.2 s" for the last start.
+    func startText() -> String {
+        lock.withLock {
+            guard !startTimes.isEmpty else { return "no recording started since launch" }
+            return startTimes.map { String(format: "%@ %.1f s", $0.0, $0.1) }.joined(separator: ", ")
+        }
     }
 
     /// Pause and Stop: the wait until the next audio isn't a stall.
@@ -79,8 +162,8 @@ final class LiveFeed: @unchecked Sendable {
 
     func close() {
         lock.withLock {
-            continuation?.finish()
-            continuation = nil
+            queue?.close()
+            queue = nil
         }
     }
 }
@@ -112,6 +195,9 @@ final class LiveTranscriber {
     private(set) var texts: [UUID: LiveText] = [:]
     /// Words Apple's engine is still working out. Shown after the last line.
     private(set) var volatile = ""
+    /// Live text is more than a few seconds behind the mic (the models were
+    /// still loading, or had a slow moment) and is catching up.
+    private(set) var catchingUp = false
     private(set) var activeID: UUID?
     /// The line being edited right now (recording, line start). New words never go into it.
     var editing: (id: UUID, start: Double)?
@@ -166,12 +252,13 @@ final class LiveTranscriber {
         if texts[id] == nil { texts[id] = LiveText() }
         generation += 1
         let run = generation
-        let stream = feed.open()
+        catchingUp = false
+        let queue = feed.open()
         let previous = runTask
         let runner = runner
         runTask = Task {
             await previous?.value
-            await runner.run(id: id, run: run, stream: stream, position: samples)
+            await runner.run(id: id, run: run, queue: queue, position: samples)
         }
     }
 
@@ -370,6 +457,11 @@ final class LiveTranscriber {
         if Date().timeIntervalSince(lastSave) > 10 { save(id) }
     }
 
+    fileprivate func setCatchingUp(_ on: Bool, run: Int) {
+        guard run == generation, catchingUp != on else { return }
+        catchingUp = on
+    }
+
     fileprivate func save(_ id: UUID) {
         guard let t = texts[id], !t.lines.isEmpty else { return }
         try? LiveStore.save(t, for: id)
@@ -382,6 +474,7 @@ final class LiveTranscriber {
         activeID = nil
         status = nil
         volatile = ""
+        catchingUp = false
     }
 
     // MARK: - Parakeet download
@@ -469,50 +562,111 @@ actor LiveRunner {
     private var speakerStart: Double?
     private var voiceBase = 0
 
-    func run(id: UUID, run: Int, stream: AsyncStream<LiveInput>, position start: Int64) async {
-        var position = start
+    /// Most audio handed to the models in one go (5 s). Normally each step
+    /// is just the last few hundredths of a second; this only matters when
+    /// catching up, so text still comes in steps instead of one big jump.
+    static let biggestBite = 5 * 16_000
+
+    /// What one run keeps track of between bits of audio.
+    private struct RunState {
+        let id: UUID
+        let run: Int
+        var position: Int64
         var engine: (any LiveEngine)?
         var name = ""
         var offset = 0.0
         var nextTry: Int64 = 0
-        await startSpeakers(id: id, position: position)
+        var catchingUp = false
+        var firstWords = false
+    }
 
-        for await input in stream {
-            switch input {
-            case .samples(let samples):
-                // Speakers first: then it's ahead of the words that need it.
-                if speakerStart != nil { await speakers.feed(samples) }
-                if engine == nil, position >= nextTry {
-                    (engine, name) = await pick(run: run)
-                    offset = Double(position) / 16_000
-                    // Nothing could listen: look again after 15 s of audio.
-                    if engine == nil { nextTry = position + 15 * 16_000 }
-                }
-                if let engine {
-                    let out = await engine.feed(samples)
-                    await deliver(out, offset: offset, engine: name, id: id, run: run)
-                }
-                position += Int64(samples.count)
-                LiveFeed.shared.finished(samples.count)
-            case .flush:
-                if let e = engine {
-                    let out = await e.end()
-                    await deliver(out, offset: offset, engine: name, id: id, run: run)
-                }
-                engine = nil
-                nextTry = 0
-                await MainActor.run { LiveTranscriber.shared.save(id) }
+    func run(id: UUID, run: Int, queue: LiveQueue, position start: Int64) async {
+        var state = RunState(id: id, run: run, position: start)
+
+        // Words first. Parakeet and the speaker model load at the same time,
+        // so the first words wait for the slower of the two, not for both
+        // one after the other (the mic keeps saving audio meanwhile).
+        async let speakersReady: Void = startSpeakers(id: id, position: start)
+        await pickEngine(&state)
+        await speakersReady
+        if speakerStart != nil { LiveFeed.shared.mark("speakers listening") }
+
+        for await _ in queue.wakeups {
+            while let input = queue.take(max: Self.biggestBite) {
+                await handle(input, &state, queue: queue)
             }
         }
+        // Stop: whatever was still waiting.
+        while let input = queue.take(max: Self.biggestBite) {
+            await handle(input, &state, queue: queue)
+        }
 
-        if let engine {
+        if let engine = state.engine {
             if speakerStart != nil { await speakers.finish() }
-            await deliver(await engine.end(), offset: offset, engine: name, id: id, run: run)
+            await deliver(await engine.end(), &state)
         }
         await parakeet.unload() // free the memory for files waiting to be transcribed
         await speakers.unload()
         speakerStart = nil
         await MainActor.run { LiveTranscriber.shared.finished(id, run: run) }
+    }
+
+    private func handle(_ input: LiveInput, _ state: inout RunState, queue: LiveQueue) async {
+        switch input {
+        case .samples(let samples):
+            guard !samples.isEmpty else { return }
+            // Speakers first: then it's ahead of the words that need it.
+            if speakerStart != nil { await speakers.feed(samples) }
+            if state.engine == nil, state.position >= state.nextTry {
+                await pickEngine(&state)
+            }
+            if let engine = state.engine {
+                let out = await engine.feed(samples)
+                await deliver(out, &state)
+            }
+            state.position += Int64(samples.count)
+            LiveFeed.shared.finished(samples.count)
+            await showCatchingUp(queue.waitingSeconds, &state)
+        case .flush:
+            if let e = state.engine {
+                let out = await e.end()
+                await deliver(out, &state)
+            }
+            state.engine = nil
+            state.nextTry = 0
+            await showCatchingUp(0, &state)
+            let id = state.id
+            await MainActor.run { LiveTranscriber.shared.save(id) }
+        }
+    }
+
+    private func pickEngine(_ state: inout RunState) async {
+        (state.engine, state.name) = await pick(run: state.run)
+        state.offset = Double(state.position) / 16_000
+        if state.engine != nil {
+            LiveFeed.shared.mark("\(state.name) listening")
+        } else {
+            // Nothing could listen: look again after 15 s of audio.
+            state.nextTry = state.position + 15 * 16_000
+        }
+    }
+
+    /// "Catching up" shows above the transcript while more than 4 s of audio
+    /// waits, and goes once it's under 1 s (so it doesn't flicker).
+    private func showCatchingUp(_ waiting: Double, _ state: inout RunState) async {
+        let on = state.catchingUp ? waiting > 1 : waiting > 4
+        guard on != state.catchingUp else { return }
+        state.catchingUp = on
+        let run = state.run
+        await MainActor.run { LiveTranscriber.shared.setCatchingUp(on, run: run) }
+    }
+
+    private func deliver(_ out: LiveOutput, _ state: inout RunState) async {
+        if !state.firstWords, !out.finals.isEmpty {
+            state.firstWords = true
+            LiveFeed.shared.mark("first words")
+        }
+        await deliver(out, offset: state.offset, engine: state.name, id: state.id, run: state.run)
     }
 
     private func deliver(_ out: LiveOutput, offset: Double, engine: String, id: UUID, run: Int) async {

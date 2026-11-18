@@ -167,7 +167,8 @@ final class HitchMeter: @unchecked Sendable {
             let behind = LiveFeed.shared.behind()
             let live = String(format: "LIVE TEXT BEHIND THE MIC (audio waiting for the models): %.1f s now, worst %.1f s since the last copy", behind.now, behind.worst)
             let gap = String(format: "MIC: longest wait between two bits of audio %.2f s since the last copy", LiveFeed.shared.worstGapSeconds())
-            let text = "MAIN THREAD (since the last copy)\n  while recording: \(recording.text)\n  not recording: \(idle.text)\n\(live)\n\(gap)\n\(sampleText())"
+            let start = "LIVE TEXT START (seconds after the last Start): \(LiveFeed.shared.startText())"
+            let text = "MAIN THREAD (since the last copy)\n  while recording: \(recording.text)\n  not recording: \(idle.text)\n\(live)\n\(start)\n\(gap)\n\(sampleText())"
             recording = Bucket()
             idle = Bucket()
             return text

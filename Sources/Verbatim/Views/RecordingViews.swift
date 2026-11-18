@@ -132,6 +132,8 @@ struct LiveStatusLine: View {
         switch live.status {
         case .starting:
             return "Getting live text ready. Your audio is already being saved."
+        case .listening where live.catchingUp:
+            return "Live text is catching up. Nothing is lost: the words from the last few seconds are on their way."
         case .listening(let engine) where engine == AppleSpeechEngine.name:
             if live.isModelReady {
                 return "Live text is using your Mac's built-in engine. Parakeet takes over after you pause, and redoes it all after you stop."
