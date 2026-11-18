@@ -41,7 +41,7 @@ struct StartView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Wide window: title left, Record right. Narrow: Record under it.
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .bottom, spacing: 20) {
+                HStack(alignment: .center, spacing: 20) {
                     titleBlock
                     Spacer(minLength: 0)
                     recordButton
