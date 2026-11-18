@@ -258,6 +258,47 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
   control right). Look holds sidebar (glass/solid), recordings (soft
   boxes/paper cards), text size, times, times in copies.
 
+## Code health review (2026-11-18), checked against `claude/general-names-simpler-start`
+Done by another chat on main (3 reviewers), then checked in this chat
+against this branch. Only the live text delay item is changed here (the
+fix is on this branch). Everything else is still true on this branch.
+Order to do them in, one chat each:
+1. Test the live text fix (this branch, build 0.1.171+), merge it.
+2. Quick fixes, one chat:
+   - Stop, then start a new recording within 10 s: `start()` clears
+     `stoppedNote`, so the old one never gets `Transcriber.recordingFinal`
+     / `AutoName.consider`: background work stalls until relaunch
+     (`RecorderModel.swift` stop() and start()). Confirmed on branch.
+   - Audio shrink: a crash mid-shrink leaves a leftover file and it never
+     shrinks again, retries every launch.
+   - Uninstall doesn't remove the "verbatim" entry from Claude's config.
+   - Export Everything leaves out groups.
+   - Connect to Claude: if the config exists but can't be read, Connect
+     could overwrite Claude's other servers.
+   - Mini window, menu bar panel and bottom bar redraw everything 20x a
+     second while recording: move the clock into tiny views.
+   - Every live word redraws most of the window: `LiveTranscriber.apply`
+     writes the observed `texts` dictionary (`texts[id] = t`).
+   - New (this branch): start page title menu > New Group… uses the
+     rename alert on `SidebarView`; with the sidebar hidden (narrow
+     window) the prompt may not show. Move the alert up to ContentView.
+3. Protect data: "Stop and Quit" can lose up to 10 s (or more, if live
+   text was behind) of live text (`apply` saves every 10 s); a failed save
+   is silently undone on the next app activation (renames, notes,
+   markers, Keep Audio); live and file Parakeet can be loaded at once.
+4. Errors: a speech model error is swallowed, the app keeps saying
+   "listening". Turn the HitchMeter off once the lag is solved.
+5. Tests: none exist. Add a test target that runs on CI. First: word list
+   fixes, keeping edits when accurate text arrives, speaker naming, WAV
+   writing, reading old saved recordings.
+6. Cleanup: RecorderModel split, the ~9 copies of "status for N seconds",
+   paths/saving/download copies, Shortcuts page missing ⇧⌘E ⌥⌘P ⌘G,
+   speaker counting copied (RecordingHeader + Speakers), Swift 6 mode,
+   trim this file (old "how step N works" notes to docs/).
+Live text fix itself (read in this chat): queue + 5 s bites, Parakeet and
+speakers load at once (higher peak memory while loading, worth watching
+on 8 GB), nothing wrong found, not yet tried on Ryan's Mac.
+
 ## Bugs to fix (Ryan, from real use)
 - **Live text is late (2026-11-18, in class).** Words only start to show
   after a few minutes of recording, and it does not feel as live as the
@@ -266,26 +307,93 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
   behind (it has "LIVE TEXT BEHIND THE MIC" and the stall sample), and
   which version he is on. Then compare with the old lag notes below
   (main thread stall, `SpeakerEngine.computeUnits`) before changing code.
+  Fix tried the same day, branch `claude/fix-live-text-delay` (Ryan asked
+  to try one before a paste). Found in code, not measured: at Start the
+  speaker model loaded (and played the known voice clips), THEN Parakeet
+  (and the word spotter), before any audio was handled; the audio saved
+  meanwhile then went through every model and to the screen one tiny bit
+  at a time (the mic gives ~47 bits a second), so the backlog cleared
+  slowly. Now: `LiveQueue` (one per run) and `LiveRunner` takes all audio
+  waiting at once, up to 5 s per step (`biggestBite`); Parakeet and the
+  speaker model load at the same time (`async let`); "Live text is
+  catching up" shows above the transcript while 4+ s wait (gone under 1
+  s); ⌃⌘L has "LIVE TEXT START": seconds after Start until Parakeet
+  listening, speakers listening, first words. If words are still late,
+  that line says which part is slow. If "behind" keeps growing after the
+  start, the models are slower than speech (look at ANE sharing between
+  Parakeet, Sortformer and the word spotter), not the start.
 
-## Next asks from Ryan (2026-11-18), for a new chat (UI: ux-planner, mockup first)
-Ryan wants Verbatim to feel less Claude-only and the start simpler.
-1. Gear menu "Copy Details for Claude" (`SidebarView.swift`, GearMenu):
-   rename to something general, e.g. "Copy Details for a Bug Report".
-   Ryan wasn't sure of the words: offer 2 or 3.
-2. Settings page "Claude" (`SettingsView.swift`, `case .claude`): a
-   general name (e.g. "AI Apps" or "Connect to AI"), since ChatGPT can use
-   MCP too. Keep the Claude setup inside it.
-3. New recording must never start recording by itself. Found: the "+" next
-   to a group name in the sidebar calls `model.start(in:)` straight away,
-   so while reading a transcript it starts instantly. It should open the
-   start screen with that group picked in "Save in", like Claude's "New
-   chat". Ryan also said New recording "doesn't work" sometimes: ask him
-   which button and what he saw.
-4. Start screen "looks weird": simplify it, like Claude's new chat screen
-   (greeting, one clear Start button, little else). Mockup first.
-Before starting: `claude/fix-live-text-delay` (live text fix, test build
-0.1.161) may still be unmerged; check `git branch -r` and branch from it
-if Ryan hasn't merged it, or he gets a build without the fix.
+## Next asks from Ryan (2026-11-18): branch `claude/general-names-simpler-start`
+Built on `claude/fix-live-text-delay` (not merged yet), so a build has both.
+Done (not tested by Ryan yet):
+1. Gear menu: "Copy Details for a Bug Report" (other choices offered to
+   Ryan: "Copy Problem Details", "Copy App Details"). "Connect to Claude"
+   in the gear menu is now "Connect to AI Apps".
+2. Settings page "Claude" is now "AI Apps". Claude row stays first; new
+   "Other AI apps" row with Copy Setup (the `mcpServers` JSON with this
+   app's path and `--mcp`, `ClaudeConnector.setupText()`). Wording no
+   longer says only Claude. Enum case stays `.claude`.
+3. New recording never starts by itself: the "+" on a group and its
+   "New Recording Here" call `model.showNewRecording(in:pickGroup:)`,
+   which opens the start screen with that group in "Save in". ⌘K "Record
+   in" and the menu bar "Record in" still start right away (asked for
+   by name there). Found why New recording "didn't work": from Recently
+   deleted it set `selection = nil`, but `showingDeleted` stayed true, so
+   the screen didn't change. Fixed.
+4. Start screen: mockup https://claude.ai/artifact/Bx3y11h4r3KMAz1s9EnCbh
+   (A: one white box with "Save in" + Start, like Claude's chat box, mic
+   name in one small line, status only while something downloads; A
+   first-time state; B: one big round button; and today's for comparison).
+   Ryan: A is "too much like chat". Looked at similar apps: Voice Memos
+   (no start screen, one red record button always in the same spot),
+   Granola and Otter (home is your list of recent notes, record is a
+   small button), Apple Notes (record from a toolbar button). Added C
+   (a "Today" page: Record top right, last 3 classes in the group below)
+   and D (record button docked at the bottom like Voice Memos). Waiting
+   for Ryan to pick. Ryan then picked **E, "a blank notebook page"**:
+   the group name is the page title (click it to pick another group),
+   date and mic under it, Record button on the right of the title line,
+   an empty ruled page below ("The class shows up on this page as it's
+   said."), footer with last class link and "Or drop a Voice Memo here".
+   When recording, the same page fills in (no jump). No greeting, no
+   centered box. Button: Verbatim wave icon, no red dot, no black pill.
+   Color not final: Ryan likes warm red #B5523F, also looked at
+   notebook blue #2F5F9E and plum #6A5A8E. States drawn: E1 ready,
+   E2 first time (download + "Make a group" link), E3 recording,
+   E4 group menu open. Next: Ryan picks the color, then build it in
+   `StartView.swift` (and the recording view's header to match E3).
+   Ryan then: "right direction but looks weird", links look weird, what
+   about dark mode. Cause: the mockup's sidebar didn't match the real app
+   (CI screenshots: dark mode, floating glass sidebar, group icons,
+   recording cards). Redrew E in the real look, dark and light, with no
+   underlined links (last-class link dropped, Pause is a small button).
+   Mockup row "E, in the real app's look". Ryan: no lines on the page
+   (removed), Record button in the **Mac's system accent color**
+   (`NSColor.controlAccentColor`, not Theme.accent). Built in
+   `StartView.swift`: `GroupTitleMenu` (title = Save in), `RecordButtonStyle`,
+   `SmallWave`, `PageModelStatus` (download bar + Pause on the page).
+   Greeting, WaveMark, GroupChooser and MicStatusLine removed; version
+   number is in the gear menu and Settings > Updates. Recording view
+   header (E3) not changed yet: ask Ryan after he tries this.
+   Test build 0.1.171 (CI screenshots checked: matches the mockup;
+   Record centered beside the title; recording page not in screenshots).
+   Test list: 1) start screen looks like E, Record is your Mac's accent
+   color; 2) click the title, pick English, Record, it saves there;
+   3) title menu > New Group… names a new group; 4) "+" on a group opens
+   this screen with that group as title, doesn't record; 5) Recently
+   deleted > New recording opens this screen; 6) gear menu names and
+   Settings > AI Apps; 7) narrow window: Record moves under the title.
+   Then (Ryan: "fix that too"): recording page matches the start page.
+   Recording before the first words now shows the header and a left
+   "Listening. ..." hint where the first line goes (was a centered
+   "Listening." that jumped). `TranscriptList.emptyHint`. Every transcript
+   header ends with the same 1.5 pt ink rule. Start page uses the
+   transcript's geometry (760 column, 32 side, 24 top, 70 gutter) and
+   header order (date eyebrow, 30 pt serif title, "Using the X mic.").
+   Pause/Stop stay in the bottom bar (they'd scroll away in the header).
+   Test 8) press Record: title, line and hint stay put, "Listening."
+   shows where the first line goes. When Ryan says good: open the PR
+   (milestone), merge to main.
 
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,

@@ -26,6 +26,12 @@ struct RecordingHeader: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            // The page's top rule, same as the start page (Ryan's E).
+            Rectangle()
+                .fill(Theme.ink)
+                .frame(height: 1.5)
+                .padding(.top, 8)
+                .accessibilityHidden(true)
         }
         .padding(.leading, 70) // lines up with the transcript text, past the time gutter
         .frame(maxWidth: .infinity, alignment: .leading)

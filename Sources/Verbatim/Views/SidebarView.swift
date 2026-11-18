@@ -480,7 +480,7 @@ struct GroupHeader: View {
                 MoveHereLabel()
             } else {
                 Button {
-                    Task { await model.start(in: group.id) }
+                    model.showNewRecording(in: group.id, pickGroup: true)
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 11, weight: .semibold))
@@ -498,7 +498,7 @@ struct GroupHeader: View {
         .padding(.horizontal, 4)
         .padding(.top, 5)
         .contextMenu {
-            Button("New Recording Here") { Task { await model.start(in: group.id) } }
+            Button("New Recording Here") { model.showNewRecording(in: group.id, pickGroup: true) }
                 .disabled(model.isBusy)
             Divider()
             Button("Rename Group…") { model.renameGroupRequest = group.id }
@@ -813,7 +813,7 @@ struct GearMenu: View {
         Menu {
             Button { open(.general) } label: { Label("Settings…", systemImage: "gearshape") }
             Button { open(.shortcuts) } label: { Label("Keyboard Shortcuts", systemImage: "keyboard") }
-            Button { open(.claude) } label: { Label("Connect to Claude", systemImage: "bubble.left.and.text.bubble.right") }
+            Button { open(.claude) } label: { Label("Connect to AI Apps", systemImage: "bubble.left.and.text.bubble.right") }
             Divider()
             Button {
                 open(.updates)
@@ -822,7 +822,7 @@ struct GearMenu: View {
             Button {
                 if let url = URL(string: "https://github.com/RywnSwn/Verbatim/issues") { NSWorkspace.shared.open(url) }
             } label: { Label("Get Help or Send Feedback", systemImage: "questionmark.circle") }
-            Button { LayoutDetails.copy() } label: { Label("Copy Details for Claude", systemImage: "doc.on.clipboard") }
+            Button { LayoutDetails.copy() } label: { Label("Copy Details for a Bug Report", systemImage: "doc.on.clipboard") }
             Divider()
             Text("Verbatim \(AppInfo.version)")
         } label: {

@@ -24,6 +24,10 @@ struct TranscriptList: View {
     var checkedUpTo: Double?
     var volatile: String = ""
     var isLive = false
+    /// Shown under the header while there are no lines yet ("Listening...").
+    /// Left-aligned where the first line will be, like the start page, so
+    /// nothing jumps when the first words arrive.
+    var emptyHint: String?
 
     @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
     @AppStorage(TextSize.key) private var textSize = TextSize.normal
@@ -107,6 +111,13 @@ struct TranscriptList: View {
             LazyVStack(alignment: .leading, spacing: Theme.lineGap) {
                 RecordingHeader(info: info, lines: checked + live, isLive: isLive)
                     .padding(.bottom, 10)
+                if rows.isEmpty, let emptyHint {
+                    Text(emptyHint)
+                        .font(.body)
+                        .foregroundStyle(.tertiary)
+                        .padding(.leading, 70)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 ForEach(rows) { row in
                     // One view per row, always. With a different number of views
                     // per row, the lazy stack has to build every row of the whole

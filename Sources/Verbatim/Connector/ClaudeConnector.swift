@@ -61,6 +61,17 @@ enum ClaudeConnector {
         try write(config)
     }
 
+    /// For other AI apps that run MCP servers on this Mac (Settings > AI
+    /// Apps > Other apps): the same entry Connect writes for Claude, as the
+    /// "mcpServers" JSON most of them accept. Nil when Verbatim is running
+    /// from a temporary copy, which would stop working later.
+    static func setupText() -> String? {
+        guard !command.isEmpty, !command.contains("/AppTranslocation/") else { return nil }
+        let config: [String: Any] = ["mcpServers": [name: ["command": command, "args": ["--mcp"]]]]
+        guard let data = try? JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) else { return nil }
+        return String(decoding: data, as: UTF8.self)
+    }
+
     static func disconnect() throws {
         var config = try readConfig()
         guard var servers = config["mcpServers"] as? [String: Any] else { return }

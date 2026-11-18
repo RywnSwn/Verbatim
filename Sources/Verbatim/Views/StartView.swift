@@ -1,167 +1,261 @@
 import AVFoundation
 import SwiftUI
 
-/// First launch / empty screen. Layout follows docs/design/Empty.dc.html.
+/// The start screen (2026-11-18, Ryan picked "E, a blank notebook page"):
+/// the first page of the class, still empty. The group is the page title
+/// (click it to pick another), the date and mic sit under it, Record is on
+/// the right, and the page below says where the words will appear. No
+/// greeting and no box in the middle, so it doesn't look like an AI chat.
+/// Mockup: https://claude.ai/artifact/Bx3y11h4r3KMAz1s9EnCbh
 struct StartView: View {
     @Environment(RecorderModel.self) private var model
 
-    /// Scrolls when the window is short, centered when it fits. Without this
-    /// the screen was taller than a short window, which pushed the sidebar's
-    /// top and bottom past the window's edges (Ryan's screenshot).
+    /// Scrolls when the window is short. Without this the screen was taller
+    /// than a short window, which pushed the sidebar's top and bottom past
+    /// the window's edges (Ryan's screenshot).
     var body: some View {
         GeometryReader { proxy in
             ScrollView(.vertical) {
-                content
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: proxy.size.height)
+                page
+                    .frame(maxWidth: 760, alignment: .leading)
+                    .padding(.horizontal, 32)
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
+                    // The drop hint sits at the bottom of the window, or
+                    // under the page when the window is short.
+                    .overlay(alignment: .bottom) {
+                        Text("Or drop a Voice Memo here to transcribe it.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 70)
+                            .frame(maxWidth: 760, alignment: .leading)
+                            .padding(.horizontal, 32)
+                            .padding(.bottom, 20)
+                            .frame(maxWidth: .infinity)
+                    }
             }
             .scrollBounceBehavior(.basedOnSize)
         }
     }
 
-    private var content: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 26) {
-                // Simple and warm, like Claude's start screen (Ryan, step 10):
-                // the waveform mark and a greeting for the time of day.
-                HStack(alignment: .center, spacing: 16) {
-                    WaveMark()
-                        .frame(width: 40, height: 40)
-                        .accessibilityHidden(true)
-                    Text(Greeting.text())
-                        .font(.system(size: 46, weight: .regular, design: .serif))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6) // a narrow window shrinks it, never squeezes the sidebar
+    private var page: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Wide window: title left, Record right. Narrow: Record under it.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 20) {
+                    titleBlock
+                    Spacer(minLength: 0)
+                    recordButton
                 }
-                .padding(.bottom, 6)
-
-                Button {
-                    Task { await model.start() }
-                } label: {
-                    HStack(spacing: 10) {
-                        Text("Start recording")
-                        Text("⌘R").foregroundStyle(Theme.paper.opacity(0.65))
-                    }
-                }
-                .buttonStyle(.inkLarge)
-
-                GroupChooser()
-
-                Text("Or drop a Voice Memo here to transcribe it.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(alignment: .leading, spacing: 0) {
-                Divider()
-                    .padding(.bottom, 18)
-                VStack(alignment: .leading, spacing: 16) {
-                    MicStatusLine(permission: model.micPermission, micName: model.micName)
-                    LiveModelStatusLine()
+                VStack(alignment: .leading, spacing: 14) {
+                    titleBlock
+                    recordButton
                 }
             }
-            .frame(maxWidth: 460, alignment: .leading) // shrinks with the window
+            .padding(.bottom, 8)
+
+            Rectangle()
+                .fill(Theme.ink)
+                .frame(height: 1.5)
+                .accessibilityHidden(true)
+                .padding(.bottom, 10)
+
+            VStack(alignment: .leading, spacing: 12) {
+                PageModelStatus()
+                Text("The class shows up on this page as it's said.")
+                    .font(.body)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.top, 10)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 32)
+        // Same spot as a transcript's header and first line (TranscriptList:
+        // 32 side margin, 24 top, 70 past the time gutter), so pressing
+        // Record doesn't move the title, the rule or the hint.
+        .padding(.leading, 70)
+        .padding(.top, 24)
+        .padding(.bottom, 64) // room for the drop hint
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Like a transcript's header: small line on top, big title,
+            // then details.
+            Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+            GroupTitleMenu()
+            Text(subtitle)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var subtitle: String {
+        model.micPermission == .authorized
+            ? "Using the \(model.micName)."
+            : "Your Mac asks to use the mic when you press Record."
+    }
+
+    private var recordButton: some View {
+        Button {
+            Task { await model.start() }
+        } label: {
+            HStack(spacing: 10) {
+                SmallWave()
+                Text("Record")
+                Text("⌘R").opacity(0.7)
+            }
+        }
+        .buttonStyle(RecordButtonStyle())
+        .disabled(model.isBusy)
+        .help("Start recording into \(GroupStore.shared.group(GroupStore.shared.lastUsedID)?.name ?? "Recents") (⌘R)")
     }
 }
 
-/// "Evening, Ryan". The first name comes from the Mac's account name.
-enum Greeting {
-    static func text(at date: Date = Date()) -> String {
-        let hour = Calendar.current.component(.hour, from: date)
-        let first = NSFullUserName().split(separator: " ").first.map(String.init) ?? ""
-        let name = first.isEmpty ? "" : ", \(first)"
-        switch hour {
-        case 5..<12: return "Morning\(name)"
-        case 12..<17: return "Afternoon\(name)"
-        case 17..<22: return "Evening\(name)"
-        default: return first.isEmpty ? "Up late?" : "Up late, \(first)?"
-        }
-    }
-}
-
-/// Verbatim's mark: five ink bars, the signature waveform, breathing gently.
-/// Still when Reduce Motion is on.
-struct WaveMark: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private static let rest: [Double] = [0.38, 0.7, 1, 0.7, 0.38]
-
-    var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: 4) {
-                ForEach(0..<5, id: \.self) { i in
-                    let move = reduceMotion ? 0 : 0.18 * sin(t * 1.6 + Double(i) * 0.9)
-                    Capsule()
-                        .fill(Theme.ink)
-                        .frame(width: 5, height: 40 * min(1, max(0.2, Self.rest[i] + move)))
-                }
-            }
-            .frame(maxHeight: .infinity)
-        }
-    }
-}
-
-/// "Save in: English 2026". Remembers the last pick, so the next class
-/// starts in the same group with one click.
-struct GroupChooser: View {
+/// The page title: the group the next recording goes into. Clicking it
+/// opens the list of groups, like "Save in" used to.
+struct GroupTitleMenu: View {
     @Environment(RecorderModel.self) private var model
     private var store: GroupStore { .shared }
+    @State private var hovering = false
 
     var body: some View {
-        if !store.groups.isEmpty {
-            @Bindable var store = store
-            HStack(spacing: 6) {
-                Text("Save in")
-                    .foregroundStyle(.secondary)
-                Picker("Save in", selection: $store.lastUsedID) {
-                    ForEach(store.groups) { group in
-                        Label {
-                            Text(group.name)
-                        } icon: {
-                            Image(systemName: group.icon ?? "folder")
-                        }
-                        .tag(Optional(group.id))
-                    }
-                    Divider()
-                    Text("Recents (no group)").tag(UUID?.none)
+        let current = store.group(store.lastUsedID)
+        Menu {
+            ForEach(store.groups) { group in
+                Button {
+                    store.lastUsedID = group.id
+                } label: {
+                    Label(group.name, systemImage: group.id == current?.id ? "checkmark" : (group.icon ?? "folder"))
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
             }
-            .font(.callout)
+            if !store.groups.isEmpty { Divider() }
+            Button {
+                store.lastUsedID = nil
+            } label: {
+                Label("Recents (no group)", systemImage: current == nil ? "checkmark" : "clock")
+            }
+            Button("New Group…") {
+                let group = store.add()
+                store.lastUsedID = group.id
+                model.renameGroupRequest = group.id
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(current?.name ?? "Recents")
+                    .font(.system(size: 30, weight: .regular, design: .serif))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Theme.ink.opacity(hovering ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
         }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .padding(.leading, -6) // the hover box sits outside the text, so the text lines up
+        .onHover { hovering = $0 }
+        .help("Pick the class this recording goes into")
+        .accessibilityLabel("Save in \(current?.name ?? "Recents"). Pick a group")
     }
 }
 
-/// Under the thin line: is the mic ready, and which one.
-struct MicStatusLine: View {
-    let permission: AVAuthorizationStatus
-    let micName: String
+/// The Record button: filled with the Mac's own accent color (Ryan's pick),
+/// the one you set in System Settings > Appearance, not Verbatim's blue.
+struct RecordButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 9)
+            .background(Color(nsColor: .controlAccentColor).opacity(configuration.isPressed ? 0.75 : 1), in: Capsule())
+            .opacity(isEnabled ? 1 : 0.4)
+            .contentShape(Capsule())
+    }
+}
+
+/// Verbatim's five-bar wave, small, as the Record button's icon.
+struct SmallWave: View {
+    private static let heights: [CGFloat] = [6, 10, 14, 10, 6]
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: permission == .authorized ? "checkmark" : "mic")
-                .fontWeight(.semibold)
-                .foregroundStyle(permission == .authorized ? Color.green : Color.secondary)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(permission == .authorized ? "Microphone allowed" : "Microphone")
-                    .font(.body.weight(.medium))
-                Text(permission == .authorized
-                     ? "Using the \(micName). Change it in Settings (⌘,)."
-                     : "Your Mac asks to use the mic the first time you press Start.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+        HStack(spacing: 2) {
+            ForEach(0..<5, id: \.self) { i in
+                Capsule().frame(width: 2.5, height: Self.heights[i])
             }
-            Spacer(minLength: 0)
-            Text("Version \(AppInfo.version)")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
+        .frame(height: 14)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The speech model on the start page: nothing once it's ready, one thin
+/// bar with Pause while it downloads, one line otherwise. The speaker and
+/// word helpers that come after only show while they download.
+struct PageModelStatus: View {
+    @Environment(LiveTranscriber.self) private var live
+
+    var body: some View {
+        switch live.modelState {
+        case .ready:
+            VStack(alignment: .leading, spacing: 8) {
+                SpeakerModelNote()
+                WordModelNote()
+            }
+        case .preparing:
+            note("Getting the speech model ready. First time only, this can take a few minutes. Keep Verbatim open.")
+        case .downloading(let fraction, let left):
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Getting the speech model, first time only")
+                    Spacer()
+                    Text(LiveModelStatusLine.progressText(fraction, left)).monospacedDigit()
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+                    .controlSize(.small)
+                    .tint(Theme.ink)
+                HStack(alignment: .firstTextBaseline) {
+                    note("You can record now. Until it's done, live text uses your Mac's own speech engine, and Voice Memos wait.")
+                    Spacer()
+                    Button("Pause") { live.pauseDownload() }
+                        .controlSize(.small)
+                }
+            }
+        case .paused(let fraction):
+            HStack(alignment: .firstTextBaseline) {
+                note("Speech model download paused at \(Int(fraction * 100))%.")
+                Spacer()
+                Button("Resume") { live.startDownload() }
+                    .controlSize(.small)
+            }
+        case .failed(let fraction):
+            HStack(alignment: .firstTextBaseline) {
+                note("Speech model download stopped at \(Int(fraction * 100))%, probably the internet. Trying again by itself.")
+                Spacer()
+                Button("Try Now") { live.startDownload() }
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    private func note(_ s: String) -> some View {
+        Text(s)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

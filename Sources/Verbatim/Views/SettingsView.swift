@@ -58,7 +58,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .transcription: "Transcription"
         case .words: "Words"
         case .voices: "Voices"
-        case .claude: "Claude"
+        case .claude: "AI Apps"
         case .storage: "Storage"
         case .updates: "Updates"
         case .shortcuts: "Shortcuts"
@@ -438,6 +438,7 @@ struct UpdateSettings: View {
 struct ClaudeSettings: View {
     @State private var state = ClaudeConnector.state()
     @State private var problem: String?
+    @State private var setupProblem: String?
     @State private var copied: String?
 
     private static let examples = [
@@ -467,23 +468,44 @@ struct ClaudeSettings: View {
                     Text(problem ?? help)
                 }
             } header: {
-                PageHeader(lede: "Let the Claude app read your transcripts by itself, so you don't copy and paste. You ask Claude a question, Claude asks Verbatim. Nothing leaves this Mac until Claude reads a transcript in a chat.")
+                PageHeader(lede: "Let an AI app read your transcripts by itself, so you don't copy and paste. You ask the app a question, it asks Verbatim. Nothing leaves this Mac until the app reads a transcript in a chat.",
+                           first: "Claude")
             }
 
-            Section("What Claude can do") {
+            Section {
+                LabeledContent {
+                    Button(copied == "setup" ? "Copied" : "Copy Setup") {
+                        guard let text = ClaudeConnector.setupText() else {
+                            setupProblem = "Move Verbatim into your Applications folder first, open it from there, then copy again."
+                            return
+                        }
+                        setupProblem = nil
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(text, forType: .string)
+                        copied = "setup"
+                    }
+                } label: {
+                    Text("Another app that supports MCP")
+                    Text(setupProblem ?? "MCP is the kind of connector Claude uses. Some other AI apps on a Mac can add one too: copy this, then paste it where that app adds MCP servers.")
+                }
+            } header: {
+                Text("Other AI apps")
+            }
+
+            Section("What an AI app can do") {
                 Label("See the list of your recordings", systemImage: "list.bullet")
                 Label("Read a transcript, with speaker names and your markers", systemImage: "text.alignleft")
                 Label("Search every transcript for a word", systemImage: "magnifyingglass")
                 Label("Read the class being recorded right now", systemImage: "waveform")
                 Label {
                     Text("It can't record, change or delete anything")
-                    Text("What Claude reads becomes part of your chat with Claude, like text you paste there. Claude asks you before it uses Verbatim the first time.")
+                    Text("What the app reads becomes part of your chat, like text you paste there. Claude asks you before it uses Verbatim the first time.")
                 } icon: {
                     Image(systemName: "lock")
                 }
             }
 
-            Section("Try asking Claude") {
+            Section("Things to ask") {
                 ForEach(Self.examples, id: \.self) { example in
                     LabeledContent {
                         Button(copied == example ? "Copied" : "Copy") {
