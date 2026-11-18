@@ -299,6 +299,34 @@ Live text fix itself (read in this chat): queue + 5 s bites, Parakeet and
 speakers load at once (higher peak memory while loading, worth watching
 on 8 GB), nothing wrong found, not yet tried on Ryan's Mac.
 
+Review of the merged code (PR 21: live text fix, start screen, AI Apps),
+done after the merge, read only, nothing run. No crash or data-loss bugs.
+Add to the quick fixes chat (item 2) unless noted:
+- Live text start: `LiveRunner.run` waits for `speakersReady` before any
+  audio is handled, and `startSpeakers` plays up to 3 known-voice clips,
+  so first words still wait for the speaker start even when Parakeet is
+  ready first. Let words flow while speakers start (label later lines
+  only). Do this after Ryan's test shows the "LIVE TEXT START" numbers.
+- Memory: Parakeet, word spotter and Sortformer now load at the same
+  moment (`async let` in `LiveRunner.run`). Measure the peak on 8 GB; if
+  it swaps, load speakers after Parakeet again (with the queue, the
+  backlog now clears fast anyway).
+- Undo Stop: `LiveFeed.open()` zeroes `given`/`done` and the start times
+  while the old run is still draining and calling `finished()`, so
+  "LIVE TEXT BEHIND" and "LIVE TEXT START" are wrong after Undo Stop.
+- "Live text is catching up" (`RecordingViews.swift`, LiveStatusLine)
+  says "the last few seconds" even when minutes wait. Say how far behind
+  it is (`LiveQueue.waitingSeconds`).
+- Start page date (`StartView.swift`, titleBlock) is `Date.now` in body:
+  left open overnight, it shows yesterday. Redraw when the day changes.
+- Cleanup (item 6): `PageModelStatus` copies `LiveModelStatusLine` (same
+  file); `LiveQueue.waiting` and `LiveFeed` given/done count the same
+  backlog twice (use one); `LiveQueue.take` joins up to 5 s of audio
+  while holding the lock the mic needs (swap the array out, join
+  outside); the page geometry (70 gutter, 1.5 pt rule, 760 column, 32
+  side, 24 top) is copied as numbers in StartView, TranscriptList and
+  RecordingHeader (put it in Theme).
+
 ## Bugs to fix (Ryan, from real use)
 - **Live text is late (2026-11-18, in class).** Words only start to show
   after a few minutes of recording, and it does not feel as live as the
