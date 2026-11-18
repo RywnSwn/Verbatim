@@ -258,6 +258,15 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
   control right). Look holds sidebar (glass/solid), recordings (soft
   boxes/paper cards), text size, times, times in copies.
 
+## Bugs to fix (Ryan, from real use)
+- **Live text is late (2026-11-18, in class).** Words only start to show
+  after a few minutes of recording, and it does not feel as live as the
+  very first builds (step 4 era, about 2 s behind). Not looked at yet.
+  First step next chat: ask Ryan for his ⌃⌘L paste taken while it is
+  behind (it has "LIVE TEXT BEHIND THE MIC" and the stall sample), and
+  which version he is on. Then compare with the old lag notes below
+  (main thread stall, `SpeakerEngine.computeUnits`) before changing code.
+
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,
 gear menu, notes, diagnostics) and `claude/mini-window-crash` are in main.
