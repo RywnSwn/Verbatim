@@ -1358,3 +1358,12 @@ Mockup v3: https://claude.ai/artifact/2ii2Hd8QkNtZ6gtxUYHziJ (Ryan approved).
 7. Hide the window behind others, stay quiet 5 min: silent banner with Stop.
 8. ⌘K, type "mark", Return. ⌘+ and ⌘− change transcript size.
 9. Settings: General sections, Transcription tab, DJI mic in the list.
+
+## Weekly bug hunts
+Ryan asked for this on 2026-11-18. A scheduled task ("Weekly Verbatim bug
+hunt") starts a fresh chat every Saturday at 9:38 Myanmar time. It sends 3
+reviewer agents over the code changed since the last hunt, checks what they
+find, and lists real bugs here (it never fixes code itself). Ryan can turn
+it off or change it in the claude.ai scheduled tasks list. It costs a fair
+amount of usage each time it finds new code, nothing when there is none.
+Last commit hunted: none yet (first hunt covers the whole app).
