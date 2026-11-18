@@ -309,7 +309,18 @@ Done (not tested by Ryan yet):
    small button), Apple Notes (record from a toolbar button). Added C
    (a "Today" page: Record top right, last 3 classes in the group below)
    and D (record button docked at the bottom like Voice Memos). Waiting
-   for Ryan to pick. Then build it in `StartView.swift`.
+   for Ryan to pick. Ryan then picked **E, "a blank notebook page"**:
+   the group name is the page title (click it to pick another group),
+   date and mic under it, Record button on the right of the title line,
+   an empty ruled page below ("The class shows up on this page as it's
+   said."), footer with last class link and "Or drop a Voice Memo here".
+   When recording, the same page fills in (no jump). No greeting, no
+   centered box. Button: Verbatim wave icon, no red dot, no black pill.
+   Color not final: Ryan likes warm red #B5523F, also looked at
+   notebook blue #2F5F9E and plum #6A5A8E. States drawn: E1 ready,
+   E2 first time (download + "Make a group" link), E3 recording,
+   E4 group menu open. Next: Ryan picks the color, then build it in
+   `StartView.swift` (and the recording view's header to match E3).
 
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,
