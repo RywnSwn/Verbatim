@@ -258,12 +258,12 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
   control right). Look holds sidebar (glass/solid), recordings (soft
   boxes/paper cards), text size, times, times in copies.
 
-## Code health review (2026-11-18), checked against `claude/general-names-simpler-start`
+## Code health review (2026-11-18), checked against what is now main
 Done by another chat on main (3 reviewers), then checked in this chat
 against this branch. Only the live text delay item is changed here (the
 fix is on this branch). Everything else is still true on this branch.
 Order to do them in, one chat each:
-1. Test the live text fix (this branch, build 0.1.171+), merge it.
+1. Test the live text fix and new start screen (main build), report back.
 2. Quick fixes, one chat:
    - Stop, then start a new recording within 10 s: `start()` clears
      `stoppedNote`, so the old one never gets `Transcriber.recordingFinal`
@@ -323,8 +323,9 @@ on 8 GB), nothing wrong found, not yet tried on Ryan's Mac.
   start, the models are slower than speech (look at ANE sharing between
   Parakeet, Sortformer and the word spotter), not the start.
 
-## Next asks from Ryan (2026-11-18): branch `claude/general-names-simpler-start`
-Built on `claude/fix-live-text-delay` (not merged yet), so a build has both.
+## Next asks from Ryan (2026-11-18): MERGED to main (RywnSwn/Verbatim#21)
+`claude/general-names-simpler-start` and `claude/fix-live-text-delay` are in
+main, merged at Ryan's ask before his test. Test list below still to do.
 Done (not tested by Ryan yet):
 1. Gear menu: "Copy Details for a Bug Report" (other choices offered to
    Ryan: "Copy Problem Details", "Copy App Details"). "Connect to Claude"
