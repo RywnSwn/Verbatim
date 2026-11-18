@@ -35,6 +35,13 @@ decided and why (read it before re-arguing a choice).
   giving Ryan a build (see `PLAN.md`).
 
 ## Working rules
+- Unmerged work: at the START of every chat, list remote branches with
+  commits not on `main` (`git ls-remote --heads origin`, then
+  `git rev-list --count origin/main..<branch>`) and tell Ryan in plain
+  words. Build on the newest unmerged work it depends on, never on a
+  `main` that is missing it. At the END of every chat, tell Ryan clearly
+  whether the work is merged into `main` or not, and if not, which pull
+  request to merge after he tests (he only merges when he asks).
 - One task per chat. At the end of each session, update `PLAN.md` (and
   `DECISIONS.md` if something was decided) so the next chat can continue.
 - Keep this file short. Details go in `PLAN.md`, `DECISIONS.md`, `docs/`.
