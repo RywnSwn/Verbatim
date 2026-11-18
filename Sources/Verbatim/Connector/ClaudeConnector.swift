@@ -55,6 +55,10 @@ enum ClaudeConnector {
             throw Problem(text: "Move Verbatim into your Applications folder first, open it from there, then connect.")
         }
         var config = try readConfig()
+        // A list that isn't in the usual shape would be replaced: leave it.
+        if config["mcpServers"] != nil, !(config["mcpServers"] is [String: Any]) {
+            throw Problem(text: "Claude's list of tools isn't in the shape Verbatim expects, so nothing was changed. In Claude: Settings > Developer > Edit Config, and check the file.")
+        }
         var servers = config["mcpServers"] as? [String: Any] ?? [:]
         servers[name] = ["command": command, "args": ["--mcp"]]
         config["mcpServers"] = servers
@@ -80,14 +84,21 @@ enum ClaudeConnector {
         try write(config)
     }
 
-    /// An empty or missing file is fine. A file that isn't readable JSON is
-    /// left alone: better no connection than breaking Claude's settings.
+    /// An empty or missing file is fine. A file that is there but can't be
+    /// opened, or isn't readable JSON, is left alone: better no connection
+    /// than writing over Claude's other tools. (Before, a file that couldn't
+    /// be opened counted as empty, so Connect could replace it.)
     private static func readConfig() throws -> [String: Any] {
-        guard let data = try? Data(contentsOf: configURL),
-              !String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [:] }
-        guard let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw Problem(text: "Claude's settings file couldn't be read, so nothing was changed. In Claude: Settings > Developer > Edit Config, and check the file.")
+        let unreadable = Problem(text: "Claude's settings file couldn't be read, so nothing was changed. In Claude: Settings > Developer > Edit Config, and check the file.")
+        guard FileManager.default.fileExists(atPath: configURL.path) else { return [:] }
+        let data: Data
+        do {
+            data = try Data(contentsOf: configURL)
+        } catch {
+            throw unreadable
         }
+        guard !String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [:] }
+        guard let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw unreadable }
         return config
     }
 

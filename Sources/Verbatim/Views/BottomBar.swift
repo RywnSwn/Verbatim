@@ -49,14 +49,9 @@ struct BottomBar: View {
             HStack(spacing: 14) {
                 // The timer never shrinks or wraps (Ryan saw "00:0..." in a narrow
                 // window); the waveform gives up room instead, keeping the newest bars.
-                Text(RecorderModel.clock(model.elapsed))
-                    .font(.system(size: 17, weight: .medium).monospacedDigit())
-                    // No rolling digits here (see the note on Waveform).
-                    .foregroundStyle(paused ? .secondary : .primary)
-                    .lineLimit(1)
-                    .fixedSize()
+                BarClock(paused: paused)
                     .layoutPriority(2)
-                Waveform(levels: model.levels, paused: paused)
+                BarWaveform(paused: paused)
                     .fixedSize()
                     .frame(minWidth: 0, maxWidth: 240, alignment: .trailing)
                     .clipped()
@@ -167,6 +162,32 @@ struct BottomBar: View {
 /// Rule: anything that moves while recording is one Canvas or plain text.
 /// No shape per bar, no `.contentTransition(.numericText())`, no
 /// `.symbolEffect` that repeats.
+/// The bottom bar's timer. Its own view, so the clock (20 ticks a second)
+/// redraws only this text, not the whole bar.
+private struct BarClock: View {
+    @Environment(RecorderModel.self) private var model
+    let paused: Bool
+
+    var body: some View {
+        Text(RecorderModel.clock(model.elapsed))
+            .font(.system(size: 17, weight: .medium).monospacedDigit())
+            // No rolling digits here (see the note on Waveform).
+            .foregroundStyle(paused ? .secondary : .primary)
+            .lineLimit(1)
+            .fixedSize()
+    }
+}
+
+/// The bottom bar's moving bars, on their own for the same reason.
+private struct BarWaveform: View {
+    @Environment(RecorderModel.self) private var model
+    let paused: Bool
+
+    var body: some View {
+        Waveform(levels: model.levels, paused: paused)
+    }
+}
+
 struct Waveform: View {
     let levels: [Float]
     let paused: Bool

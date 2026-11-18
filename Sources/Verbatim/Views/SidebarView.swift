@@ -23,7 +23,6 @@ struct SidebarView: View {
     @AppStorage("recentsCollapsed") private var recentsCollapsed = false
     @State private var renaming: RecordingInfo?
     @State private var newTitle = ""
-    @State private var groupDraft = ""
     @State private var iconFor: UUID?
     @FocusState private var focused: Bool
 
@@ -95,22 +94,8 @@ struct SidebarView: View {
             }
             Button("Cancel", role: .cancel) { renaming = nil }
         }
-        .alert("Name this group", isPresented: Binding(
-            get: { model.renameGroupRequest != nil },
-            set: { if !$0 { model.renameGroupRequest = nil } })
-        ) {
-            TextField("Like English 2026", text: $groupDraft)
-            Button("OK") {
-                if let id = model.renameGroupRequest { store.rename(id, to: groupDraft) }
-                model.renameGroupRequest = nil
-            }
-            Button("Cancel", role: .cancel) { model.renameGroupRequest = nil }
-        } message: {
-            Text("One group per class works well. Pick an icon by clicking the one next to its name.")
-        }
-        .onChange(of: model.renameGroupRequest) {
-            if let id = model.renameGroupRequest { groupDraft = store.group(id)?.name ?? "" }
-        }
+        // "Name this group" is in ContentView (GroupNameAlert), so it also
+        // shows when the sidebar is hidden.
     }
 
     /// A group: bold name with its icon and +, then its recordings indented.
