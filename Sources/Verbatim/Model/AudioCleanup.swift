@@ -59,6 +59,7 @@ enum AudioCleanup {
             guard let due = deleteDate(info), due <= Date(),
                   model.audioDeleteBlocker(info.id) == nil,
                   !Transcriber.shared.isUnfinished(info.id),
+                  LiveTranscriber.shared.facts(info.id) != nil, // not still being checked after launch
                   Playback.shared.id != info.id else { continue }
             if model.removeAudioForGood(info.id) { count += 1 }
         }

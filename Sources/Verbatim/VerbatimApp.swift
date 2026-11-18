@@ -191,6 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
             if RecorderModel.shared.isBusy { RecorderModel.shared.stop() }
+            LiveTranscriber.shared.saveIndexNow()
         }
     }
 }

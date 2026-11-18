@@ -211,8 +211,21 @@ final class LiveTranscriber {
     /// its own: a new live word redraws only views showing that recording,
     /// not every view that reads any text (it used to be one dictionary, so
     /// every word redrew most of the window).
+    /// A text is read from disk the first time something asks for it (the
+    /// recording is opened, copied, exported...), not at launch: a year of
+    /// classes is a lot to read before the window can show. Launch only
+    /// reads `TextIndex` (see `facts`).
     var texts: LiveTexts { LiveTexts(owner: self) }
     @ObservationIgnored private var boxes: [UUID: LiveBox] = [:]
+    /// Recordings known to have no live.json (not read again each time).
+    @ObservationIgnored private var noFile: Set<UUID> = []
+    /// Facts about every recording's text, also the ones not read yet.
+    /// Missing = still being checked in the background (first launch after
+    /// the update, or the file changed while Verbatim was closed).
+    @ObservationIgnored private var index: [UUID: TextIndex.Entry] = [:]
+    @ObservationIgnored private var indexSaveTask: Task<Void, Never>?
+    /// Goes up when facts change, for anything that read them from the index.
+    private var factsChanged = 0
     /// Goes up when a recording's text is added or removed (not when it
     /// changes), so a view waiting for a text that isn't there yet hears of it.
     private var added = 0
@@ -244,11 +257,25 @@ final class LiveTranscriber {
 
     private init() {}
 
-    /// Called once at launch with the saved recordings.
+    /// Called once at launch with the saved recordings. Reads only the small
+    /// index; texts it has nothing (current) on are checked in the background.
     func start(with recordings: [RecordingInfo]) {
+        let saved = TextIndex.load()
+        var toCheck: [UUID] = []
         for r in recordings {
-            if let t = LiveStore.load(r.id) { put(t, r.id) }
+            guard let stamp = TextIndex.stamp(r.id) else {
+                noFile.insert(r.id)
+                continue
+            }
+            if let entry = saved[r.id], entry.stamp.matches(stamp) {
+                index[r.id] = entry
+            } else {
+                toCheck.append(r.id)
+            }
         }
+        // Drops recordings that are gone, and saves the first index.
+        if index.count != saved.count || !toCheck.isEmpty { saveIndexSoon() }
+        checkInBackground(toCheck)
         if UserDefaults.standard.bool(forKey: Self.preparedKey) {
             modelState = .ready
             SpeakerModel.shared.startIfNeeded()
@@ -329,28 +356,131 @@ final class LiveTranscriber {
 
     private func commit(_ t: LiveText, _ id: UUID) {
         put(t, id)
-        try? LiveStore.save(t, for: id)
+        write(t, id)
     }
 
-    func reload(_ id: UUID) { put(LiveStore.load(id), id) }
+    /// Saves live.json and keeps the index in step with it.
+    private func write(_ t: LiveText, _ id: UUID) {
+        guard (try? LiveStore.save(t, for: id)) != nil else { return }
+        remember(t, id)
+    }
+
+    /// The file on disk changed (Put Back, Undo of Delete All): it's read
+    /// again when something asks for it, and its facts in the background
+    /// (Undo of Delete All puts back every recording at once).
+    func reload(_ id: UUID) {
+        noFile.remove(id)
+        index[id] = nil
+        boxes[id] = nil
+        added += 1 // views showing it read it again
+        checkInBackground([id], atLaunch: false)
+    }
 
     /// The one place texts change. nil removes it.
     private func put(_ t: LiveText?, _ id: UUID) {
         if let t {
+            noFile.remove(id)
             if let box = boxes[id] {
                 box.text = t
             } else {
                 boxes[id] = LiveBox(t)
                 added += 1
             }
-        } else if boxes.removeValue(forKey: id) != nil {
-            added += 1
+        } else {
+            noFile.insert(id)
+            index[id] = nil
+            if boxes.removeValue(forKey: id) != nil { added += 1 }
         }
     }
 
     fileprivate func text(_ id: UUID) -> LiveText? {
         _ = added // watch for this text being added or removed
-        return boxes[id]?.text
+        if let box = boxes[id] { return box.text }
+        guard !noFile.contains(id) else { return nil }
+        // First time anything asks: read it now. Not a change anyone needs
+        // to hear about (it was on disk all along), so `added` stays.
+        guard let t = LiveStore.load(id) else {
+            noFile.insert(id)
+            return nil
+        }
+        let box = LiveBox(t)
+        boxes[id] = box
+        return box.text // read through the box, so this view hears its changes
+    }
+
+    // MARK: - Facts for launch (TextIndex)
+
+    /// What the Transcriber needs to know about a recording's text, without
+    /// reading it. nil = not known yet (being checked in the background; the
+    /// Transcriber hears `textChecked` when it is).
+    func facts(_ id: UUID) -> TextFacts? {
+        _ = added
+        if let box = boxes[id] { return TextFacts(box.text) }
+        _ = factsChanged
+        if noFile.contains(id) { return TextFacts() }
+        return index[id]?.facts
+    }
+
+    private func remember(_ t: LiveText?, _ id: UUID) {
+        guard let stamp = TextIndex.stamp(id) else { return }
+        let entry = TextIndex.Entry(facts: TextFacts(t), stamp: stamp)
+        guard index[id] != entry else { return }
+        if index[id]?.facts != entry.facts { factsChanged += 1 }
+        index[id] = entry
+        saveIndexSoon()
+    }
+
+    /// One save for a burst of changes (live text saves every 10 s, a file
+    /// pass every 30 s of audio). If Verbatim quits before it, the next
+    /// launch sees the stamps don't match and checks those texts again.
+    private func saveIndexSoon() {
+        guard indexSaveTask == nil else { return }
+        indexSaveTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            indexSaveTask = nil
+            saveIndexNow()
+        }
+    }
+
+    /// Also called when Verbatim quits. Small (a few hundred bytes per
+    /// recording), so it's written right here.
+    func saveIndexNow() {
+        indexSaveTask?.cancel()
+        indexSaveTask = nil
+        try? TextIndex.save(index)
+    }
+
+    /// Reads texts the index has nothing current on, one at a time, off the
+    /// main thread, so the window shows right away. The first launch after
+    /// this update does all of them (a few seconds for a year of classes).
+    private func checkInBackground(_ ids: [UUID], atLaunch: Bool = true) {
+        guard !ids.isEmpty else { return }
+        if atLaunch { LaunchTimer.shared.mark("texts to check", detail: "\(ids.count)") }
+        Task.detached(priority: .utility) {
+            for id in ids {
+                let stamp = TextIndex.stamp(id)
+                let facts = TextFacts(stamp == nil ? nil : LiveStore.load(id))
+                await LiveTranscriber.shared.checked(id, facts, stamp)
+            }
+            if atLaunch { LaunchTimer.shared.mark("texts checked", detail: "\(ids.count) read in the background") }
+        }
+    }
+
+    private func checked(_ id: UUID, _ facts: TextFacts, _ stamp: TextIndex.Stamp?) {
+        // Saved meanwhile: the index already has newer facts.
+        guard index[id] == nil else { return }
+        if let box = boxes[id] {
+            // Opened meanwhile: the text in memory is the newest.
+            remember(box.text, id)
+        } else if let stamp {
+            index[id] = TextIndex.Entry(facts: facts, stamp: stamp)
+            noFile.remove(id)
+        } else {
+            noFile.insert(id)
+        }
+        factsChanged += 1
+        saveIndexSoon()
+        Transcriber.shared.textChecked(id)
     }
 
     // MARK: - Speakers (step 7)
@@ -507,7 +637,7 @@ final class LiveTranscriber {
 
     fileprivate func save(_ id: UUID) {
         guard let t = texts[id], !t.lines.isEmpty else { return }
-        try? LiveStore.save(t, for: id)
+        write(t, id)
         lastSave = Date()
     }
 

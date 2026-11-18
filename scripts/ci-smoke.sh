@@ -233,6 +233,17 @@ shot "mini-idle"
 osascript -e 'tell application "System Events" to keystroke "m" using {shift down, command down}' || true
 sleep 1
 
+# Open a recording with ⌘K (texts are read when opened, not at launch): its
+# lines must show.
+osascript -e 'tell application "System Events" to keystroke "k" using {command down}' || true
+sleep 1
+osascript -e 'tell application "System Events" to keystroke "sky god part 1"' || true
+sleep 1
+osascript -e 'tell application "System Events" to key code 36' || true
+sleep 2
+check "open a recording"
+shot "opened-recording"
+
 # Design pass: the Settings window (pages down the left), General then Look.
 osascript -e 'tell application "System Events" to keystroke "," using {command down}' || true
 sleep 3
@@ -257,6 +268,13 @@ sleep 1
 osascript -e 'tell application "System Events" to keystroke "q" using {command down}' || true
 sleep 3
 kill "$APP_PID" 2>/dev/null || true
+echo "----- text index -----" | tee -a "$OUT/launch.txt"
+INDEX="$HOME/Library/Application Support/Verbatim/text-index.json"
+if [ -f "$INDEX" ]; then
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); e=d["entries"]; print("%d entries, %d with lines, %d bytes" % (len(e), sum(1 for v in e.values() if v["facts"]["hasLines"]), len(open(sys.argv[1]).read())))' "$INDEX" | tee -a "$OUT/launch.txt"
+else
+  echo "no text-index.json" | tee -a "$OUT/launch.txt"
+fi
 echo "----- saved window frames -----"
 defaults read com.rywnswn.verbatim | grep "NSWindow Frame" || echo "none saved"
 defaults read com.rywnswn.verbatim | grep "NSWindow Frame" | sed -E 's/^ *"([^"]+)" = "([^"]+)";/\1|\2/' | while IFS='|' read -r key value; do
