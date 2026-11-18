@@ -303,7 +303,13 @@ Done (not tested by Ryan yet):
    (A: one white box with "Save in" + Start, like Claude's chat box, mic
    name in one small line, status only while something downloads; A
    first-time state; B: one big round button; and today's for comparison).
-   Waiting for Ryan to pick. Then build it in `StartView.swift`.
+   Ryan: A is "too much like chat". Looked at similar apps: Voice Memos
+   (no start screen, one red record button always in the same spot),
+   Granola and Otter (home is your list of recent notes, record is a
+   small button), Apple Notes (record from a toolbar button). Added C
+   (a "Today" page: Record top right, last 3 classes in the group below)
+   and D (record button docked at the bottom like Voice Memos). Waiting
+   for Ryan to pick. Then build it in `StartView.swift`.
 
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,
