@@ -1367,3 +1367,24 @@ find, and lists real bugs here (it never fixes code itself). Ryan can turn
 it off or change it in the claude.ai scheduled tasks list. It costs a fair
 amount of usage each time it finds new code, nothing when there is none.
 Last commit hunted: none yet (first hunt covers the whole app).
+
+## Faster start-up (Ryan asked 2026-11-18, next chat)
+Build it on top of `claude/quick-fixes` (or after RywnSwn/Verbatim#22 is
+merged): that branch changed how `LiveTranscriber.texts` works (one
+`LiveBox` per recording, writes through `put`), and this work touches the
+same code. Measure first, then change.
+What happens at launch now (read in the quick fixes chat):
+- `RecorderModel.init`: `RecordingStore.loadAll()` reads every
+  recording.json, then `LiveTranscriber.start(with:)` reads EVERY live.json
+  (the full text of every class) and `Transcriber.start(with:)` reads every
+  transcript.json. All on the main thread, before the window shows.
+- Transcriber then looks at each text only for small facts: is a file pass
+  unfinished, are there no lines, were speakers found. So it doesn't need
+  the full text.
+Idea: keep a few small facts per recording (pass unfinished, has lines,
+speakers found, made with backup engine) in recording.json or a small
+index file, and load a recording's full text only when it's opened, copied,
+exported, searched, or handed to Claude (MCP). Old recordings without the
+facts: work them out once in the background and save them.
+Measure: make the smoke test create about 200 fake recordings with long
+live.json files and log how long launch takes before and after.
