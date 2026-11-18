@@ -326,7 +326,14 @@ Done (not tested by Ryan yet):
    (CI screenshots: dark mode, floating glass sidebar, group icons,
    recording cards). Redrew E in the real look, dark and light, with no
    underlined links (last-class link dropped, Pause is a small button).
-   Mockup row "E, in the real app's look". Waiting for his reaction.
+   Mockup row "E, in the real app's look". Ryan: no lines on the page
+   (removed), Record button in the **Mac's system accent color**
+   (`NSColor.controlAccentColor`, not Theme.accent). Built in
+   `StartView.swift`: `GroupTitleMenu` (title = Save in), `RecordButtonStyle`,
+   `SmallWave`, `PageModelStatus` (download bar + Pause on the page).
+   Greeting, WaveMark, GroupChooser and MicStatusLine removed; version
+   number is in the gear menu and Settings > Updates. Recording view
+   header (E3) not changed yet: ask Ryan after he tries this.
 
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,
