@@ -334,6 +334,13 @@ Done (not tested by Ryan yet):
    Greeting, WaveMark, GroupChooser and MicStatusLine removed; version
    number is in the gear menu and Settings > Updates. Recording view
    header (E3) not changed yet: ask Ryan after he tries this.
+   Test build 0.1.168 (CI screenshots checked: matches the mockup).
+   Test list: 1) start screen looks like E, Record is your Mac's accent
+   color; 2) click the title, pick English, Record, it saves there;
+   3) title menu > New Group… names a new group; 4) "+" on a group opens
+   this screen with that group as title, doesn't record; 5) Recently
+   deleted > New recording opens this screen; 6) gear menu names and
+   Settings > AI Apps; 7) narrow window: Record moves under the title.
 
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,
