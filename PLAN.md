@@ -258,6 +258,47 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
   control right). Look holds sidebar (glass/solid), recordings (soft
   boxes/paper cards), text size, times, times in copies.
 
+## Code health review (2026-11-18), checked against `claude/general-names-simpler-start`
+Done by another chat on main (3 reviewers), then checked in this chat
+against this branch. Only the live text delay item is changed here (the
+fix is on this branch). Everything else is still true on this branch.
+Order to do them in, one chat each:
+1. Test the live text fix (this branch, build 0.1.171+), merge it.
+2. Quick fixes, one chat:
+   - Stop, then start a new recording within 10 s: `start()` clears
+     `stoppedNote`, so the old one never gets `Transcriber.recordingFinal`
+     / `AutoName.consider`: background work stalls until relaunch
+     (`RecorderModel.swift` stop() and start()). Confirmed on branch.
+   - Audio shrink: a crash mid-shrink leaves a leftover file and it never
+     shrinks again, retries every launch.
+   - Uninstall doesn't remove the "verbatim" entry from Claude's config.
+   - Export Everything leaves out groups.
+   - Connect to Claude: if the config exists but can't be read, Connect
+     could overwrite Claude's other servers.
+   - Mini window, menu bar panel and bottom bar redraw everything 20x a
+     second while recording: move the clock into tiny views.
+   - Every live word redraws most of the window: `LiveTranscriber.apply`
+     writes the observed `texts` dictionary (`texts[id] = t`).
+   - New (this branch): start page title menu > New Group… uses the
+     rename alert on `SidebarView`; with the sidebar hidden (narrow
+     window) the prompt may not show. Move the alert up to ContentView.
+3. Protect data: "Stop and Quit" can lose up to 10 s (or more, if live
+   text was behind) of live text (`apply` saves every 10 s); a failed save
+   is silently undone on the next app activation (renames, notes,
+   markers, Keep Audio); live and file Parakeet can be loaded at once.
+4. Errors: a speech model error is swallowed, the app keeps saying
+   "listening". Turn the HitchMeter off once the lag is solved.
+5. Tests: none exist. Add a test target that runs on CI. First: word list
+   fixes, keeping edits when accurate text arrives, speaker naming, WAV
+   writing, reading old saved recordings.
+6. Cleanup: RecorderModel split, the ~9 copies of "status for N seconds",
+   paths/saving/download copies, Shortcuts page missing ⇧⌘E ⌥⌘P ⌘G,
+   speaker counting copied (RecordingHeader + Speakers), Swift 6 mode,
+   trim this file (old "how step N works" notes to docs/).
+Live text fix itself (read in this chat): queue + 5 s bites, Parakeet and
+speakers load at once (higher peak memory while loading, worth watching
+on 8 GB), nothing wrong found, not yet tried on Ryan's Mac.
+
 ## Bugs to fix (Ryan, from real use)
 - **Live text is late (2026-11-18, in class).** Words only start to show
   after a few minutes of recording, and it does not feel as live as the
