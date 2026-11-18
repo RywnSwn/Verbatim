@@ -18,6 +18,7 @@ struct StartView: View {
             ScrollView(.vertical) {
                 page
                     .frame(maxWidth: 760, alignment: .leading)
+                    .padding(.horizontal, 32)
                     .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
                     // The drop hint sits at the bottom of the window, or
                     // under the page when the window is short.
@@ -25,8 +26,9 @@ struct StartView: View {
                         Text("Or drop a Voice Memo here to transcribe it.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
+                            .padding(.leading, 70)
                             .frame(maxWidth: 760, alignment: .leading)
-                            .padding(.horizontal, 48)
+                            .padding(.horizontal, 32)
                             .padding(.bottom, 20)
                             .frame(maxWidth: .infinity)
                     }
@@ -49,12 +51,13 @@ struct StartView: View {
                     recordButton
                 }
             }
-            .padding(.bottom, 14)
+            .padding(.bottom, 8)
 
             Rectangle()
                 .fill(Theme.ink)
                 .frame(height: 1.5)
                 .accessibilityHidden(true)
+                .padding(.bottom, 10)
 
             VStack(alignment: .leading, spacing: 12) {
                 PageModelStatus()
@@ -62,15 +65,23 @@ struct StartView: View {
                     .font(.body)
                     .foregroundStyle(.tertiary)
             }
-            .padding(.top, 18)
+            .padding(.top, 10)
         }
-        .padding(.horizontal, 48)
-        .padding(.top, 28)
+        // Same spot as a transcript's header and first line (TranscriptList:
+        // 32 side margin, 24 top, 70 past the time gutter), so pressing
+        // Record doesn't move the title, the rule or the hint.
+        .padding(.leading, 70)
+        .padding(.top, 24)
         .padding(.bottom, 64) // room for the drop hint
     }
 
     private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            // Like a transcript's header: small line on top, big title,
+            // then details.
+            Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
             GroupTitleMenu()
             Text(subtitle)
                 .font(.callout)
@@ -80,11 +91,9 @@ struct StartView: View {
     }
 
     private var subtitle: String {
-        let day = Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day())
-        let mic = model.micPermission == .authorized
-            ? model.micName
-            : "Your Mac asks to use the mic when you press Record"
-        return "\(day) · \(mic)"
+        model.micPermission == .authorized
+            ? "Using the \(model.micName)."
+            : "Your Mac asks to use the mic when you press Record."
     }
 
     private var recordButton: some View {
@@ -134,7 +143,7 @@ struct GroupTitleMenu: View {
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(current?.name ?? "Recents")
-                    .font(.system(size: 34, weight: .regular, design: .serif))
+                    .font(.system(size: 30, weight: .regular, design: .serif))
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                 Image(systemName: "chevron.down")

@@ -341,6 +341,14 @@ Done (not tested by Ryan yet):
    this screen with that group as title, doesn't record; 5) Recently
    deleted > New recording opens this screen; 6) gear menu names and
    Settings > AI Apps; 7) narrow window: Record moves under the title.
+   Then (Ryan: "fix that too"): recording page matches the start page.
+   Recording before the first words now shows the header and a left
+   "Listening. ..." hint where the first line goes (was a centered
+   "Listening." that jumped). `TranscriptList.emptyHint`. Every transcript
+   header ends with the same 1.5 pt ink rule. Start page uses the
+   transcript's geometry (760 column, 32 side, 24 top, 70 gutter) and
+   header order (date eyebrow, 30 pt serif title, "Using the X mic.").
+   Pause/Stop stay in the bottom bar (they'd scroll away in the header).
 
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,

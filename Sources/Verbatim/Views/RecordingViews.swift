@@ -40,22 +40,14 @@ struct RecordingNowView: View {
         VStack(spacing: 0) {
             LiveStatusLine(paused: model.phase == .paused)
             FindLine(id: info.id)
-            if checked.isEmpty, lines.isEmpty, live.volatile.isEmpty {
-                VStack(spacing: 8) {
-                    Text(model.phase == .paused ? "Paused." : "Listening.")
-                        .font(.title3)
-                    Text(emptyNote)
-                        .foregroundStyle(.secondary)
-                }
-                .multilineTextAlignment(.center)
-                .padding(40)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                TranscriptList(
-                    info: info, checked: checked, live: lines, checkedUpTo: transcript?.doneUpTo,
-                    volatile: live.volatile, isLive: true
-                )
-            }
+            // Always the page, even before the first words (it used to be a
+            // centered "Listening." that jumped away): same spot as the start
+            // page's hint, so pressing Record doesn't move things around.
+            TranscriptList(
+                info: info, checked: checked, live: lines, checkedUpTo: transcript?.doneUpTo,
+                volatile: live.volatile, isLive: true,
+                emptyHint: "\(model.phase == .paused ? "Paused." : "Listening.") \(emptyNote)"
+            )
         }
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(info.groupedStartedText)
