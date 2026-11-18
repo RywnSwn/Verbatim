@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 @main
 enum Launch {
     @MainActor static func main() {
+        _ = LaunchTimer.shared
         if CommandLine.arguments.contains("--mcp") {
             MCPServer.run()
             return

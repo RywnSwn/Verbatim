@@ -103,7 +103,10 @@ struct ContentView: View {
             }
         }
         .animation(.snappy(duration: 0.18), value: model.showCommandMenu)
-        .onAppear { MainWindow.open = { openWindow(id: "main") } }
+        .onAppear {
+            MainWindow.open = { openWindow(id: "main") }
+            LaunchTimer.shared.mark("window shown")
+        }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
             // Changed after this layout pass ends, never in the middle of it:
             // showing or hiding the sidebar while the window is laying out can

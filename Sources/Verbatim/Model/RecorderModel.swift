@@ -131,6 +131,7 @@ final class RecorderModel {
     var isBusy: Bool { phase != .idle }
 
     private init() {
+        let began = Date()
         recoverUnfinished()
         recordings = RecordingStore.loadAll()
         refreshMicName()
@@ -143,6 +144,7 @@ final class RecorderModel {
             AudioSquash.shared.run()
             AudioCleanup.start()
         }
+        LaunchTimer.shared.mark("recordings read", detail: String(format: "%d recordings, %.3f s on the main thread", recordings.count, Date().timeIntervalSince(began)))
     }
 
     // MARK: - Start / Pause / Stop
