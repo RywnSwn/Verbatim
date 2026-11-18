@@ -334,7 +334,8 @@ Done (not tested by Ryan yet):
    Greeting, WaveMark, GroupChooser and MicStatusLine removed; version
    number is in the gear menu and Settings > Updates. Recording view
    header (E3) not changed yet: ask Ryan after he tries this.
-   Test build 0.1.168 (CI screenshots checked: matches the mockup).
+   Test build 0.1.171 (CI screenshots checked: matches the mockup;
+   Record centered beside the title; recording page not in screenshots).
    Test list: 1) start screen looks like E, Record is your Mac's accent
    color; 2) click the title, pick English, Record, it saves there;
    3) title menu > New Group… names a new group; 4) "+" on a group opens
@@ -349,6 +350,9 @@ Done (not tested by Ryan yet):
    transcript's geometry (760 column, 32 side, 24 top, 70 gutter) and
    header order (date eyebrow, 30 pt serif title, "Using the X mic.").
    Pause/Stop stay in the bottom bar (they'd scroll away in the header).
+   Test 8) press Record: title, line and hint stay put, "Listening."
+   shows where the first line goes. When Ryan says good: open the PR
+   (milestone), merge to main.
 
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,
