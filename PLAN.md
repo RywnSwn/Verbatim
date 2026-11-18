@@ -264,7 +264,7 @@ against this branch. Only the live text delay item is changed here (the
 fix is on this branch). Everything else is still true on this branch.
 Order to do them in, one chat each:
 1. Test the live text fix and new start screen (main build), report back.
-2. Quick fixes: DONE 2026-11-18 on branch `claude/quick-fixes` (not
+2. Quick fixes: DONE 2026-11-18, merged (RywnSwn/Verbatim#22, not
    tested by Ryan yet, see "Quick fixes test list" below). Was:
    - Stop, then start a new recording within 10 s: `start()` clears
      `stoppedNote`, so the old one never gets `Transcriber.recordingFinal`
