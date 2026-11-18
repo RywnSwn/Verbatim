@@ -282,25 +282,28 @@ https://claude.ai/artifact/52gonTfcK3E7cSGNCY78tg, copy in
   start, the models are slower than speech (look at ANE sharing between
   Parakeet, Sortformer and the word spotter), not the start.
 
-## Next asks from Ryan (2026-11-18), for a new chat (UI: ux-planner, mockup first)
-Ryan wants Verbatim to feel less Claude-only and the start simpler.
-1. Gear menu "Copy Details for Claude" (`SidebarView.swift`, GearMenu):
-   rename to something general, e.g. "Copy Details for a Bug Report".
-   Ryan wasn't sure of the words: offer 2 or 3.
-2. Settings page "Claude" (`SettingsView.swift`, `case .claude`): a
-   general name (e.g. "AI Apps" or "Connect to AI"), since ChatGPT can use
-   MCP too. Keep the Claude setup inside it.
-3. New recording must never start recording by itself. Found: the "+" next
-   to a group name in the sidebar calls `model.start(in:)` straight away,
-   so while reading a transcript it starts instantly. It should open the
-   start screen with that group picked in "Save in", like Claude's "New
-   chat". Ryan also said New recording "doesn't work" sometimes: ask him
-   which button and what he saw.
-4. Start screen "looks weird": simplify it, like Claude's new chat screen
-   (greeting, one clear Start button, little else). Mockup first.
-Before starting: `claude/fix-live-text-delay` (live text fix, test build
-0.1.161) may still be unmerged; check `git branch -r` and branch from it
-if Ryan hasn't merged it, or he gets a build without the fix.
+## Next asks from Ryan (2026-11-18): branch `claude/general-names-simpler-start`
+Built on `claude/fix-live-text-delay` (not merged yet), so a build has both.
+Done (not tested by Ryan yet):
+1. Gear menu: "Copy Details for a Bug Report" (other choices offered to
+   Ryan: "Copy Problem Details", "Copy App Details"). "Connect to Claude"
+   in the gear menu is now "Connect to AI Apps".
+2. Settings page "Claude" is now "AI Apps". Claude row stays first; new
+   "Other AI apps" row with Copy Setup (the `mcpServers` JSON with this
+   app's path and `--mcp`, `ClaudeConnector.setupText()`). Wording no
+   longer says only Claude. Enum case stays `.claude`.
+3. New recording never starts by itself: the "+" on a group and its
+   "New Recording Here" call `model.showNewRecording(in:pickGroup:)`,
+   which opens the start screen with that group in "Save in". ⌘K "Record
+   in" and the menu bar "Record in" still start right away (asked for
+   by name there). Found why New recording "didn't work": from Recently
+   deleted it set `selection = nil`, but `showingDeleted` stayed true, so
+   the screen didn't change. Fixed.
+4. Start screen: mockup https://claude.ai/artifact/Bx3y11h4r3KMAz1s9EnCbh
+   (A: one white box with "Save in" + Start, like Claude's chat box, mic
+   name in one small line, status only while something downloads; A
+   first-time state; B: one big round button; and today's for comparison).
+   Waiting for Ryan to pick. Then build it in `StartView.swift`.
 
 ## Merged to main (2026-11-12, late)
 `claude/claude-connector` (lag fixes, mini window, design pass, connector,

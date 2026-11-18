@@ -160,8 +160,20 @@ final class RecorderModel {
     }
 
     /// "New recording": show the start screen, or the recording in progress.
-    func showNewRecording() {
-        selection = isBusy ? currentID : nil
+    /// Never starts recording by itself (Ryan's ask): only the start screen's
+    /// Start button, ⌘R, the menu bar and ⌘K start one. With a group (the
+    /// "+" next to a group name), "Save in" is set to that group, like
+    /// "New chat" in a Claude project.
+    func showNewRecording(in groupID: UUID? = nil, pickGroup: Bool = false) {
+        // Recently deleted covers the start screen, so New recording looked
+        // like it did nothing from there.
+        showingDeleted = false
+        if isBusy {
+            selection = currentID
+            return
+        }
+        if pickGroup { GroupStore.shared.lastUsedID = GroupStore.shared.group(groupID)?.id }
+        selection = nil
     }
 
     /// Starts in the group picked last time (start screen, ⌘R, menu bar).
