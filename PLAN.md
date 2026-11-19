@@ -478,6 +478,10 @@ gear menu, notes, diagnostics) and `claude/mini-window-crash` are in main.
 - `claude/mini-crash-repro` is a throwaway branch: delete on GitHub.
   (2026-11-19: every `claude/*` branch is merged or throwaway; Ryan can
   prune them all. Keep `main` and `ci-smoke`.)
+- Cleaning branches: Actions tab > "Delete merged branches" > Run workflow
+  (`.github/workflows/prune-branches.yml`). Deletes branches with nothing
+  that isn't in main and no open PR; keeps main and ci-smoke. Chats can't
+  delete branches themselves (the session can only push its own branch).
 
 ## State of Ryan's three asks (2026-11-12, evening)
 All on branch `claude/claude-connector` (it holds the lag fix, the mini

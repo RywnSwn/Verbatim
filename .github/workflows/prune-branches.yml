@@ -1,0 +1,53 @@
+name: Delete merged branches
+
+# Ryan presses Run workflow on the Actions tab. Deletes every branch whose
+# work is all in main already, so nothing is lost. Never touches main,
+# ci-smoke (the smoke test's screenshots), or a branch with an open pull
+# request. A branch with work that isn't in main is left alone and listed.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Delete branches that are fully in main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          open=$(gh pr list --state open --limit 200 --json headRefName --jq '.[].headRefName')
+          deleted=""
+          kept=""
+          for ref in $(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin); do
+            case "$ref" in
+              HEAD|main|ci-smoke) continue ;;
+            esac
+            if echo "$open" | grep -qx "$ref"; then
+              kept="$kept\n- \`$ref\`: has an open pull request"
+              continue
+            fi
+            ahead=$(git rev-list --count "origin/main..origin/$ref")
+            if [ "$ahead" = "0" ]; then
+              git push origin --delete "$ref"
+              deleted="$deleted\n- \`$ref\`"
+            else
+              kept="$kept\n- \`$ref\`: $ahead commit(s) not in main, delete by hand if you're sure"
+            fi
+          done
+          {
+            echo "## Deleted"
+            if [ -n "$deleted" ]; then echo -e "$deleted"; else echo "Nothing to delete."; fi
+            echo
+            echo "## Kept"
+            echo "- \`main\` and \`ci-smoke\` (always kept)"
+            if [ -n "$kept" ]; then echo -e "$kept"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
