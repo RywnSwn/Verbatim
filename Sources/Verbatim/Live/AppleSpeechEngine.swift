@@ -17,6 +17,10 @@ actor AppleSpeechEngine: LiveEngine {
     private var targetFormat: AVAudioFormat?
     private var finals: [LivePiece] = []
     private var volatile: String?
+    /// The results stream stopped with an error: the next `feed` throws it.
+    private var failure: Error?
+    /// Counts `begin`s, so an old stream ending late can't fail the new one.
+    private var session = 0
     private let sourceFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
 
     private static func makeTranscriber(_ locale: Locale) -> SpeechTranscriber {
@@ -78,6 +82,9 @@ actor AppleSpeechEngine: LiveEngine {
         self.analyzer = analyzer
         finals = []
         volatile = nil
+        failure = nil
+        session += 1
+        let session = session
         resultsTask = Task { [weak self] in
             do {
                 for try await result in transcriber.results {
@@ -86,7 +93,11 @@ actor AppleSpeechEngine: LiveEngine {
                     let end = result.range.end.seconds
                     await self?.receive(text: text, start: start.isFinite ? start : 0, end: end.isFinite ? end : 0, isFinal: result.isFinal)
                 }
-            } catch {}
+            } catch is CancellationError {
+                // Stopped on purpose (Pause, Stop, a new begin).
+            } catch {
+                await self?.failed(error, session: session)
+            }
         }
         try await analyzer.start(inputSequence: stream)
     }
@@ -100,7 +111,16 @@ actor AppleSpeechEngine: LiveEngine {
         }
     }
 
-    func feed(_ samples: [Float]) async -> LiveOutput {
+    private func failed(_ error: Error, session: Int) {
+        guard session == self.session, analyzer != nil else { return }
+        failure = error
+    }
+
+    func feed(_ samples: [Float]) async throws -> LiveOutput {
+        if let failure {
+            self.failure = nil
+            throw failure
+        }
         if let buffer = convert(samples) {
             input?.yield(AnalyzerInput(buffer: buffer))
         }

@@ -293,3 +293,15 @@ listen.m4a, 64 kbps AAC) is made from the same mic sound; Parakeet keeps
 its own 16 kHz file so text stays the same. Stereo mics are mixed down so
 a 2-mic receiver in split mode keeps both mics. Echo removal: not doing
 it, it could damage his voice in the recording.
+
+## Speech model errors: restart, say so, redo after Stop (2026-11-19)
+A speech model error is never swallowed. While recording, the model is
+loaded fresh and fed the same audio again (up to 3 times in a row), then
+the app says "No live text right now" and tries every 30 s. Ryan never
+loses words for good: the recording is marked and Parakeet redoes the
+whole text after Stop (edits kept), since audio is always saved. Not
+chosen: redoing only the missing part (more code for little gain, a full
+redo takes about a minute per hour). The error text itself only goes in
+⌃⌘L; the app says it in plain words. HitchMeter removed with this (freeze
+fixed in 0.1.153); git history has it if a freeze ever comes back.
+

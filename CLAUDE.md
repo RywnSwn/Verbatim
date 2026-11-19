@@ -20,10 +20,10 @@ Code health quick fixes (item 2, RywnSwn/Verbatim#22) and faster start-up
 (RywnSwn/Verbatim#23) merged 2026-11-18, not tested by Ryan yet (test lists
 in `PLAN.md`). Code health item 3 (protect data, RywnSwn/Verbatim#25), 48 kHz playback
 audio, Add line below and the stereo mic fix (RywnSwn/Verbatim#26):
-tested by Ryan and merged 2026-11-19. Next: item 4 in `PLAN.md`, one
-chat each.
-Design pass (sidebar boxes, drag, glass or solid, Settings pages) built on
-`claude/design-pass`, waiting for Ryan's test. See `PLAN.md` for build order and progress,
+tested by Ryan and merged 2026-11-19. Code health item 4 (speech model
+errors, HitchMeter removed) on `claude/speech-model-errors`, waiting for
+Ryan's test. Next: item 5 in `PLAN.md`, one chat each.
+See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).

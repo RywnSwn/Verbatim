@@ -126,6 +126,8 @@ struct LiveStatusLine: View {
             return "Getting live text ready. Your audio is already being saved."
         case .listening where live.catchingUp:
             return "Live text is catching up. Nothing is lost: the words from the last few seconds are on their way."
+        case .listening where live.missedSome:
+            return "Live text skipped some words when the speech model had a problem. Nothing is lost: the full text comes after you press Stop."
         case .listening(let engine) where engine == AppleSpeechEngine.name:
             if live.isModelReady {
                 return "Live text is using your Mac's built-in engine. Parakeet takes over after you pause, and redoes it all after you stop."
@@ -358,6 +360,12 @@ struct TranscriptStatusLine: View {
         // Made with the Mac's backup engine before Parakeet was here.
         if text?.pass == nil, text?.madeWithBackupEngine == true, info.hasAudio, live.isModelReady {
             return ("Made with your Mac's built-in engine. Parakeet is more accurate, and your edits are kept.",
+                    "Redo with Parakeet", { transcriber.redo(id) })
+        }
+        // The live model failed for a while during the recording (and the
+        // redo after Stop didn't happen, or Parakeet wasn't here then).
+        if text?.pass == nil, text?.missedAudio == true, info.hasAudio, live.isModelReady {
+            return ("The speech model had a problem during this recording, so some words may be missing. Parakeet can go over the audio again, and your edits are kept.",
                     "Redo with Parakeet", { transcriber.redo(id) })
         }
         return nil
