@@ -18,7 +18,10 @@ Line edit fix, ⌘Z undo, page edge, copy times, preloaded live models
 (RywnSwn/Verbatim#24) merged 2026-11-19, not tested by Ryan yet.
 Code health quick fixes (item 2, RywnSwn/Verbatim#22) and faster start-up
 (RywnSwn/Verbatim#23) merged 2026-11-18, not tested by Ryan yet (test lists
-in `PLAN.md`). Next: the other code health items in `PLAN.md`, one chat each.
+in `PLAN.md`). Code health item 3 (protect data, RywnSwn/Verbatim#25) and, on top of it,
+48 kHz playback audio + Add line below + stereo mic fix
+(`claude/listen-audio-add-line`): not merged, not tested. Next: item 4
+in `PLAN.md`, one chat each.
 Design pass (sidebar boxes, drag, glass or solid, Settings pages) built on
 `claude/design-pass`, waiting for Ryan's test. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build

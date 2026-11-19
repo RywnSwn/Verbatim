@@ -283,10 +283,11 @@ Order to do them in, one chat each:
    - New (this branch): start page title menu > New Group… uses the
      rename alert on `SidebarView`; with the sidebar hidden (narrow
      window) the prompt may not show. Move the alert up to ContentView.
-3. Protect data: "Stop and Quit" can lose up to 10 s (or more, if live
-   text was behind) of live text (`apply` saves every 10 s); a failed save
-   is silently undone on the next app activation (renames, notes,
-   markers, Keep Audio); live and file Parakeet can be loaded at once.
+3. Protect data: DONE 2026-11-19 on `claude/protect-data`, not merged,
+   not tested by Ryan yet (see "Protect data" at the end). Was: "Stop and
+   Quit" lost up to 10 s of live text; a failed save was silently undone
+   on the next app activation; live and file Parakeet could be loaded at
+   once.
 4. Errors: a speech model error is swallowed, the app keeps saying
    "listening". Turn the HitchMeter off once the lag is solved.
 5. Tests: none exist. Add a test target that runs on CI. First: word list
@@ -297,8 +298,8 @@ Order to do them in, one chat each:
    speaker counting copied (RecordingHeader + Speakers), Swift 6 mode,
    trim this file (old "how step N works" notes to docs/).
 7. Faster start-up: DONE 2026-11-18 (see "Faster start-up" at the end).
-   Left over: app activation re-reads every recording.json, and the live
-   text save every 10 s runs on the main thread (do with item 3).
+   Left over: app activation re-reads every recording.json. (The live
+   text save every 10 s is off the main thread now, item 3.)
 How the quick fixes were done (2026-11-18):
 - `RecorderModel.finishStopped()` ends Undo Stop for good (recordingFinal +
   AutoName). Called by the 10 s timer, by `start()` and when Undo Stop fails.
@@ -1508,3 +1509,91 @@ early Stop (30 s, no words yet) the page showed a big "Transcribe" screen.
 Test: open the app, wait 10 s on the start page, press Record and talk:
 words should come within ~2 s. Stop after 10 s: same page, words fill in.
 If still slow, paste ⌃⌘L ("LIVE TEXT START" line).
+
+## Protect data (code health item 3, 2026-11-19)
+Branch `claude/protect-data`. Not tested by Ryan yet.
+- Stop and Quit (and ⌘Q a moment after Stop, while live text is still
+  catching up): the app answers `.terminateLater`, shows "Saving the last
+  words, then Verbatim quits…", waits for the live run to finish (max
+  20 s, `LiveTranscriber.finishBeforeQuit`), saves, then quits. Logout
+  path (`applicationWillTerminate`) calls `saveNow()`.
+- live.json saves all go through one serial queue (`LiveTranscriber.disk`).
+  The every-10-s save while recording runs there in the background; edits
+  wait for it (`sync`), so an old text can't land on a new one. `writes`
+  counts saves per recording so a late background save doesn't put old
+  facts in the index. A failed save says so once per recording.
+- recording.json: every save goes through `RecorderModel.persist`. On
+  failure it says "Couldn't save the change to X..." once and keeps the
+  change in memory (`unsaved`); `reload()` (on app activation) tries it
+  again and keeps the in-memory copy instead of the old file.
+- Record while a file is being transcribed: live text waits for the file's
+  models to unload (`Transcriber.modelsFreed`) before loading its own, so
+  two Parakeets are never loaded at once. Audio is saved meanwhile and
+  live text catches up.
+Test list (for Ryan):
+1. Record, talk for 20 s, then ⌘Q > Stop and Quit right after a sentence.
+   Open the app again: the last sentence is in the text.
+2. Record, Stop, then ⌘Q within 2 s: same, nothing missing at the end.
+3. Import a long Voice Memo, and while it says "Transcribing", press
+   Record and talk: live text comes after a short wait (maybe "catching
+   up"), the app doesn't freeze or crash. Stop: the file carries on.
+4. Rename a class, add a note and a marker, click another app, click back:
+   all still there (this always worked when the disk is fine).
+
+## Next asks (Ryan, 2026-11-19), one chat, branch `claude/listen-audio-add-line`
+(built on `claude/protect-data`, so merging it brings item 3 too)
+1. Better playback audio. Audio was 16 kHz, squashed to 32 kbps AAC after
+   Stop: muffled to listen to. Ryan picked 48 kHz: record a 48 kHz copy for
+   listening and shrink it gently after Stop (~45 MB per hour is fine, he
+   deletes audio after reviewing). Parakeet keeps getting 16 kHz and the
+   transcripts must not change.
+2. Add line below. Right-click a line > "Add line below": an empty line to
+   type in, time between the lines around it, speaker from the line above
+   (click the name to change it), locked like an edit, ⌘Z undoes it.
+   Follows the typing rule (one box open, click away saves, no copying).
+3. Small: `AudioPipeline` drops the right channel of a stereo mic (no
+   downmix), so a 2-mic receiver in split mode loses one mic. Fix.
+Not doing: echo removal (could damage his voice in the recording).
+Built 2026-11-19, not tested by Ryan yet:
+- Audio: `AudioPipeline` takes the mic's own format (no audioSettings) and
+  makes two mono files from the same sound with its own converters
+  (`downmix = true`, best resampler): audio.wav 16 kHz (Parakeet, speaker
+  model, live text, level meter: as before) and listen.wav 48 kHz (only
+  for the player, `RecordingStore.playbackURL`). If listen.wav can't be
+  written, it's dropped and playback uses the 16 kHz audio. Undo Stop
+  carries on listen.wav, padded with silence to stay in step; crash
+  recovery repairs it too. `bytesPerHour` counts both while recording
+  (~460 MB/h before shrinking).
+- `AudioSquash`: audio.wav > audio.m4a 32 kbps (unchanged, ~14 MB/h, what
+  Transcribe again reads) and listen.wav > listen.m4a 64 kbps 48 kHz
+  (~29 MB/h). Total ~43 MB/h. Delete Audio, old-audio cleanup and the
+  size in the sidebar menu use `RecordingStore.audioFiles` (all four).
+  Imports and older recordings have no listen copy: they play as before.
+- Note: the 16 kHz audio is now made by Verbatim's converter, not macOS's
+  (it used to keep only the left channel). Same rate and format for
+  Parakeet; a mono mic gives the same sound.
+- Add line below (`TranscriptList` `adding`, `RecorderModel.addLine`,
+  `newLineTimes`, `LiveTranscriber.discardLine`): right-click a live line.
+  The new line is a draft in the view until it has text: empty = nothing
+  added. Its own `LineDraft` box and focus; focus loss does not save (the
+  name menu may take it), but a click anywhere else, Enter, starting any
+  other edit, or leaving the page saves. Esc cancels. The line above is
+  covered like other lines. Time: halfway into the gap before the next
+  line (just after the last line at the end). Speaker: the line above's
+  (`speaker` field, no voice, so changing it never offers to rename a
+  whole voice). Locked. ⌘Z / Undo removes it (no "deleted here" mark).
+Test list (for Ryan):
+1. Record a class bit (or just talk) for a minute, Stop, wait ~20 s, then
+   play it: it should sound clearer than before (not muffled). The words
+   in the transcript are the same kind of quality as before.
+2. Right-click the recording > Delete Audio Only: the size it shows is
+   about 43 MB per hour of recording. Undo brings the audio back.
+3. If you have the 2-mic receiver: split mode, one mic each side, record:
+   both voices are in the recording and in the live text.
+4. Right-click a line > Add line below: an empty line opens under it with
+   a time and the speaker of the line above. Type, click somewhere else:
+   it's added with a lock. Click the name first to change who said it.
+5. Add line below, type nothing, click away: nothing is added.
+6. Add a line, press ⌘Z: it goes away. While typing in it, ⌘Z undoes typing.
+7. While the new line is open, click another line: it only saves, the
+   other line does NOT open and does NOT change.

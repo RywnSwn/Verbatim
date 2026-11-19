@@ -44,6 +44,14 @@ struct TranscriptList: View {
     /// The line whose note is being typed (see `Notes`).
     @State private var notingLine: Transcript.Line?
     @State private var noteDraft = LineDraft()
+    /// Right-click > Add line below: the empty line being typed under the
+    /// line that starts at `below`. It only becomes a real line once it has
+    /// text (`saveNewLine`), so an empty one is never saved.
+    @State private var adding: NewLine?
+    @State private var newDraft = LineDraft()
+    /// Its own focus: losing it doesn't save (picking a speaker from the
+    /// name menu may take focus). A click away, Enter or leaving saves.
+    @FocusState private var newFocused: Bool
     @FocusState private var noteFocused: Bool
     @FocusState private var fieldFocused: Bool
     /// Last time you scrolled by hand, so playing audio doesn't yank the view away.
@@ -60,6 +68,14 @@ struct TranscriptList: View {
         /// Rename this voice everywhere. nil = just this line.
         var voice: Int?
         var oldName: String
+        /// For the line being added (not saved yet).
+        var newLine = false
+    }
+
+    private struct NewLine {
+        var below: Double
+        /// Who said it: starts as the line above's speaker.
+        var speaker: String?
     }
 
     private var playback: Playback { .shared }
@@ -139,6 +155,8 @@ struct TranscriptList: View {
                                 lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil,
                                         name: source == .live ? labels.name(line) : nil, options: options,
                                         marked: marked.contains(line.start), note: notes[line.start])
+                                    // The line above a new line: covered too, a click only saves.
+                                    .modifier(TypingShield(active: isAddingBelow(line, source)) { stopTyping() })
                                 if notingLine?.start == line.start {
                                     noteEditor
                                 } else if let note = notes[line.start] {
@@ -146,6 +164,9 @@ struct TranscriptList: View {
                                 }
                                 if let offer = model.fixOffer, offer.recordingID == info.id, offer.start == line.start {
                                     fixOfferRow(offer.fix)
+                                }
+                                if isAddingBelow(line, source), let adding {
+                                    newLineEditor(adding, labels: labels, options: options)
                                 }
                             }
                             // While a line or note is being typed, every other
@@ -216,10 +237,8 @@ struct TranscriptList: View {
             // Clicking somewhere else saves, like a text field in Notes.
             if !fieldFocused, editing != nil { save() }
         }
-        .onDisappear {
-            if editing != nil { save() }
-            if notingLine != nil { saveNote() }
-        }
+        .onDisappear { stopTyping() }
+        .onChange(of: live.count) { keepNewLineAnchored() }
         .onChange(of: noteFocused) {
             if !noteFocused, notingLine != nil { saveNote() }
         }
@@ -243,7 +262,10 @@ struct TranscriptList: View {
             Button("OK") {
                 let name = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                 if let n = naming, !name.isEmpty {
-                    if let voice = n.voice {
+                    if n.newLine {
+                        adding?.speaker = name
+                        Task { @MainActor in newFocused = true }
+                    } else if let voice = n.voice {
                         model.renameVoice(info.id, voice: voice, to: name)
                     } else {
                         model.setSpeaker(info.id, start: n.start, to: name)
@@ -448,6 +470,9 @@ struct TranscriptList: View {
             Button("Copy from here down") { model.copyLines(info, linesFrom(line, source)) }
             Divider()
             Button("Edit line") { begin(line, source) }
+            if source == .live {
+                Button("Add line below") { beginNewLine(below: line, speaker: speaker) }
+            }
             if marked {
                 Button("Remove marker") { model.removeMarker(info.id, line: line) }
             } else {
@@ -469,6 +494,9 @@ struct TranscriptList: View {
         }
         .accessibilityAction(named: "Edit line") { begin(line, source) }
         .accessibilityAction(named: "Delete line") { model.deleteLine(info.id, source, start: line.start) }
+        .accessibilityAction(named: "Add line below") {
+            if source == .live { beginNewLine(below: line, speaker: speaker) }
+        }
     }
 
     /// Under a line Ryan just fixed: remember it for next time? (step 8)
@@ -558,8 +586,7 @@ struct TranscriptList: View {
     }
 
     private func beginNote(_ line: Transcript.Line, _ text: String) {
-        if editing != nil { save() }
-        if notingLine != nil { saveNote() }
+        stopTyping()
         noteDraft = LineDraft() // a new box, same reason as in `begin`
         noteDraft.text = text
         notingLine = line
@@ -577,23 +604,28 @@ struct TranscriptList: View {
         noteFocused = false
     }
 
-    /// A line or a note is being typed.
-    private var isTyping: Bool { editing != nil || notingLine != nil }
+    /// A line, a note or a new line is being typed. Only one at a time.
+    private var isTyping: Bool { editing != nil || notingLine != nil || adding != nil }
+
+    private func isAddingBelow(_ line: Transcript.Line, _ source: LineSource) -> Bool {
+        source == .live && adding?.below == line.start
+    }
 
     /// This line (or its note) is the one being typed: it stays uncovered.
     private func isTyping(on line: Transcript.Line, _ source: LineSource) -> Bool {
         editing == EditKey(source: source, start: line.start) || notingLine?.start == line.start
+            || isAddingBelow(line, source) // the new line under it (the line itself has its own cover)
     }
 
     /// A click anywhere else while typing: save and stop, nothing more.
     private func stopTyping() {
         if editing != nil { save() }
         if notingLine != nil { saveNote() }
+        if adding != nil { saveNewLine() }
     }
 
     private func begin(_ line: Transcript.Line, _ source: LineSource) {
-        if editing != nil { save() }
-        if notingLine != nil { saveNote() }
+        stopTyping()
         // A new box for every edit. The old field writes its text one last
         // time as it closes; into a shared box that landed in the line you
         // clicked next and replaced it (Ryan, 2026-11-19).
@@ -602,6 +634,85 @@ struct TranscriptList: View {
         editing = EditKey(source: source, start: line.start)
         if source == .live { liveTranscriber.editing = (info.id, line.start) }
         Task { @MainActor in fieldFocused = true }
+    }
+
+    // MARK: - Add line below
+
+    private func beginNewLine(below line: Transcript.Line, speaker: String?) {
+        stopTyping()
+        newDraft = LineDraft() // a new box, same reason as in `begin`
+        adding = NewLine(below: line.start, speaker: speaker)
+        Task { @MainActor in newFocused = true }
+    }
+
+    private func saveNewLine() {
+        guard let a = adding else { return }
+        finishNewLine()
+        model.addLine(info.id, below: a.below, text: newDraft.text, speaker: a.speaker)
+    }
+
+    /// A pass over the file can rebuild the lines while a new line is open:
+    /// if the line it sits under is gone, it moves under the line now there.
+    private func keepNewLineAnchored() {
+        guard let a = adding, !live.contains(where: { $0.start == a.below }) else { return }
+        if let line = live.last(where: { $0.start <= a.below }) ?? live.first {
+            adding?.below = line.start
+        } else {
+            finishNewLine()
+        }
+    }
+
+    private func finishNewLine() {
+        adding = nil
+        newFocused = false
+    }
+
+    /// The new line under its line: the time it will get, the speaker (click
+    /// to change), then the field. Lines up with the lines around it.
+    @ViewBuilder private func newLineEditor(_ a: NewLine, labels: Speakers.Labeler,
+                                            options: [Speakers.SpeakerOption]) -> some View {
+        let time = RecorderModel.newLineTimes(live, below: a.below)?.start ?? a.below
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(info.timeLabel(time, style: timeStyle))
+                .font(.callout)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(width: 60, alignment: .trailing)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    if let s = a.speaker {
+                        SpeakerLabelButton(name: labels.display(s), solid: true) { newLineSpeakerItems(options) }
+                    }
+                    LineEditor(draft: newDraft, focused: $newFocused, font: Theme.transcript(textSize),
+                               prompt: "New line", onSave: { saveNewLine() }, onCancel: { finishNewLine() })
+                }
+                Text("Enter adds the line. Esc cancels.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .transition(.opacity)
+    }
+
+    /// The name menu of the new line: same people as the other lines.
+    @ViewBuilder private func newLineSpeakerItems(_ options: [Speakers.SpeakerOption]) -> some View {
+        let pick = Binding<String>(
+            get: { adding?.speaker ?? "" },
+            set: {
+                adding?.speaker = $0
+                Task { @MainActor in newFocused = true } // back to typing
+            }
+        )
+        Picker("This line is:", selection: pick) {
+            ForEach(options, id: \.choice) { Text($0.name).tag($0.choice) }
+        }
+        .pickerStyle(.inline)
+        Button("Someone else…") {
+            nameDraft = ""
+            naming = Naming(start: adding?.below ?? 0, voice: nil, oldName: "", newLine: true)
+        }
     }
 
     private func save() {
@@ -829,6 +940,8 @@ private struct PlayingLineText: View {
 /// clicking the name opens the menu right there. Shaded on hover.
 struct SpeakerLabelButton<Items: View>: View {
     let name: String
+    /// Drawn by itself (on a line being added), not over a name under it.
+    var solid = false
     @ViewBuilder let items: () -> Items
     @State private var hovering = false
     @AppStorage(TextSize.key) private var textSize = TextSize.normal
@@ -842,7 +955,7 @@ struct SpeakerLabelButton<Items: View>: View {
                 .fontWeight(.semibold)
                 // See-through, so the name under it shows. On hover it draws
                 // itself over the shade (the shade would hide the one under it).
-                .foregroundStyle(hovering ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Color.clear))
+                .foregroundStyle(hovering || solid ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Color.clear))
                 .background {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Theme.line.opacity(hovering ? 0.9 : 0))

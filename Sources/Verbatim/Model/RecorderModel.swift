@@ -33,7 +33,19 @@ final class RecorderModel {
     static var quietMinutes: Int {
         UserDefaults.standard.object(forKey: quietMinutesKey) as? Int ?? 5
     }
-    static let bytesPerHour: Int64 = 16_000 * 2 * 3600
+    /// While recording: audio.wav (16 kHz) plus listen.wav (48 kHz), 16-bit.
+    static let bytesPerHour: Int64 = (16_000 + 48_000) * 2 * 3600
+
+    /// Undo Stop: the listening copy carries on too, padded with silence if
+    /// it's short, so it stays in step with audio.wav. None if the recording
+    /// never had one.
+    static func listenWriter(appendingTo id: UUID, after samples: Int64) -> WavWriter? {
+        let url = RecordingStore.listenWavURL(id)
+        guard FileManager.default.fileExists(atPath: url.path),
+              let w = try? WavWriter(appendingTo: url, rate: WavWriter.listenRate) else { return nil }
+        try? w.pad(to: samples * Int64(WavWriter.listenRate / WavWriter.sampleRate))
+        return w
+    }
 
     private(set) var phase: Phase = .idle
     private(set) var recordings: [RecordingInfo] = []
@@ -63,6 +75,8 @@ final class RecorderModel {
     /// every change is a round trip to macOS.
     private(set) var menuClock = "00:00"
     private(set) var status: Status?
+    /// Recordings whose last change couldn't be saved (see `persist`).
+    @ObservationIgnored private var unsaved: Set<UUID> = []
     private(set) var stoppedNote: StoppedNote?
     /// Shown for 10 s after Move to Trash, with Undo.
     struct DeletedNote: Equatable {
@@ -128,7 +142,8 @@ final class RecorderModel {
     /// What the text link in the status spot does, for `offer`.
     @ObservationIgnored private var offered: (() -> Void)?
     /// Delete Audio Only, for Undo: which recording and where its audio went in the Trash.
-    @ObservationIgnored private var audioUndo: (id: UUID, trashURL: URL, original: URL)?
+    /// Delete Audio's Undo: each file moved to the Trash, and where it was.
+    @ObservationIgnored private var audioUndo: (id: UUID, files: [(trash: URL, original: URL)])?
 
     var current: RecordingInfo? { recordings.first { $0.id == currentID } }
     var isBusy: Bool { phase != .idle }
@@ -220,7 +235,8 @@ final class RecorderModel {
         do {
             try RecordingStore.create(info)
             let writer = try WavWriter(creating: RecordingStore.wavURL(info.id))
-            pipeline.attach(writer)
+            let listen = try? WavWriter(creating: RecordingStore.listenWavURL(info.id), rate: WavWriter.listenRate)
+            pipeline.attach(writer, listen: listen)
             LiveTranscriber.shared.recordingStarted(info.id, samples: 0)
             try pipeline.startCapture(device: dev)
             Transcriber.shared.recordingStarted(info.id)
@@ -354,7 +370,7 @@ final class RecorderModel {
         }
         do {
             let writer = try WavWriter(appendingTo: RecordingStore.wavURL(info.id))
-            pipeline.attach(writer)
+            pipeline.attach(writer, listen: Self.listenWriter(appendingTo: info.id, after: writer.samplesWritten))
             LiveTranscriber.shared.recordingStarted(info.id, samples: writer.samplesWritten)
             try pipeline.startCapture(device: dev)
             Transcriber.shared.recordingStarted(info.id)
@@ -492,7 +508,7 @@ final class RecorderModel {
     func setKeepAudio(_ id: UUID, _ keep: Bool) {
         guard let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         recordings[i].keepAudio = keep ? true : nil
-        try? RecordingStore.save(recordings[i])
+        guard persist(recordings[i]) else { return }
         flash(keep ? "\(recordings[i].title) keeps its audio." : "\(recordings[i].title)'s audio is deleted after \(AudioCleanup.days) days like the others.")
     }
 
@@ -500,11 +516,11 @@ final class RecorderModel {
     func removeAudioForGood(_ id: UUID) -> Bool {
         guard let i = recordings.firstIndex(where: { $0.id == id }) else { return false }
         Playback.shared.forget(id)
-        for url in [RecordingStore.wavURL(id), RecordingStore.m4aURL(id)] where FileManager.default.fileExists(atPath: url.path) {
+        for url in RecordingStore.audioFiles(id) {
             do { try FileManager.default.removeItem(at: url) } catch { return false }
         }
         recordings[i].audioDeletedAt = Date()
-        try? RecordingStore.save(recordings[i])
+        persist(recordings[i])
         return true
     }
 
@@ -512,7 +528,7 @@ final class RecorderModel {
 
     /// Selects the audio in Finder, or the folder if the audio was deleted.
     func showInFinder(_ info: RecordingInfo) {
-        let audio = RecordingStore.audioURL(info.id)
+        let audio = RecordingStore.playbackURL(info.id)
         let target = FileManager.default.fileExists(atPath: audio.path) ? audio : RecordingStore.folder(info.id)
         NSWorkspace.shared.activateFileViewerSelecting([target])
     }
@@ -544,7 +560,7 @@ final class RecorderModel {
         return nil
     }
 
-    /// Moves only audio.wav to the Mac's Trash. The transcript stays.
+    /// Moves only the audio files to the Mac's Trash. The transcript stays.
     /// Undo for 10 s; after that it's still in the Trash.
     func deleteAudio(_ id: UUID) {
         guard audioDeleteBlocker(id) == nil, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
@@ -561,21 +577,25 @@ final class RecorderModel {
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
         Playback.shared.forget(id)
-        let audio = RecordingStore.audioURL(id)
-        var trashed: NSURL?
-        if FileManager.default.fileExists(atPath: audio.path) {
+        // The 16 kHz audio and the 48 kHz listening copy go together.
+        var moved: [(trash: URL, original: URL)] = []
+        for audio in RecordingStore.audioFiles(id) {
+            var trashed: NSURL?
             do {
                 try FileManager.default.trashItem(at: audio, resultingItemURL: &trashed)
             } catch {
+                // Put back what already went, so it's all or nothing.
+                for m in moved { try? FileManager.default.moveItem(at: m.trash, to: m.original) }
                 status = Status(text: "Couldn't delete the audio: \(error.localizedDescription)")
                 return
             }
+            if let url = trashed as URL? { moved.append((url, audio)) }
         }
         recordings[i].audioDeletedAt = Date()
-        try? RecordingStore.save(recordings[i])
+        persist(recordings[i])
 
-        guard let url = trashed as URL? else { return }
-        audioUndo = (id, url, audio)
+        guard !moved.isEmpty else { return }
+        audioUndo = (id, moved)
         let s = Status(text: "Deleted the audio for \(info.title). The text stays.", action: .undoAudioDelete)
         status = s
         Task { [weak self] in
@@ -591,14 +611,14 @@ final class RecorderModel {
         audioUndo = nil
         if status?.action == .undoAudioDelete { status = nil }
         do {
-            try FileManager.default.moveItem(at: undo.trashURL, to: undo.original)
+            for f in undo.files { try FileManager.default.moveItem(at: f.trash, to: f.original) }
         } catch {
             status = Status(text: "Couldn't bring the audio back. It's still in the Trash.")
             return
         }
         guard let i = recordings.firstIndex(where: { $0.id == undo.id }) else { return }
         recordings[i].audioDeletedAt = nil
-        try? RecordingStore.save(recordings[i])
+        persist(recordings[i])
     }
 
     // MARK: - Import (Voice Memos and other files)
@@ -655,7 +675,7 @@ final class RecorderModel {
                 guard let self, let i = self.recordings.firstIndex(where: { $0.id == id }) else { return }
                 self.recordings[i].samples = samples
                 self.recordings[i].endedAt = self.recordings[i].createdAt.addingTimeInterval(Double(samples) / 16_000)
-                try? RecordingStore.save(self.recordings[i])
+                self.persist(self.recordings[i])
                 Transcriber.shared.setImporting(id, false)
                 Transcriber.shared.enqueue(id)
             } catch {
@@ -681,6 +701,9 @@ final class RecorderModel {
     }
 
     func clearStatus() { status = nil }
+
+    /// A note that stays until something replaces it.
+    func hold(_ text: String) { status = Status(text: text) }
 
     /// A short note that goes away by itself, even while recording.
     func flash(_ text: String) {
@@ -777,14 +800,14 @@ final class RecorderModel {
     func setCopiedUpTo(_ id: UUID, _ seconds: Double) {
         guard let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         recordings[i].copiedUpTo = seconds
-        try? RecordingStore.save(recordings[i])
+        persist(recordings[i])
     }
 
     /// Markers (step 7b), seconds into the audio. See Markers.swift.
     func setMarkers(_ id: UUID, _ markers: [Double]) {
         guard let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         recordings[i].markers = markers.isEmpty ? nil : markers.sorted()
-        try? RecordingStore.save(recordings[i])
+        persist(recordings[i])
     }
 
     func rename(_ id: UUID, to title: String) {
@@ -792,7 +815,7 @@ final class RecorderModel {
         guard !trimmed.isEmpty, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         recordings[i].title = trimmed
         recordings[i].autoTitle = nil // Ryan named it: auto-naming leaves it alone
-        try? RecordingStore.save(recordings[i])
+        persist(recordings[i])
     }
 
     /// Auto-naming (step 10): only if Ryan hasn't renamed it meanwhile.
@@ -800,7 +823,7 @@ final class RecorderModel {
         guard let i = recordingIndex(id), recordings[i].autoTitle == true else { return }
         recordings[i].title = title
         recordings[i].autoTitle = false // named once; don't redo it
-        try? RecordingStore.save(recordings[i])
+        persist(recordings[i])
     }
 
     func recordingIndex(_ id: UUID) -> Int? { recordings.firstIndex { $0.id == id } }
@@ -809,7 +832,7 @@ final class RecorderModel {
     func changeRecording(_ i: Int, _ change: (inout RecordingInfo) -> Void) {
         guard recordings.indices.contains(i) else { return }
         change(&recordings[i])
-        try? RecordingStore.save(recordings[i])
+        persist(recordings[i])
     }
 
     /// "Wed 12 Nov": a new recording's name until auto-naming or Ryan changes it.
@@ -817,11 +840,52 @@ final class RecorderModel {
         date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
     }
 
+    /// Saves one recording's recording.json. If it fails (disk full, folder
+    /// locked), says so once and keeps the change in memory: `reload` keeps
+    /// it instead of putting the old file back, and tries again. It used to
+    /// fail silently and the change was undone the next time the app was
+    /// clicked (renames, notes, markers, Keep Audio).
+    @discardableResult
+    func persist(_ info: RecordingInfo) -> Bool {
+        do {
+            try RecordingStore.save(info)
+            unsaved.remove(info.id)
+            return true
+        } catch {
+            if unsaved.insert(info.id).inserted {
+                status = Status(text: "Couldn't save the change to \(info.title): \(error.localizedDescription) Verbatim keeps it and tries again.")
+            }
+            return false
+        }
+    }
+
+    /// Tries the saves that failed again. Returns the ones that still fail.
+    private func retryUnsaved() -> [UUID: RecordingInfo] {
+        var still: [UUID: RecordingInfo] = [:]
+        for id in unsaved {
+            guard let info = recordings.first(where: { $0.id == id }),
+                  FileManager.default.fileExists(atPath: RecordingStore.folder(id).path) else {
+                unsaved.remove(id) // gone: nothing left to save
+                continue
+            }
+            if persist(info) {
+                flash("Saved the change to \(info.title).")
+            } else {
+                still[id] = info
+            }
+        }
+        return still
+    }
+
     func reload() {
         let active = current
+        let mine = retryUnsaved()
         var list = RecordingStore.loadAll()
         if let active, let i = list.firstIndex(where: { $0.id == active.id }) {
             list[i] = active // the live copy is newer than the file
+        }
+        for (i, info) in list.enumerated() where mine[info.id] != nil {
+            list[i] = mine[info.id]! // the file is older than what Ryan did
         }
         recordings = list
         if let s = selection, !list.contains(where: { $0.id == s }) { selection = nil }
@@ -1033,6 +1097,10 @@ final class RecorderModel {
         for (i, var info) in all.enumerated() where info.isActive {
             let audio = RecordingStore.wavURL(info.id)
             let samples = (try? WavWriter.repair(audio)) ?? info.samples
+            let listen = RecordingStore.listenWavURL(info.id)
+            if FileManager.default.fileExists(atPath: listen.path) {
+                _ = try? WavWriter.repair(listen, rate: WavWriter.listenRate)
+            }
             let modified = (try? audio.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
             let endedAt = modified ?? info.createdAt.addingTimeInterval(info.duration)
             info.samples = samples
@@ -1064,7 +1132,7 @@ final class RecorderModel {
 
     private func saveCurrent() {
         guard let info = current else { return }
-        try? RecordingStore.save(info)
+        persist(info)
         lastSave = Date()
     }
 

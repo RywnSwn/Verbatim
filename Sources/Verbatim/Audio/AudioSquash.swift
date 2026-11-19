@@ -2,10 +2,14 @@
 import Foundation
 import Observation
 
-/// Shrinks a recording's audio after Stop (Ryan's ask): the full-size WAV
-/// (about 115 MB per hour, crash safe while recording) becomes AAC in an
-/// .m4a, the format Voice Memos uses, about 14 MB per hour. Speech sounds
-/// the same.
+/// Shrinks a recording's audio after Stop (Ryan's ask). Two full-size WAVs
+/// (crash safe while recording) become AAC in .m4a, the format Voice Memos
+/// uses:
+/// - audio.wav, 16 kHz, what Parakeet reads: 32 kbps, about 14 MB per hour
+///   (as before, so text made from it later doesn't change).
+/// - listen.wav, 48 kHz, for listening: 64 kbps, about 29 MB per hour. A
+///   gentle squeeze: it still sounds like the room (Ryan picked 48 kHz and
+///   ~45 MB per hour for both, 2026-11-19).
 ///
 /// Waits until the recording is final (the 10 s Undo Stop is over) and the
 /// file isn't being transcribed. One at a time, never while recording.
@@ -29,9 +33,15 @@ final class AudioSquash {
         task = Task {
             while let id = nextID() {
                 working = id
-                let wav = RecordingStore.wavURL(id)
-                let m4a = RecordingStore.m4aURL(id)
-                let ok = await Task.detached(priority: .utility) { Self.squash(wav, to: m4a) }.value
+                let jobs = [
+                    (RecordingStore.wavURL(id), RecordingStore.m4aURL(id), Self.textBitRates),
+                    (RecordingStore.listenWavURL(id), RecordingStore.listenM4aURL(id), Self.listenBitRates),
+                ].filter { FileManager.default.fileExists(atPath: $0.0.path) }
+                var ok = true
+                for (wav, m4a, rates) in jobs {
+                    let done = await Task.detached(priority: .utility) { Self.squash(wav, to: m4a, bitRates: rates) }.value
+                    ok = ok && done
+                }
                 working = nil
                 // Something odd (disk full, unreadable file): keep the WAV and
                 // don't try that one again until next launch.
@@ -49,15 +59,22 @@ final class AudioSquash {
         guard !model.isBusy, t.growing.isEmpty else { return nil }
         return model.recordings.first { r in
             r.hasAudio && !r.isActive && r.id != model.currentID && !skipped.contains(r.id)
-                && FileManager.default.fileExists(atPath: RecordingStore.wavURL(r.id).path)
+                && (FileManager.default.fileExists(atPath: RecordingStore.wavURL(r.id).path)
+                    || FileManager.default.fileExists(atPath: RecordingStore.listenWavURL(r.id).path))
                 && t.active?.id != r.id && !t.isQueued(r.id) && !t.importing.contains(r.id)
                 && model.stoppedNote?.recordingID != r.id
         }?.id
     }
 
+    /// 32 kbps is plenty for Parakeet at 16 kHz. If the Mac's encoder won't
+    /// take it, try lower, then its own default (0).
+    nonisolated static let textBitRates = [32_000, 24_000, 0]
+    /// The listening copy: 64 kbps mono at 48 kHz keeps voices clear.
+    nonisolated static let listenBitRates = [64_000, 96_000, 0]
+
     /// Off the main thread. True when the m4a is in place and the WAV is gone.
-    nonisolated private static func squash(_ wav: URL, to m4a: URL) -> Bool {
-        let temp = m4a.deletingLastPathComponent().appending(path: "audio-shrinking.m4a")
+    nonisolated private static func squash(_ wav: URL, to m4a: URL, bitRates: [Int]) -> Bool {
+        let temp = m4a.deletingLastPathComponent().appending(path: m4a.deletingPathExtension().lastPathComponent + "-shrinking.m4a")
         // Left over if the app quit or crashed partway through last time.
         try? FileManager.default.removeItem(at: temp)
         do {
@@ -76,10 +93,8 @@ final class AudioSquash {
                 }
                 try FileManager.default.removeItem(at: m4a)
             }
-            // 32 kbps is plenty for speech at 16 kHz. If the Mac's encoder
-            // won't take it, try lower, then its own default.
             var output: AVAudioFile?
-            for bitRate in [32_000, 24_000, 0] {
+            for bitRate in bitRates {
                 var settings: [String: Any] = [
                     AVFormatIDKey: kAudioFormatMPEG4AAC,
                     AVSampleRateKey: format.sampleRate,

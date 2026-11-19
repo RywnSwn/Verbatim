@@ -75,6 +75,38 @@ extension RecorderModel {
         }
     }
 
+    /// Right-click > Add line below, once something was typed. Locked like
+    /// an edit (later passes leave it alone), with the speaker Ryan left on
+    /// it. Nothing typed: nothing added.
+    func addLine(_ id: UUID, below: Double, text: String, speaker: String?) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let live = LiveTranscriber.shared
+        guard let at = Self.newLineTimes(live.lines(id), below: below) else { return }
+        var line = Transcript.Line(start: at.start, end: at.end, text: trimmed, locked: true)
+        line.speaker = speaker
+        live.insertLine(id, line)
+        offerLineUndo("Added a line.") {
+            live.discardLine(id, start: at.start)
+        }
+    }
+
+    /// Where a line added under `below` goes: in the gap before the next
+    /// line, so the order and the times stay right. At the very end (also
+    /// while recording) just after the last line, before any new words.
+    static func newLineTimes(_ lines: [Transcript.Line], below: Double) -> (start: Double, end: Double)? {
+        guard let i = lines.firstIndex(where: { $0.start == below }) else { return nil }
+        let above = lines[i]
+        let low = max(above.end, above.start)
+        guard i + 1 < lines.count, lines[i + 1].start > above.start else {
+            return (low + 0.01, low + 0.02)
+        }
+        let next = lines[i + 1].start
+        if low < next { return ((low + next) / 2, next) }
+        let start = (above.start + next) / 2 // lines overlap: halfway between their starts
+        return (start, start)
+    }
+
     func deleteLine(_ id: UUID, _ source: LineSource, start: Double) {
         let removed: Transcript.Line? = switch source {
         case .checked: Transcriber.shared.removeLine(id, start: start)
