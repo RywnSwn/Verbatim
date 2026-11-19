@@ -172,11 +172,11 @@ struct PastRecordingView: View {
         VStack(spacing: 0) {
             TranscriptStatusLine(info: info)
             FindLine(id: info.id)
-            if checked.isEmpty, liveLines.isEmpty {
-                emptyState
-            } else {
-                TranscriptList(info: info, checked: checked, live: liveLines, checkedUpTo: transcript?.doneUpTo)
-            }
+            // Always the page, also with no lines yet (it used to be a big
+            // centered screen with a Transcribe button; Ryan: after an early
+            // Stop it should stay the same page and just fill in).
+            TranscriptList(info: info, checked: checked, live: liveLines, checkedUpTo: transcript?.doneUpTo,
+                           emptyHint: emptyHint, emptyAction: emptyAction)
             if playback.isShowing(info.id) {
                 PlayerBar(info: info)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -238,28 +238,30 @@ struct PastRecordingView: View {
         return "\(info.groupedStartedText), \(RecorderModel.minutesText(info.duration))"
     }
 
-    @ViewBuilder private var emptyState: some View {
-        VStack(spacing: 14) {
-            Text(info.fullTitle)
-                .font(.system(size: 30, weight: .medium, design: .serif))
-            if transcript?.finished == true {
-                Text("No speech found in this recording.")
-                    .foregroundStyle(.secondary)
-            } else if !info.hasAudio {
-                Text("The audio was deleted before it was transcribed.")
-                    .foregroundStyle(.secondary)
-            } else if !transcriber.isQueued(info.id), transcriber.active?.id != info.id,
-                      !transcriber.importing.contains(info.id), transcriber.errors[info.id] == nil,
-                      !transcriber.isUnfinished(info.id) {
-                Button("Transcribe") { transcriber.enqueue(info.id) }
-                    .buttonStyle(.inkLarge)
-            } else {
-                Text("Text shows up here as it goes.")
-                    .foregroundStyle(.secondary)
-            }
+    /// No lines yet: what's going on, in the spot where the first line goes.
+    private var emptyHint: String {
+        if transcript?.finished == true || live.texts[info.id]?.pass?.finished == true {
+            return "No speech found in this recording."
         }
-        .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if live.activeID == info.id { return "Finishing the text…" }
+        if !info.hasAudio { return "The audio was deleted before it was transcribed." }
+        if needsTranscribe { return "No text yet." }
+        return "Text shows up here as it goes."
+    }
+
+    /// Nothing is working on it: offer Transcribe as a text link.
+    private var needsTranscribe: Bool {
+        info.hasAudio && live.activeID != info.id
+            && !transcriber.isQueued(info.id) && transcriber.active?.id != info.id
+            && !transcriber.importing.contains(info.id) && transcriber.errors[info.id] == nil
+            && !transcriber.isUnfinished(info.id)
+    }
+
+    private var emptyAction: (label: String, run: () -> Void)? {
+        guard needsTranscribe, checked.isEmpty, liveLines.isEmpty,
+              transcript?.finished != true, live.texts[info.id]?.pass?.finished != true else { return nil }
+        let id = info.id
+        return ("Transcribe", { transcriber.enqueue(id) })
     }
 }
 

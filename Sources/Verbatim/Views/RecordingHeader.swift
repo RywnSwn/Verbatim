@@ -28,12 +28,13 @@ struct RecordingHeader: View {
             }
             // The page's top rule, same as the start page (Ryan's E).
             Rectangle()
-                .fill(Theme.ink)
-                .frame(height: 1.5)
+                .fill(Theme.rule)
+                .frame(height: 1)
                 .padding(.top, 8)
                 .accessibilityHidden(true)
         }
-        .padding(.leading, 70) // lines up with the transcript text, past the time gutter
+        // Starts at the page edge, over the times (was 70 pt in, lined up
+        // with the text; Ryan found the gap from the sidebar too big).
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

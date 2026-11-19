@@ -294,7 +294,10 @@ private struct MiniLines: View {
                     .padding(.vertical, 3)
                 } else {
                     MiniLineRow(text: row.line.text, name: labels.name(row.line), font: Self.font,
-                                newest: i == rows.count - 1) { begin(row.line, row.source) }
+                                newest: i == rows.count - 1, covered: editing != nil) {
+                        // While one line is being fixed, the others only save it (Ryan, 2026-11-19).
+                        if editing != nil { save() } else { begin(row.line, row.source) }
+                    }
                 }
             }
             if more > 0 {
@@ -320,6 +323,9 @@ private struct MiniLines: View {
 
     private func begin(_ line: Transcript.Line, _ source: LineSource) {
         if editing != nil { save() }
+        // A new box for every edit, so the old field's last write can't land
+        // in this line (see TranscriptList.begin).
+        draft = LineDraft()
         draft.text = line.text
         editing = EditKey(source: source, start: line.start)
         if source == .live { live.editing = (id, line.start) }
@@ -346,6 +352,8 @@ private struct MiniLineRow: View {
     let name: String?
     let font: Font
     let newest: Bool
+    /// Another line is being fixed: a click here just saves it.
+    var covered = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -360,13 +368,13 @@ private struct MiniLineRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .background(Theme.ink.opacity(hovering ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 6))
+                .background(Theme.ink.opacity(hovering && !covered ? 0.06 : 0), in: RoundedRectangle(cornerRadius: 6))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .pointerStyle(.horizontalText)
-        .help("Click to fix this line")
+        .pointerStyle(covered ? .default : .horizontalText)
+        .help(covered ? "Click to save the line you're fixing" : "Click to fix this line")
         .accessibilityHint("Edit line")
     }
 }

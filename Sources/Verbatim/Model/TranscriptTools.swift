@@ -16,7 +16,9 @@ enum TimeStyle: String, CaseIterable {
         TimeStyle(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .clock
     }
 
-    static var includeInCopies: Bool { UserDefaults.standard.bool(forKey: copyKey) }
+    /// On unless switched off in Settings (was off; Ryan expected times in
+    /// copies and exports, 2026-11-19).
+    static var includeInCopies: Bool { UserDefaults.standard.object(forKey: copyKey) as? Bool ?? true }
 }
 
 /// One search hit: which line, and which hit inside that line.

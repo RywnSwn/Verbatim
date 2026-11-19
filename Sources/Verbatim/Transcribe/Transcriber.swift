@@ -285,11 +285,16 @@ final class Transcriber {
 
     // MARK: - Running
 
+    /// No file being transcribed or waiting (the live models may load then).
+    var isIdle: Bool { workTask == nil && queue.isEmpty }
+
     private func runQueue() {
         let files = isModelReady && !queue.isEmpty
         let voices = SpeakerModel.shared.isReady && !speakerQueue.isEmpty
         guard workTask == nil, growing.isEmpty, files || voices else { return }
         workTask = Task {
+            // The live models loaded ahead of Record go first: one Parakeet at a time.
+            await live.coolDown()
             while isModelReady, let id = queue.first, growing.isEmpty {
                 let finished = await transcribe(id)
                 if finished {
@@ -305,6 +310,10 @@ final class Transcriber {
             await speakers.unload()
             workTask = nil
             runQueue()
+            // Done with files and the start page is open: load the live
+            // models again, ready for Record.
+            let model = RecorderModel.shared
+            if workTask == nil, model.selection == nil, !model.showingDeleted { live.warmUp() }
             AudioSquash.shared.run() // shrink the audio of files that are done
         }
     }

@@ -9,6 +9,7 @@ import SwiftUI
 /// Mockup: https://claude.ai/artifact/Bx3y11h4r3KMAz1s9EnCbh
 struct StartView: View {
     @Environment(RecorderModel.self) private var model
+    @Environment(LiveTranscriber.self) private var live
 
     /// Scrolls when the window is short. Without this the screen was taller
     /// than a short window, which pushed the sidebar's top and bottom past
@@ -26,7 +27,6 @@ struct StartView: View {
                         Text("Or drop a Voice Memo here to transcribe it.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
-                            .padding(.leading, 70)
                             .frame(maxWidth: 760, alignment: .leading)
                             .padding(.horizontal, 32)
                             .padding(.bottom, 20)
@@ -35,6 +35,10 @@ struct StartView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
+        // Get the live models ready while you're on this page, so Record
+        // starts listening straight away (see LiveTranscriber.warmUp).
+        .onAppear { live.warmUp() }
+        .onChange(of: live.modelState == .ready) { if live.modelState == .ready { live.warmUp() } }
     }
 
     private var page: some View {
@@ -51,26 +55,30 @@ struct StartView: View {
                     recordButton
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, 14)
 
+            // Same rule and the same space around it as a transcript's
+            // header (RecordingHeader): 14 above, 24 to the first line.
             Rectangle()
-                .fill(Theme.ink)
-                .frame(height: 1.5)
+                .fill(Theme.rule)
+                .frame(height: 1)
                 .accessibilityHidden(true)
-                .padding(.bottom, 10)
+                .padding(.bottom, 24)
 
+            // The hint sits where the first line will be. The model status
+            // goes under it, so an empty status can't add a gap above it.
             VStack(alignment: .leading, spacing: 12) {
-                PageModelStatus()
                 Text("The class shows up on this page as it's said.")
                     .font(.body)
                     .foregroundStyle(.tertiary)
+                PageModelStatus()
             }
-            .padding(.top, 10)
         }
-        // Same spot as a transcript's header and first line (TranscriptList:
-        // 32 side margin, 24 top, 70 past the time gutter), so pressing
-        // Record doesn't move the title, the rule or the hint.
-        .padding(.leading, 70)
+        // Same spot as a transcript's header (TranscriptList: 32 side
+        // margin, 24 top), so pressing Record doesn't move the title, the
+        // rule or the hint. Starts at the page edge, not 70 pt in past the
+        // time gutter: there are no times here, and Ryan found that gap too
+        // big (2026-11-19).
         .padding(.top, 24)
         .padding(.bottom, 64) // room for the drop hint
     }

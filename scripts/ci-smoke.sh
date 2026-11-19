@@ -242,6 +242,18 @@ sleep 2
 check "open a recording"
 shot "opened-recording"
 
+# Copy All (⇧⌘C) and Export as Markdown read the same text: check the
+# speaker names are in it (Ryan, 2026-11-19: "a copy doesn't show the speaker").
+pbcopy < /dev/null
+osascript -e 'tell application "System Events" to keystroke "c" using {shift down, command down}' || true
+sleep 1
+pbpaste > "$OUT/copy-all.txt"
+echo "copy all:"; cat "$OUT/copy-all.txt"
+if ! grep -q "Mr. Yurt" "$OUT/copy-all.txt"; then
+  echo "::error::Copy All has no speaker names"
+  FAILED=1
+fi
+
 # Design pass: the Settings window (pages down the left), General then Look.
 osascript -e 'tell application "System Events" to keystroke "," using {command down}' || true
 sleep 3
