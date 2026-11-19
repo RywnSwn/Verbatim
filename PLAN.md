@@ -1539,3 +1539,18 @@ Test list (for Ryan):
    up"), the app doesn't freeze or crash. Stop: the file carries on.
 4. Rename a class, add a note and a marker, click another app, click back:
    all still there (this always worked when the disk is fine).
+
+## Next asks (Ryan, 2026-11-19), one chat, branch `claude/listen-audio-add-line`
+(built on `claude/protect-data`, so merging it brings item 3 too)
+1. Better playback audio. Audio was 16 kHz, squashed to 32 kbps AAC after
+   Stop: muffled to listen to. Ryan picked 48 kHz: record a 48 kHz copy for
+   listening and shrink it gently after Stop (~45 MB per hour is fine, he
+   deletes audio after reviewing). Parakeet keeps getting 16 kHz and the
+   transcripts must not change.
+2. Add line below. Right-click a line > "Add line below": an empty line to
+   type in, time between the lines around it, speaker from the line above
+   (click the name to change it), locked like an edit, ⌘Z undoes it.
+   Follows the typing rule (one box open, click away saves, no copying).
+3. Small: `AudioPipeline` drops the right channel of a stereo mic (no
+   downmix), so a 2-mic receiver in split mode loses one mic. Fix.
+Not doing: echo removal (could damage his voice in the recording).
