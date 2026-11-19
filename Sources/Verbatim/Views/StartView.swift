@@ -51,21 +51,24 @@ struct StartView: View {
                     recordButton
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, 14)
 
+            // Same rule and the same space around it as a transcript's
+            // header (RecordingHeader): 14 above, 24 to the first line.
             Rectangle()
-                .fill(Theme.ink)
-                .frame(height: 1.5)
+                .fill(Theme.rule)
+                .frame(height: 1)
                 .accessibilityHidden(true)
-                .padding(.bottom, 10)
+                .padding(.bottom, 24)
 
+            // The hint sits where the first line will be. The model status
+            // goes under it, so an empty status can't add a gap above it.
             VStack(alignment: .leading, spacing: 12) {
-                PageModelStatus()
                 Text("The class shows up on this page as it's said.")
                     .font(.body)
                     .foregroundStyle(.tertiary)
+                PageModelStatus()
             }
-            .padding(.top, 10)
         }
         // Same spot as a transcript's header and first line (TranscriptList:
         // 32 side margin, 24 top, 70 past the time gutter), so pressing

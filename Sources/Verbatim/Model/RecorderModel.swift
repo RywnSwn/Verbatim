@@ -120,7 +120,10 @@ final class RecorderModel {
     @ObservationIgnored private var asleepSince: Date?
     @ObservationIgnored private var restartedAfterError = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
-    @ObservationIgnored private var lineUndo: (() -> Void)?
+    /// Every change with Undo (line edits, deletes, markers, notes, speakers,
+    /// moves), newest last. ⌘Z takes them back one by one, also after the
+    /// Undo link in the bottom bar has gone (Ryan, 2026-11-19).
+    @ObservationIgnored private var undoStack: [(text: String, run: () -> Void)] = []
     @ObservationIgnored private var fileToShow: URL?
     /// What the text link in the status spot does, for `offer`.
     @ObservationIgnored private var offered: (() -> Void)?
@@ -387,9 +390,8 @@ final class RecorderModel {
         case .resume: resume()
         case .undoDelete: undoDelete()
         case .undoLine:
-            lineUndo?()
-            lineUndo = nil
             if status?.action == .undoLine { status = nil }
+            undoLastChange()
         case .showFile:
             if let url = fileToShow { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             status = nil
@@ -690,17 +692,59 @@ final class RecorderModel {
         }
     }
 
-    /// "Line edited. Undo" in the status spot for 10 seconds.
+    /// "Line edited. Undo" in the status spot for 10 seconds, and on the
+    /// ⌘Z list for good (until the app quits, last 50 changes).
     func offerLineUndo(_ text: String, undo: @escaping () -> Void) {
-        lineUndo = undo
+        undoStack.append((text, undo))
+        if undoStack.count > 50 { undoStack.removeFirst() }
         let s = Status(text: text, action: .undoLine)
         status = s
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(10))
             guard let self, self.status == s else { return }
             self.status = nil
-            self.lineUndo = nil
         }
+    }
+
+    /// Edit > Undo (⌘Z). Typing in a box: undoes the typing, like any Mac
+    /// app. Otherwise: a deleted recording or audio that still shows Undo,
+    /// then the newest change on the list.
+    func undo() {
+        if NSApp.keyWindow?.firstResponder is NSTextView {
+            NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
+            return
+        }
+        switch status?.action {
+        case .undoDelete?: perform(.undoDelete)
+        case .undoAudioDelete?: perform(.undoAudioDelete)
+        default:
+            if status?.action == .undoLine { status = nil }
+            undoLastChange()
+        }
+    }
+
+    /// Edit > Redo (⇧⌘Z): only for typing in a box.
+    func redo() {
+        if NSApp.keyWindow?.firstResponder is NSTextView {
+            NSApp.sendAction(Selector(("redo:")), to: nil, from: nil)
+        }
+    }
+
+    private func undoLastChange() {
+        guard let last = undoStack.popLast() else {
+            flash("Nothing to undo.")
+            return
+        }
+        last.run()
+        flash("Undid: \(Self.undoName(last.text))")
+    }
+
+    /// "Line edited." becomes "line edited." for "Undid: line edited."
+    /// Names at the start (Mr. Yurt, English) stay as they are.
+    private static func undoName(_ text: String) -> String {
+        let common = ["Line", "Deleted", "Moved", "Marker", "Note", "Remembered."]
+        guard let word = text.split(separator: " ").first, common.contains(String(word)) else { return text }
+        return text.prefix(1).lowercased() + text.dropFirst()
     }
 
     /// A message with a text link that does `run`, for 10 seconds.

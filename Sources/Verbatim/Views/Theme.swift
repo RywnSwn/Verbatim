@@ -11,6 +11,9 @@ enum Theme {
     static let ink = dynamic(light: 0x1F1D1A, dark: 0xEBE8E1)
     /// Thin divider lines.
     static let line = dynamic(light: 0xE6E2DA, dark: 0x34322E)
+    /// The page's top rule, under the title (start page and transcripts).
+    /// Was 1.5 pt of full ink; Ryan found it thick (2026-11-19).
+    static let rule = dynamic(light: 0xCFCAC0, dark: 0x4A4741)
     /// Links, focus and the edit underline.
     static let accent = dynamic(light: 0x24427A, dark: 0x8FA9DD)
     /// Notes Ryan typed under a line: a warm pencil color, so a note never

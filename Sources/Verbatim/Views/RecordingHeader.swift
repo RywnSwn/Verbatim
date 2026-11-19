@@ -28,8 +28,8 @@ struct RecordingHeader: View {
             }
             // The page's top rule, same as the start page (Ryan's E).
             Rectangle()
-                .fill(Theme.ink)
-                .frame(height: 1.5)
+                .fill(Theme.rule)
+                .frame(height: 1)
                 .padding(.top, 8)
                 .accessibilityHidden(true)
         }

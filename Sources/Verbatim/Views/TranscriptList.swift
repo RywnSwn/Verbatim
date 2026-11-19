@@ -11,9 +11,10 @@ import SwiftUI
 /// each line. Click it to rename or pick who said it (or right-click > Speaker).
 ///
 /// Editing: click a line (Enter saves, Esc cancels, clicking away
-/// saves), or right-click for Copy / Edit / Delete. Edited lines turn full ink
-/// and get a lock; new words never go into them. Every change has Undo in
-/// the bottom bar.
+/// saves), or right-click for Copy / Edit / Delete. While a line is being
+/// typed, the rest of the page is covered (`TypingShield`): a click there
+/// only saves. Edited lines turn full ink and get a lock; new words never go
+/// into them. Every change has Undo in the bottom bar and on ⌘Z.
 struct TranscriptList: View {
     @Environment(RecorderModel.self) private var model
     @Environment(LiveTranscriber.self) private var liveTranscriber
@@ -110,6 +111,7 @@ struct TranscriptList: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.lineGap) {
                 RecordingHeader(info: info, lines: checked + live, isLive: isLive)
+                    .modifier(TypingShield(active: isTyping) { stopTyping() })
                     .padding(.bottom, 10)
                 if rows.isEmpty, let emptyHint {
                     Text(emptyHint)
@@ -125,17 +127,22 @@ struct TranscriptList: View {
                     VStack(alignment: .leading, spacing: Theme.lineGap) {
                         switch row {
                         case .line(let line, let source):
-                            lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil,
-                                    name: source == .live ? labels.name(line) : nil, options: options,
-                                    marked: marked.contains(line.start), note: notes[line.start])
-                            if notingLine?.start == line.start {
-                                noteEditor
-                            } else if let note = notes[line.start] {
-                                NoteRow(text: note) { beginNote(line, note) }
+                            VStack(alignment: .leading, spacing: Theme.lineGap) {
+                                lineRow(line, source, speaker: source == .live ? labels.choice(line) : nil,
+                                        name: source == .live ? labels.name(line) : nil, options: options,
+                                        marked: marked.contains(line.start), note: notes[line.start])
+                                if notingLine?.start == line.start {
+                                    noteEditor
+                                } else if let note = notes[line.start] {
+                                    NoteRow(text: note) { beginNote(line, note) }
+                                }
+                                if let offer = model.fixOffer, offer.recordingID == info.id, offer.start == line.start {
+                                    fixOfferRow(offer.fix)
+                                }
                             }
-                            if let offer = model.fixOffer, offer.recordingID == info.id, offer.start == line.start {
-                                fixOfferRow(offer.fix)
-                            }
+                            // While a line or note is being typed, every other
+                            // line is covered: a click there only saves.
+                            .modifier(TypingShield(active: isTyping && !isTyping(on: line, source)) { stopTyping() })
                         case .checkedUpTo(let seconds):
                             HStack(spacing: 10) {
                                 Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
@@ -145,6 +152,7 @@ struct TranscriptList: View {
                             }
                             .padding(.leading, 70)
                             .padding(.vertical, 4)
+                            .modifier(TypingShield(active: isTyping) { stopTyping() })
                         case .volatile(let text):
                             HStack(alignment: .firstTextBaseline, spacing: 18) {
                                 Color.clear.frame(width: 52, height: 1)
@@ -154,6 +162,7 @@ struct TranscriptList: View {
                                     .foregroundStyle(Theme.ink.opacity(0.45))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
+                            .modifier(TypingShield(active: isTyping) { stopTyping() })
                         }
                     }
                 }
@@ -163,6 +172,12 @@ struct TranscriptList: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 24)
             .frame(maxWidth: .infinity)
+            // The gaps between lines and the margins count as "away" too.
+            .background {
+                if isTyping {
+                    Color.clear.contentShape(Rectangle()).onTapGesture { stopTyping() }
+                }
+            }
         }
         .scrollPosition($position)
         .background(Theme.paper)
@@ -532,6 +547,7 @@ struct TranscriptList: View {
     private func beginNote(_ line: Transcript.Line, _ text: String) {
         if editing != nil { save() }
         if notingLine != nil { saveNote() }
+        noteDraft = LineDraft() // a new box, same reason as in `begin`
         noteDraft.text = text
         notingLine = line
         Task { @MainActor in noteFocused = true }
@@ -548,9 +564,27 @@ struct TranscriptList: View {
         noteFocused = false
     }
 
+    /// A line or a note is being typed.
+    private var isTyping: Bool { editing != nil || notingLine != nil }
+
+    /// This line (or its note) is the one being typed: it stays uncovered.
+    private func isTyping(on line: Transcript.Line, _ source: LineSource) -> Bool {
+        editing == EditKey(source: source, start: line.start) || notingLine?.start == line.start
+    }
+
+    /// A click anywhere else while typing: save and stop, nothing more.
+    private func stopTyping() {
+        if editing != nil { save() }
+        if notingLine != nil { saveNote() }
+    }
+
     private func begin(_ line: Transcript.Line, _ source: LineSource) {
         if editing != nil { save() }
         if notingLine != nil { saveNote() }
+        // A new box for every edit. The old field writes its text one last
+        // time as it closes; into a shared box that landed in the line you
+        // clicked next and replaced it (Ryan, 2026-11-19).
+        draft = LineDraft()
         draft.text = line.text
         editing = EditKey(source: source, start: line.start)
         if source == .live { liveTranscriber.editing = (info.id, line.start) }
@@ -588,6 +622,26 @@ extension RecordingInfo {
                 : String(format: "%d:%02d", s / 60, s % 60)
         }
         return wallTime(atSecond: seconds).formatted(.dateTime.hour().minute())
+    }
+}
+
+/// While a line is being typed, lies over the rest of the page so a click
+/// there only saves that line. Before, the click also opened the line under
+/// it, and the old text could land in it (Ryan, 2026-11-19).
+struct TypingShield: ViewModifier {
+    let active: Bool
+    let onTap: () -> Void
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            if active {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onTap)
+                    .pointerStyle(.default)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 }
 

@@ -53,6 +53,14 @@ struct VerbatimApp: App {
                 Button("Transcribe a Recording…") { model.chooseFilesToImport() }
                     .keyboardShortcut("o", modifiers: .command)
             }
+            // ⌘Z: typing in a box undoes the typing; otherwise the last
+            // change to a transcript (line edits, deletes, markers...).
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") { model.undo() }
+                    .keyboardShortcut("z", modifiers: .command)
+                Button("Redo") { model.redo() }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
             CommandGroup(replacing: .textEditing) {
                 Button("Find…") { model.requestFind() }
                     .keyboardShortcut("f", modifiers: .command)
