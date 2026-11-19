@@ -283,8 +283,8 @@ Order to do them in, one chat each:
    - New (this branch): start page title menu > New Group… uses the
      rename alert on `SidebarView`; with the sidebar hidden (narrow
      window) the prompt may not show. Move the alert up to ContentView.
-3. Protect data: DONE 2026-11-19 on `claude/protect-data`, not merged,
-   not tested by Ryan yet (see "Protect data" at the end). Was: "Stop and
+3. Protect data: DONE 2026-11-19, tested by Ryan and merged
+   (RywnSwn/Verbatim#25, see "Protect data" at the end). Was: "Stop and
    Quit" lost up to 10 s of live text; a failed save was silently undone
    on the next app activation; live and file Parakeet could be loaded at
    once.
@@ -476,6 +476,8 @@ gear menu, notes, diagnostics) and `claude/mini-window-crash` are in main.
   mostly uses cloud Claude, where it can't reach his Mac. Idea offered, not
   decided: save transcripts to a repo so cloud Claude can read them.
 - `claude/mini-crash-repro` is a throwaway branch: delete on GitHub.
+  (2026-11-19: every `claude/*` branch is merged or throwaway; Ryan can
+  prune them all. Keep `main` and `ci-smoke`.)
 
 ## State of Ryan's three asks (2026-11-12, evening)
 All on branch `claude/claude-connector` (it holds the lag fix, the mini
@@ -1511,7 +1513,7 @@ words should come within ~2 s. Stop after 10 s: same page, words fill in.
 If still slow, paste ⌃⌘L ("LIVE TEXT START" line).
 
 ## Protect data (code health item 3, 2026-11-19)
-Branch `claude/protect-data`. Not tested by Ryan yet.
+Merged (RywnSwn/Verbatim#25), tested by Ryan 2026-11-19.
 - Stop and Quit (and ⌘Q a moment after Stop, while live text is still
   catching up): the app answers `.terminateLater`, shows "Saving the last
   words, then Verbatim quits…", waits for the live run to finish (max
@@ -1554,7 +1556,7 @@ Test list (for Ryan):
 3. Small: `AudioPipeline` drops the right channel of a stereo mic (no
    downmix), so a 2-mic receiver in split mode loses one mic. Fix.
 Not doing: echo removal (could damage his voice in the recording).
-Built 2026-11-19, not tested by Ryan yet:
+Built 2026-11-19, tested by Ryan and merged (RywnSwn/Verbatim#26):
 - Audio: `AudioPipeline` takes the mic's own format (no audioSettings) and
   makes two mono files from the same sound with its own converters
   (`downmix = true`, best resampler): audio.wav 16 kHz (Parakeet, speaker
