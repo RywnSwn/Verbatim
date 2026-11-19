@@ -288,6 +288,17 @@ final class Transcriber {
     /// No file being transcribed or waiting (the live models may load then).
     var isIdle: Bool { workTask == nil && queue.isEmpty }
 
+    /// Record was pressed while a file was being transcribed: the file stops
+    /// at its next piece and frees its models. Live text waits for that, so
+    /// the file's Parakeet and the live one are never loaded at once (8 GB).
+    /// The mic keeps saving audio meanwhile; live text catches up.
+    func modelsFreed() async {
+        while let task = workTask {
+            await task.value
+            if workTask == task { break }
+        }
+    }
+
     private func runQueue() {
         let files = isModelReady && !queue.isEmpty
         let voices = SpeakerModel.shared.isReady && !speakerQueue.isEmpty

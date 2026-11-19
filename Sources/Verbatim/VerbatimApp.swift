@@ -180,7 +180,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         MainActor.assumeIsolated {
             let model = RecorderModel.shared
-            guard model.isBusy else { return .terminateNow }
+            guard model.isBusy else {
+                // Stopped a moment ago: live text may still be catching up.
+                guard LiveTranscriber.shared.activeID != nil else { return .terminateNow }
+                quitWhenSaved(sender)
+                return .terminateLater
+            }
 
             let alert = NSAlert()
             alert.messageText = "Recording in progress"
@@ -189,9 +194,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.addButton(withTitle: "Stop and Quit")
             if alert.runModal() == .alertSecondButtonReturn {
                 model.stop()
-                return .terminateNow
+                quitWhenSaved(sender)
+                return .terminateLater
             }
             return .terminateCancel
+        }
+    }
+
+    /// Quits once the last words are written down (usually well under a
+    /// second). It used to quit at once and lose up to 10 s of text.
+    @MainActor
+    private func quitWhenSaved(_ app: NSApplication) {
+        RecorderModel.shared.hold("Saving the last words, then Verbatim quits…")
+        Task { @MainActor in
+            await LiveTranscriber.shared.finishBeforeQuit(upTo: 20)
+            app.reply(toApplicationShouldTerminate: true)
         }
     }
 
@@ -199,7 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
             if RecorderModel.shared.isBusy { RecorderModel.shared.stop() }
-            LiveTranscriber.shared.saveIndexNow()
+            LiveTranscriber.shared.saveNow()
         }
     }
 }

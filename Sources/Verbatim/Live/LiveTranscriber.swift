@@ -247,6 +247,12 @@ final class LiveTranscriber {
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var progressSamples: [(Date, Double)] = []
     @ObservationIgnored private var lastSave = Date.distantPast
+    /// One line for every live.json save (see `write`).
+    nonisolated private static let disk = DispatchQueue(label: "Verbatim.live-save", qos: .utility)
+    /// Counts saves per recording, so a slow background save that finishes
+    /// late doesn't put old facts in the index.
+    @ObservationIgnored private var writes: [UUID: Int] = [:]
+    @ObservationIgnored private var warnedSave: Set<UUID> = []
     /// Counts recording starts, so a finishing earlier run (before Undo Stop)
     /// can't clear the status of the new one.
     @ObservationIgnored private var generation = 0
@@ -308,6 +314,7 @@ final class LiveTranscriber {
         let runner = runner
         runTask = Task {
             await previous?.value
+            await Transcriber.shared.modelsFreed()
             await runner.run(id: id, run: run, queue: queue, position: samples)
         }
     }
@@ -387,10 +394,51 @@ final class LiveTranscriber {
         write(t, id)
     }
 
-    /// Saves live.json and keeps the index in step with it.
-    private func write(_ t: LiveText, _ id: UUID) {
-        guard (try? LiveStore.save(t, for: id)) != nil else { return }
-        remember(t, id)
+    /// Saves live.json and keeps the index in step with it. All saves go
+    /// through one line (`disk`), so an older text can never land on top of
+    /// a newer one. `background`: the save every 10 s while recording, so
+    /// writing a long class doesn't hold up the window.
+    private func write(_ t: LiveText, _ id: UUID, background: Bool = false) {
+        let n = (writes[id] ?? 0) + 1
+        writes[id] = n
+        guard background else {
+            let saved = Self.disk.sync { (try? LiveStore.save(t, for: id)) != nil }
+            if saved { remember(t, id) } else { saveFailed(id) }
+            return
+        }
+        Self.disk.async {
+            let saved = (try? LiveStore.save(t, for: id)) != nil
+            Task { @MainActor in
+                let me = LiveTranscriber.shared
+                guard me.writes[id] == n else { return } // a newer save came after
+                if saved { me.remember(t, id) } else { me.saveFailed(id) }
+            }
+        }
+    }
+
+    /// Says it once per recording, not every 10 s.
+    private func saveFailed(_ id: UUID) {
+        guard warnedSave.insert(id).inserted else { return }
+        RecorderModel.shared.flash("Couldn't save the text. The audio is safe, and Verbatim keeps trying.")
+    }
+
+    /// Before quitting: the text of the recording in progress, and every save
+    /// still waiting, are on disk when this returns.
+    func saveNow() {
+        if let id = activeID, let t = texts[id], !t.lines.isEmpty { write(t, id) }
+        Self.disk.sync {}
+        saveIndexNow()
+    }
+
+    /// Stop and Quit: the live run goes through the audio it hadn't got to
+    /// yet (it may have been a few seconds behind), then saves. Gives up
+    /// after `seconds`: the audio file is complete either way.
+    func finishBeforeQuit(upTo seconds: Double) async {
+        let deadline = Date().addingTimeInterval(seconds)
+        while activeID != nil, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        saveNow()
     }
 
     /// The file on disk changed (Put Back, Undo of Delete All): it's read
@@ -665,7 +713,7 @@ final class LiveTranscriber {
 
     fileprivate func save(_ id: UUID) {
         guard let t = texts[id], !t.lines.isEmpty else { return }
-        write(t, id)
+        write(t, id, background: true)
         lastSave = Date()
     }
 

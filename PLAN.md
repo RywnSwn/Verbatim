@@ -283,10 +283,11 @@ Order to do them in, one chat each:
    - New (this branch): start page title menu > New Group… uses the
      rename alert on `SidebarView`; with the sidebar hidden (narrow
      window) the prompt may not show. Move the alert up to ContentView.
-3. Protect data: "Stop and Quit" can lose up to 10 s (or more, if live
-   text was behind) of live text (`apply` saves every 10 s); a failed save
-   is silently undone on the next app activation (renames, notes,
-   markers, Keep Audio); live and file Parakeet can be loaded at once.
+3. Protect data: DONE 2026-11-19 on `claude/protect-data`, not merged,
+   not tested by Ryan yet (see "Protect data" at the end). Was: "Stop and
+   Quit" lost up to 10 s of live text; a failed save was silently undone
+   on the next app activation; live and file Parakeet could be loaded at
+   once.
 4. Errors: a speech model error is swallowed, the app keeps saying
    "listening". Turn the HitchMeter off once the lag is solved.
 5. Tests: none exist. Add a test target that runs on CI. First: word list
@@ -297,8 +298,8 @@ Order to do them in, one chat each:
    speaker counting copied (RecordingHeader + Speakers), Swift 6 mode,
    trim this file (old "how step N works" notes to docs/).
 7. Faster start-up: DONE 2026-11-18 (see "Faster start-up" at the end).
-   Left over: app activation re-reads every recording.json, and the live
-   text save every 10 s runs on the main thread (do with item 3).
+   Left over: app activation re-reads every recording.json. (The live
+   text save every 10 s is off the main thread now, item 3.)
 How the quick fixes were done (2026-11-18):
 - `RecorderModel.finishStopped()` ends Undo Stop for good (recordingFinal +
   AutoName). Called by the 10 s timer, by `start()` and when Undo Stop fails.
@@ -1508,3 +1509,33 @@ early Stop (30 s, no words yet) the page showed a big "Transcribe" screen.
 Test: open the app, wait 10 s on the start page, press Record and talk:
 words should come within ~2 s. Stop after 10 s: same page, words fill in.
 If still slow, paste ⌃⌘L ("LIVE TEXT START" line).
+
+## Protect data (code health item 3, 2026-11-19)
+Branch `claude/protect-data`. Not tested by Ryan yet.
+- Stop and Quit (and ⌘Q a moment after Stop, while live text is still
+  catching up): the app answers `.terminateLater`, shows "Saving the last
+  words, then Verbatim quits…", waits for the live run to finish (max
+  20 s, `LiveTranscriber.finishBeforeQuit`), saves, then quits. Logout
+  path (`applicationWillTerminate`) calls `saveNow()`.
+- live.json saves all go through one serial queue (`LiveTranscriber.disk`).
+  The every-10-s save while recording runs there in the background; edits
+  wait for it (`sync`), so an old text can't land on a new one. `writes`
+  counts saves per recording so a late background save doesn't put old
+  facts in the index. A failed save says so once per recording.
+- recording.json: every save goes through `RecorderModel.persist`. On
+  failure it says "Couldn't save the change to X..." once and keeps the
+  change in memory (`unsaved`); `reload()` (on app activation) tries it
+  again and keeps the in-memory copy instead of the old file.
+- Record while a file is being transcribed: live text waits for the file's
+  models to unload (`Transcriber.modelsFreed`) before loading its own, so
+  two Parakeets are never loaded at once. Audio is saved meanwhile and
+  live text catches up.
+Test list (for Ryan):
+1. Record, talk for 20 s, then ⌘Q > Stop and Quit right after a sentence.
+   Open the app again: the last sentence is in the text.
+2. Record, Stop, then ⌘Q within 2 s: same, nothing missing at the end.
+3. Import a long Voice Memo, and while it says "Transcribing", press
+   Record and talk: live text comes after a short wait (maybe "catching
+   up"), the app doesn't freeze or crash. Stop: the file carries on.
+4. Rename a class, add a note and a marker, click another app, click back:
+   all still there (this always worked when the disk is fine).
