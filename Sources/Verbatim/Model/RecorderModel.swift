@@ -33,7 +33,19 @@ final class RecorderModel {
     static var quietMinutes: Int {
         UserDefaults.standard.object(forKey: quietMinutesKey) as? Int ?? 5
     }
-    static let bytesPerHour: Int64 = 16_000 * 2 * 3600
+    /// While recording: audio.wav (16 kHz) plus listen.wav (48 kHz), 16-bit.
+    static let bytesPerHour: Int64 = (16_000 + 48_000) * 2 * 3600
+
+    /// Undo Stop: the listening copy carries on too, padded with silence if
+    /// it's short, so it stays in step with audio.wav. None if the recording
+    /// never had one.
+    static func listenWriter(appendingTo id: UUID, after samples: Int64) -> WavWriter? {
+        let url = RecordingStore.listenWavURL(id)
+        guard FileManager.default.fileExists(atPath: url.path),
+              let w = try? WavWriter(appendingTo: url, rate: WavWriter.listenRate) else { return nil }
+        try? w.pad(to: samples * Int64(WavWriter.listenRate / WavWriter.sampleRate))
+        return w
+    }
 
     private(set) var phase: Phase = .idle
     private(set) var recordings: [RecordingInfo] = []
@@ -130,7 +142,8 @@ final class RecorderModel {
     /// What the text link in the status spot does, for `offer`.
     @ObservationIgnored private var offered: (() -> Void)?
     /// Delete Audio Only, for Undo: which recording and where its audio went in the Trash.
-    @ObservationIgnored private var audioUndo: (id: UUID, trashURL: URL, original: URL)?
+    /// Delete Audio's Undo: each file moved to the Trash, and where it was.
+    @ObservationIgnored private var audioUndo: (id: UUID, files: [(trash: URL, original: URL)])?
 
     var current: RecordingInfo? { recordings.first { $0.id == currentID } }
     var isBusy: Bool { phase != .idle }
@@ -222,7 +235,8 @@ final class RecorderModel {
         do {
             try RecordingStore.create(info)
             let writer = try WavWriter(creating: RecordingStore.wavURL(info.id))
-            pipeline.attach(writer)
+            let listen = try? WavWriter(creating: RecordingStore.listenWavURL(info.id), rate: WavWriter.listenRate)
+            pipeline.attach(writer, listen: listen)
             LiveTranscriber.shared.recordingStarted(info.id, samples: 0)
             try pipeline.startCapture(device: dev)
             Transcriber.shared.recordingStarted(info.id)
@@ -356,7 +370,7 @@ final class RecorderModel {
         }
         do {
             let writer = try WavWriter(appendingTo: RecordingStore.wavURL(info.id))
-            pipeline.attach(writer)
+            pipeline.attach(writer, listen: Self.listenWriter(appendingTo: info.id, after: writer.samplesWritten))
             LiveTranscriber.shared.recordingStarted(info.id, samples: writer.samplesWritten)
             try pipeline.startCapture(device: dev)
             Transcriber.shared.recordingStarted(info.id)
@@ -502,7 +516,7 @@ final class RecorderModel {
     func removeAudioForGood(_ id: UUID) -> Bool {
         guard let i = recordings.firstIndex(where: { $0.id == id }) else { return false }
         Playback.shared.forget(id)
-        for url in [RecordingStore.wavURL(id), RecordingStore.m4aURL(id)] where FileManager.default.fileExists(atPath: url.path) {
+        for url in RecordingStore.audioFiles(id) {
             do { try FileManager.default.removeItem(at: url) } catch { return false }
         }
         recordings[i].audioDeletedAt = Date()
@@ -514,7 +528,7 @@ final class RecorderModel {
 
     /// Selects the audio in Finder, or the folder if the audio was deleted.
     func showInFinder(_ info: RecordingInfo) {
-        let audio = RecordingStore.audioURL(info.id)
+        let audio = RecordingStore.playbackURL(info.id)
         let target = FileManager.default.fileExists(atPath: audio.path) ? audio : RecordingStore.folder(info.id)
         NSWorkspace.shared.activateFileViewerSelecting([target])
     }
@@ -546,7 +560,7 @@ final class RecorderModel {
         return nil
     }
 
-    /// Moves only audio.wav to the Mac's Trash. The transcript stays.
+    /// Moves only the audio files to the Mac's Trash. The transcript stays.
     /// Undo for 10 s; after that it's still in the Trash.
     func deleteAudio(_ id: UUID) {
         guard audioDeleteBlocker(id) == nil, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
@@ -563,21 +577,25 @@ final class RecorderModel {
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
         Playback.shared.forget(id)
-        let audio = RecordingStore.audioURL(id)
-        var trashed: NSURL?
-        if FileManager.default.fileExists(atPath: audio.path) {
+        // The 16 kHz audio and the 48 kHz listening copy go together.
+        var moved: [(trash: URL, original: URL)] = []
+        for audio in RecordingStore.audioFiles(id) {
+            var trashed: NSURL?
             do {
                 try FileManager.default.trashItem(at: audio, resultingItemURL: &trashed)
             } catch {
+                // Put back what already went, so it's all or nothing.
+                for m in moved { try? FileManager.default.moveItem(at: m.trash, to: m.original) }
                 status = Status(text: "Couldn't delete the audio: \(error.localizedDescription)")
                 return
             }
+            if let url = trashed as URL? { moved.append((url, audio)) }
         }
         recordings[i].audioDeletedAt = Date()
         persist(recordings[i])
 
-        guard let url = trashed as URL? else { return }
-        audioUndo = (id, url, audio)
+        guard !moved.isEmpty else { return }
+        audioUndo = (id, moved)
         let s = Status(text: "Deleted the audio for \(info.title). The text stays.", action: .undoAudioDelete)
         status = s
         Task { [weak self] in
@@ -593,7 +611,7 @@ final class RecorderModel {
         audioUndo = nil
         if status?.action == .undoAudioDelete { status = nil }
         do {
-            try FileManager.default.moveItem(at: undo.trashURL, to: undo.original)
+            for f in undo.files { try FileManager.default.moveItem(at: f.trash, to: f.original) }
         } catch {
             status = Status(text: "Couldn't bring the audio back. It's still in the Trash.")
             return
@@ -1079,6 +1097,10 @@ final class RecorderModel {
         for (i, var info) in all.enumerated() where info.isActive {
             let audio = RecordingStore.wavURL(info.id)
             let samples = (try? WavWriter.repair(audio)) ?? info.samples
+            let listen = RecordingStore.listenWavURL(info.id)
+            if FileManager.default.fileExists(atPath: listen.path) {
+                _ = try? WavWriter.repair(listen, rate: WavWriter.listenRate)
+            }
             let modified = (try? audio.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
             let endedAt = modified ?? info.createdAt.addingTimeInterval(info.duration)
             info.samples = samples

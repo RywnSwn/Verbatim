@@ -47,7 +47,7 @@ final class Playback {
     func play(_ id: UUID, from start: Double? = nil) -> String? {
         if self.id != id || player == nil {
             close()
-            let url = RecordingStore.audioURL(id)
+            let url = RecordingStore.playbackURL(id)
             guard FileManager.default.fileExists(atPath: url.path) else {
                 return "The audio for this recording isn't there any more."
             }

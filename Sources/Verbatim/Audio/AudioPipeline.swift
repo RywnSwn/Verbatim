@@ -5,19 +5,29 @@ enum CaptureError: LocalizedError {
     var errorDescription: String? { "This microphone can't be used right now." }
 }
 
-/// Mic in, 16 kHz mono Int16 samples out, written to a WavWriter.
-/// Everything that touches the writer runs on `sampleQueue`.
+/// Mic in, two mono Int16 files out, from the same sound:
+/// - 16 kHz (audio.wav): what Parakeet and the speaker model hear, and live text.
+/// - 48 kHz (listen.wav): only for listening back (Ryan, 2026-11-19: 16 kHz
+///   sounded muffled). Nothing that makes text ever reads it.
+/// The mic's own format comes in and Verbatim converts it. A stereo mic
+/// (a 2-mic receiver in split mode: one mic left, one right) is mixed down,
+/// so both mics are heard. (Before, macOS converted to mono and only the
+/// left channel was kept.)
+/// Everything that touches the writers runs on `sampleQueue`.
 final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     private let sessionQueue = DispatchQueue(label: "verbatim.session")
     private let sampleQueue = DispatchQueue(label: "verbatim.samples", qos: .userInitiated)
-    private let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true)!
+    private let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(WavWriter.sampleRate), channels: 1, interleaved: true)!
+    private let listenTarget = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(WavWriter.listenRate), channels: 1, interleaved: true)!
 
     private var session: AVCaptureSession?
     private var runtimeObserver: NSObjectProtocol?
 
     // sampleQueue only
     private var writer: WavWriter?
+    private var listenWriter: WavWriter?
     private var converter: AVAudioConverter?
+    private var listenConverter: AVAudioConverter?
     private var converterInput: AVAudioFormat?
     private var sumSquares: Double = 0
     private var levelCount = 0
@@ -32,10 +42,16 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     /// Called on the audio queue with every bit of audio that was saved, for live text.
     var onSamples: (@Sendable ([Float]) -> Void)?
 
-    func attach(_ writer: WavWriter) {
+    /// `listen`: the 48 kHz copy. nil = this recording has none (made
+    /// before it existed); playback then uses the 16 kHz audio.
+    func attach(_ writer: WavWriter, listen: WavWriter?) {
         sampleQueue.sync {
             self.writer = writer
+            self.listenWriter = listen
             self.failed = false
+            // Fresh converters: none of the last recording's sound carries over.
+            self.converter = nil
+            self.listenConverter = nil
         }
     }
 
@@ -46,13 +62,18 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         return sampleQueue.sync {
             let n = writer?.samplesWritten ?? 0
             try? writer?.close()
+            try? listenWriter?.close()
             writer = nil
+            listenWriter = nil
             return n
         }
     }
 
     func flush() {
-        sampleQueue.sync { try? writer?.flush() }
+        sampleQueue.sync {
+            try? writer?.flush()
+            try? listenWriter?.flush()
+        }
     }
 
     var samplesWritten: Int64 {
@@ -66,16 +87,9 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         guard s.canAddInput(input) else { throw CaptureError.cannotUseMic }
         s.addInput(input)
 
+        // No audioSettings: the mic's own format (rate and channels), so
+        // the 48 kHz copy is real 48 kHz and every channel is kept for the mix.
         let output = AVCaptureAudioDataOutput()
-        output.audioSettings = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: 16_000,
-            AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsNonInterleaved: false,
-        ]
         output.setSampleBufferDelegate(self, queue: sampleQueue)
         guard s.canAddOutput(output) else { throw CaptureError.cannotUseMic }
         s.addOutput(output)
@@ -116,18 +130,32 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         )
         guard status == noErr else { return }
 
-        if inFormat == target {
-            deliver(inBuf)
-            return
-        }
-        // The mic gave us another format: convert to 16 kHz mono Int16.
+        // A new mic (or the same one in a new format): new converters.
         if converter == nil || converterInput != inFormat {
-            converter = AVAudioConverter(from: inFormat, to: target)
+            converter = Self.makeConverter(from: inFormat, to: target)
+            listenConverter = Self.makeConverter(from: inFormat, to: listenTarget)
             converterInput = inFormat
         }
-        guard let converter else { return }
-        let capacity = AVAudioFrameCount(Double(frames) * target.sampleRate / inFormat.sampleRate) + 64
-        guard let outBuf = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
+        guard let converter, let out = Self.convert(inBuf, with: converter, to: target) else { return }
+        deliver(out)
+        if listenWriter != nil, let listenConverter,
+           let listen = Self.convert(inBuf, with: listenConverter, to: listenTarget) {
+            deliverListen(listen)
+        }
+    }
+
+    private static func makeConverter(from input: AVAudioFormat, to output: AVAudioFormat) -> AVAudioConverter? {
+        let c = AVAudioConverter(from: input, to: output)
+        c?.downmix = true // stereo mic: both channels, not just the left one
+        c?.sampleRateConverterQuality = AVAudioQuality.max.rawValue
+        return c
+    }
+
+    /// One buffer through a converter that keeps its state between buffers
+    /// (so the resampler doesn't click at every buffer edge).
+    private static func convert(_ input: AVAudioPCMBuffer, with converter: AVAudioConverter, to format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let capacity = AVAudioFrameCount(Double(input.frameLength) * format.sampleRate / input.format.sampleRate) + 64
+        guard let outBuf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return nil }
         var fed = false
         var error: NSError?
         let result = converter.convert(to: outBuf, error: &error) { _, inputStatus in
@@ -137,10 +165,23 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
             }
             fed = true
             inputStatus.pointee = .haveData
-            return inBuf
+            return input
         }
-        guard result != .error else { return }
-        deliver(outBuf)
+        guard result != .error else { return nil }
+        return outBuf
+    }
+
+    /// The listening copy. If it can't be written, it's dropped and the
+    /// recording carries on: playback uses the 16 kHz audio instead.
+    private func deliverListen(_ buffer: AVAudioPCMBuffer) {
+        guard let data = buffer.int16ChannelData, let listenWriter else { return }
+        do {
+            try listenWriter.append(UnsafeBufferPointer(start: data[0], count: Int(buffer.frameLength)))
+        } catch {
+            try? listenWriter.close()
+            try? FileManager.default.removeItem(at: listenWriter.url)
+            self.listenWriter = nil
+        }
     }
 
     private func deliver(_ buffer: AVAudioPCMBuffer) {

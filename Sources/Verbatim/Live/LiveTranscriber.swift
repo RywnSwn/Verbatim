@@ -381,6 +381,14 @@ final class LiveTranscriber {
         return old
     }
 
+    /// Takes away a line Ryan added himself (Undo of Add line below). Unlike
+    /// Delete, it leaves no "deleted here" mark: no words were ever there.
+    func discardLine(_ id: UUID, start: Double) {
+        guard var t = texts[id], let i = t.lines.firstIndex(where: { $0.start == start }) else { return }
+        t.lines.remove(at: i)
+        commit(t, id)
+    }
+
     func insertLine(_ id: UUID, _ line: Transcript.Line) {
         guard var t = texts[id] else { return }
         let i = t.lines.firstIndex { $0.start > line.start } ?? t.lines.count

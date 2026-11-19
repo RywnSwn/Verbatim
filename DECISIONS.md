@@ -285,3 +285,11 @@ Verbatim would also rewrite without them. Each entry keeps the live.json's
 size and date, so an entry that doesn't match is simply worked out again
 in the background (safe after a crash, Put Back or an older build).
 Full texts load the first time something needs them.
+
+## Playback audio at 48 kHz (2026-11-19)
+Ryan picked 48 kHz for listening, about 45 MB per hour after shrinking is
+fine (he deletes audio after reviewing). A second file (listen.wav >
+listen.m4a, 64 kbps AAC) is made from the same mic sound; Parakeet keeps
+its own 16 kHz file so text stays the same. Stereo mics are mixed down so
+a 2-mic receiver in split mode keeps both mics. Echo removal: not doing
+it, it could damage his voice in the recording.

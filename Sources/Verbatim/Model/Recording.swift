@@ -85,6 +85,26 @@ enum RecordingStore {
         let m4a = m4aURL(id)
         return FileManager.default.fileExists(atPath: m4a.path) ? m4a : wavURL(id)
     }
+    /// The 48 kHz copy for listening (since 2026-11-19), written while
+    /// recording next to audio.wav. Never used to make text.
+    static func listenWavURL(_ id: UUID) -> URL { folder(id).appending(path: "listen.wav") }
+    /// The listening copy, shrunk gently after Stop (AAC 64 kbps).
+    static func listenM4aURL(_ id: UUID) -> URL { folder(id).appending(path: "listen.m4a") }
+
+    /// What the player plays: the 48 kHz copy if there is one, else the
+    /// 16 kHz audio (imports and recordings from before).
+    static func playbackURL(_ id: UUID) -> URL {
+        for url in [listenM4aURL(id), listenWavURL(id)] where FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        return audioURL(id)
+    }
+
+    /// Every audio file the recording has (Delete Audio removes them all).
+    static func audioFiles(_ id: UUID) -> [URL] {
+        [wavURL(id), m4aURL(id), listenWavURL(id), listenM4aURL(id)]
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+    }
     static func infoURL(_ id: UUID) -> URL { folder(id).appending(path: "recording.json") }
 
     /// When the recording's folder was made (when a file was imported).
@@ -94,8 +114,12 @@ enum RecordingStore {
 
     /// Size of the audio file in bytes, nil if it's gone.
     static func audioSize(_ id: UUID) -> Int64? {
-        let attrs = try? FileManager.default.attributesOfItem(atPath: audioURL(id).path)
-        return (attrs?[.size] as? NSNumber)?.int64Value
+        let files = audioFiles(id)
+        guard !files.isEmpty else { return nil }
+        return files.reduce(0) { sum, url in
+            let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+            return sum + ((attrs?[.size] as? NSNumber)?.int64Value ?? 0)
+        }
     }
 
     static func create(_ info: RecordingInfo) throws {
