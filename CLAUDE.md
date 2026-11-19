@@ -14,6 +14,8 @@ UX matters a lot to him. He hates apps that don't consider the user.
 Steps 1 to 11 merged, plus the in-app player, audio shrink after Stop, the
 live text delay fix and the new start screen (2026-11-18, untested by Ryan)
 (5c, 6, 7, 7b, 7c, 8, 9, 10 and 2b also not fully tested by Ryan yet).
+Line edit fix, ⌘Z undo, page edge, copy times, preloaded live models
+(RywnSwn/Verbatim#24) merged 2026-11-19, not tested by Ryan yet.
 Code health quick fixes (item 2, RywnSwn/Verbatim#22) and faster start-up
 (RywnSwn/Verbatim#23) merged 2026-11-18, not tested by Ryan yet (test lists
 in `PLAN.md`). Next: the other code health items in `PLAN.md`, one chat each.
