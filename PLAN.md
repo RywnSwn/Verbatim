@@ -1490,3 +1490,21 @@ in the gutter wrapped ("10:42 A" / "M").
   `ci-smoke`). If it passes there but Ryan still sees none, ask how he
   copies and which recording (a Voice Memo before speakers were found?).
 - Gutter: 60 pt + 10 pt gap (was 52 + 18, same 70 total), one line always.
+Same day, Ryan: live text takes a few seconds after Record, and after an
+early Stop (30 s, no words yet) the page showed a big "Transcribe" screen.
+- Cause: every Record loaded Parakeet (+ word spotter) and the speaker
+  model from disk first; they're unloaded at Stop to free memory.
+- `LiveTranscriber.warmUp()` / `LiveRunner.warm()`: the start page loads
+  them while it's open (StartView .onAppear, when the model gets ready, and
+  after the Transcriber's queue empties if the start page is showing).
+  Runs in the same chain as recordings (`runTask`), so Record mid-load just
+  waits. Not while recording or while a file is transcribed. The
+  Transcriber calls `coolDown()` before its own Parakeet loads (8 GB: one
+  at a time). Known voices are still played to the speaker model at Start.
+- No more `emptyState` screen in PastRecordingView: always the transcript
+  page, with a hint where the first line goes: "Finishing the text…" while
+  the live run is still on that recording, "No text yet. Transcribe" (link)
+  when nothing is working on it, else as before.
+Test: open the app, wait 10 s on the start page, press Record and talk:
+words should come within ~2 s. Stop after 10 s: same page, words fill in.
+If still slow, paste ⌃⌘L ("LIVE TEXT START" line).

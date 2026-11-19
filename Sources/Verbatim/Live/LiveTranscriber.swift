@@ -312,6 +312,34 @@ final class LiveTranscriber {
         }
     }
 
+    /// Start page open: load the live models now, so Record starts listening
+    /// at once instead of loading them first (Ryan, 2026-11-19: "a few
+    /// seconds" before any words). Not while recording or while a file is
+    /// being transcribed (one Parakeet at a time on 8 GB). Runs in the same
+    /// line as recordings, so Record pressed mid-load just waits for it.
+    func warmUp() {
+        guard modelState == .ready, activeID == nil, Transcriber.shared.isIdle else { return }
+        let previous = runTask
+        let runner = runner
+        runTask = Task {
+            await previous?.value
+            await runner.warm()
+        }
+    }
+
+    /// A file is about to be transcribed: free the warm models first.
+    func coolDown() async {
+        guard activeID == nil else { return }
+        let previous = runTask
+        let runner = runner
+        let task = Task {
+            await previous?.value
+            await runner.cool()
+        }
+        runTask = task
+        await task.value
+    }
+
     /// The mic stopped (Pause or sleep): finish the last words.
     func micStopped() {
         feed.micPaused()
@@ -751,6 +779,23 @@ actor LiveRunner {
         var nextTry: Int64 = 0
         var catchingUp = false
         var firstWords = false
+    }
+
+    /// Loads Parakeet (with the word list) and the speaker model ahead of
+    /// Record. `run` finds them loaded and starts at once.
+    func warm() async {
+        if await MainActor.run(body: { LiveTranscriber.shared.modelState == .ready }) {
+            let terms = await MainActor.run { WordList.shared.boostTerms }
+            try? await parakeet.warm(for: terms)
+        }
+        if await MainActor.run(body: { SpeakerModel.shared.isReady }) {
+            try? await speakers.load()
+        }
+    }
+
+    func cool() async {
+        await parakeet.unload()
+        await speakers.unload()
     }
 
     func run(id: UUID, run: Int, queue: LiveQueue, position start: Int64) async {

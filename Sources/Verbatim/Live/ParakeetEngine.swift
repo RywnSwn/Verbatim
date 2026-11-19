@@ -118,6 +118,14 @@ actor ParakeetEngine: LiveEngine {
         manager = m
     }
 
+    /// Loaded and listening for the word list, before Record (see
+    /// `LiveRunner.warm`). `begin` then only has to reset.
+    func warm(for terms: [String]) async throws {
+        try await load()
+        await listen(for: terms)
+        try await load()
+    }
+
     func unload() async {
         await manager?.cleanup()
         manager = nil

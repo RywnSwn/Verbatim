@@ -9,6 +9,7 @@ import SwiftUI
 /// Mockup: https://claude.ai/artifact/Bx3y11h4r3KMAz1s9EnCbh
 struct StartView: View {
     @Environment(RecorderModel.self) private var model
+    @Environment(LiveTranscriber.self) private var live
 
     /// Scrolls when the window is short. Without this the screen was taller
     /// than a short window, which pushed the sidebar's top and bottom past
@@ -34,6 +35,10 @@ struct StartView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
+        // Get the live models ready while you're on this page, so Record
+        // starts listening straight away (see LiveTranscriber.warmUp).
+        .onAppear { live.warmUp() }
+        .onChange(of: live.modelState == .ready) { if live.modelState == .ready { live.warmUp() } }
     }
 
     private var page: some View {

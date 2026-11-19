@@ -29,6 +29,8 @@ struct TranscriptList: View {
     /// At the page edge, where the start page's hint is, so pressing Record
     /// doesn't move it.
     var emptyHint: String?
+    /// A text link next to the hint, like "Transcribe" (no lines yet).
+    var emptyAction: (label: String, run: () -> Void)?
 
     @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
     @AppStorage(TextSize.key) private var textSize = TextSize.normal
@@ -114,10 +116,17 @@ struct TranscriptList: View {
                     .modifier(TypingShield(active: isTyping) { stopTyping() })
                     .padding(.bottom, 10)
                 if rows.isEmpty, let emptyHint {
-                    Text(emptyHint)
-                        .font(.body)
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(emptyHint)
+                            .font(.body)
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let emptyAction {
+                            Button(emptyAction.label, action: emptyAction.run)
+                                .buttonStyle(.link)
+                                .fontWeight(.medium)
+                        }
+                    }
                 }
                 ForEach(rows) { row in
                     // One view per row, always. With a different number of views
