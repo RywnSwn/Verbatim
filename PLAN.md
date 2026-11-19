@@ -1481,3 +1481,12 @@ not 70 pt in past the time gutter. Transcript lines keep the gutter: the
 times sit under the title's left edge. Test: start page title is close to
 the sidebar; open a class: its title starts at the same spot; press Record:
 nothing moves sideways.
+Same day, Ryan: copies and exports had no time or speaker, and the time
+in the gutter wrapped ("10:42 A" / "M").
+- Times in copies (Settings > General) now default ON
+  (`TimeStyle.includeInCopies`); it was off by default.
+- Speakers: the code already writes `[Mr. Yurt]: "text"`. The smoke test
+  now presses Copy All and fails if "Mr. Yurt" is missing (copy-all.txt in
+  `ci-smoke`). If it passes there but Ryan still sees none, ask how he
+  copies and which recording (a Voice Memo before speakers were found?).
+- Gutter: 60 pt + 10 pt gap (was 52 + 18, same 70 total), one line always.

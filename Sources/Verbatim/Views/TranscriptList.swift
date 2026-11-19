@@ -153,8 +153,8 @@ struct TranscriptList: View {
                             .padding(.vertical, 4)
                             .modifier(TypingShield(active: isTyping) { stopTyping() })
                         case .volatile(let text):
-                            HStack(alignment: .firstTextBaseline, spacing: 18) {
-                                Color.clear.frame(width: 52, height: 1)
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Color.clear.frame(width: 60, height: 1)
                                 Text(text)
                                     .font(Theme.transcript(textSize))
                                     .lineSpacing(Theme.transcriptLineSpacing)
@@ -367,7 +367,8 @@ struct TranscriptList: View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
         let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
-        return HStack(alignment: .firstTextBaseline, spacing: 18) {
+        // Gutter 60 + gap 10 = the 70 pt that notes and offers line up with.
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
             timeGutter(line, isPlaying: isPlaying)
                 .overlay(alignment: .leading) {
                     // The flag sits just left of the time, so long times still fit.
@@ -487,7 +488,11 @@ struct TranscriptList: View {
             .font(isPlaying ? .callout.weight(.semibold) : .callout)
             .monospacedDigit()
             .foregroundStyle(isPlaying ? Theme.accent : .secondary)
-            .frame(width: 52, alignment: .trailing)
+            // One line always: "10:42 AM" wrapped its "M" onto a second
+            // line in the old 52 pt gutter (Ryan, 2026-11-19).
+            .lineLimit(1)
+            .fixedSize()
+            .frame(width: 60, alignment: .trailing)
         if canPlay {
             Button {
                 model.playAudio(info.id, from: line.start)

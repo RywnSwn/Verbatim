@@ -191,7 +191,7 @@ struct LookSettings: View {
     @AppStorage(RowLook.key) private var rowLook: RowLook = .soft
     @AppStorage(TextSize.key) private var textSize = TextSize.normal
     @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
-    @AppStorage(TimeStyle.copyKey) private var timesInCopies = false
+    @AppStorage(TimeStyle.copyKey) private var timesInCopies = true
 
     var body: some View {
         Form {
