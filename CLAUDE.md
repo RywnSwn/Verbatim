@@ -56,6 +56,10 @@ decided and why (read it before re-arguing a choice).
 - Never keep the random branch name a chat starts with (like
   `claude/inspiring-newton-...`). Name the branch after the work, e.g.
   `claude/step-3-transcribe-file`, and rename it if the work changes.
+- Anything you type into (line, note, new line): only ONE thing open at a
+  time, its own text box (`LineDraft` per edit), a click anywhere else only
+  saves and closes it (`TypingShield`), and ⌘Z undoes it. Ryan hit a bug
+  where clicking another line copied the text into it (2026-11-19).
 - Pin library versions. Read a library's real source/docs instead of
   guessing APIs.
 
