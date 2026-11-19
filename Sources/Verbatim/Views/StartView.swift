@@ -26,7 +26,6 @@ struct StartView: View {
                         Text("Or drop a Voice Memo here to transcribe it.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
-                            .padding(.leading, 70)
                             .frame(maxWidth: 760, alignment: .leading)
                             .padding(.horizontal, 32)
                             .padding(.bottom, 20)
@@ -70,10 +69,11 @@ struct StartView: View {
                 PageModelStatus()
             }
         }
-        // Same spot as a transcript's header and first line (TranscriptList:
-        // 32 side margin, 24 top, 70 past the time gutter), so pressing
-        // Record doesn't move the title, the rule or the hint.
-        .padding(.leading, 70)
+        // Same spot as a transcript's header (TranscriptList: 32 side
+        // margin, 24 top), so pressing Record doesn't move the title, the
+        // rule or the hint. Starts at the page edge, not 70 pt in past the
+        // time gutter: there are no times here, and Ryan found that gap too
+        // big (2026-11-19).
         .padding(.top, 24)
         .padding(.bottom, 64) // room for the drop hint
     }

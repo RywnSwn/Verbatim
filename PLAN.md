@@ -1474,3 +1474,10 @@ Test list (for Ryan):
    While typing in a line, ⌘Z undoes typing only.
 4. Start page: the line under the title is thin and the gap above and
    below looks even. Press Record: title, line and text don't jump.
+Same day, Ryan: the gap between the sidebar and the title was too big.
+The start page and every transcript header (title, details, rule) and
+the "Listening" hint now start at the page edge (32 pt from the sidebar),
+not 70 pt in past the time gutter. Transcript lines keep the gutter: the
+times sit under the title's left edge. Test: start page title is close to
+the sidebar; open a class: its title starts at the same spot; press Record:
+nothing moves sideways.

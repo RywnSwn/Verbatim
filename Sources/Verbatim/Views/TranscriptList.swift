@@ -26,8 +26,8 @@ struct TranscriptList: View {
     var volatile: String = ""
     var isLive = false
     /// Shown under the header while there are no lines yet ("Listening...").
-    /// Left-aligned where the first line will be, like the start page, so
-    /// nothing jumps when the first words arrive.
+    /// At the page edge, where the start page's hint is, so pressing Record
+    /// doesn't move it.
     var emptyHint: String?
 
     @AppStorage(TimeStyle.key) private var timeStyle: TimeStyle = .clock
@@ -117,7 +117,6 @@ struct TranscriptList: View {
                     Text(emptyHint)
                         .font(.body)
                         .foregroundStyle(.tertiary)
-                        .padding(.leading, 70)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(rows) { row in
