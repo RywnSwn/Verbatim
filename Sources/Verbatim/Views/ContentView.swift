@@ -141,8 +141,13 @@ struct ContentView: View {
                 // 2026-11-20: like the line under New recording in the sidebar).
                 .scrollEdgeEffectStyle(.hard, for: .top)
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if let notice = model.recoveryNotice {
-                        NoticeLine(text: notice) { model.recoveryNotice = nil }
+                    VStack(spacing: 0) {
+                        // Always there, not only once the text scrolls under
+                        // the bar (the hard edge alone shows it only then).
+                        Divider()
+                        if let notice = model.recoveryNotice {
+                            NoticeLine(text: notice) { model.recoveryNotice = nil }
+                        }
                     }
                 }
                 .toolbar {
