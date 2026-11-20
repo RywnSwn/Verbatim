@@ -2052,3 +2052,26 @@ Voice Memos app (file promise vs file URL); first "Still recording?"
 banner lost while macOS asks for notification permission mid-class;
 right-click on the sidebar hint text itself; mic unplugged mid-class when
 the runtime error comes before the disconnect note (may stay paused).
+
+## Punctuation looks gone (Ryan, 2026-11-20), investigation only
+Ryan: live text, text after Stop and imports have no capitals, commas or
+quotes any more; "in the past it had basic punctuation like caps and
+commas". Checked so far (no code changed):
+- The model can write them: `vocab.json` of
+  `FluidInference/parakeet-unified-en-0.6b-coreml` has `▁The`, `▁I`, `,`,
+  `.`, `?`, `!`, `"`. HF repo unchanged since 2026-09-25; FluidAudio
+  pinned at 0.18.0 since 2026-11-10.
+- App path keeps them: `ParakeetEngine.words` uses
+  `consumeTokenTimings()` (raw tokens, never the vocab rescorer's text),
+  `LineBuilder.add`, speaker labels, `Fixes.apply` (keeps lead/trail
+  punctuation and capitals) and the views never lowercase or strip.
+  `ParakeetEngine` barely changed since step 5c (only `warm`).
+- So either "the past" means the Whisper era (before step 5c), or the
+  audio reaching Parakeet got worse. Waiting on: a few pasted lines from an
+  old and a new recording, plus Copy Layout Details.
+- Ryan's wish: "rolling passes as it still records": FluidAudio's batch
+  `UnifiedAsrManager` (full-attention 15 s offline encoder, same
+  decoder/joint, ~565 MB int8 extra) over each finished minute or so,
+  replacing those lines. Breaks "one Parakeet at a time" (8 GB Mac):
+  Ryan's call. Unproven that batch punctuates better; test on real audio
+  first.
