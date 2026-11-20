@@ -1656,6 +1656,10 @@ Look (Ryan tested: "works excellent", but the tinted box with an outline
 line (Capsule, 3 pt) 24 pt left of the line: grey on hover, accent when
 picked (time turns accent too), `Theme.markPen` / `notePen` with a tool.
 The tool band is plain paper with a pen-colored chip.
+Smoke test (0.1.214): margin mark and arrow keys look right; widths never
+change. The test's "click" on the dimmed part next to the floating sidebar
+still doesn't close it (Esc does). The test clicks through accessibility,
+not a real mouse, so ask Ryan to try a real click.
 Not done: the mini window still edits a line on one click (Ryan didn't
 ask; consider the same pick / double-click rule there).
 Test list (for Ryan):

@@ -22,8 +22,11 @@ in `PLAN.md`). Code health item 3 (protect data, RywnSwn/Verbatim#25), 48 kHz pl
 audio, Add line below and the stereo mic fix (RywnSwn/Verbatim#26):
 tested by Ryan and merged 2026-11-19. Next: item 4 in `PLAN.md`, one
 chat each.
-Design pass (sidebar boxes, drag, glass or solid, Settings pages) built on
-`claude/design-pass`, waiting for Ryan's test. See `PLAN.md` for build order and progress,
+Sidebar never resizes the window, line tools (click picks, double-click
+edits, Marker/Note tools, margin mark look) and the ⌘Z-after-delete fix:
+branch `claude/sidebar-and-line-tools` (2026-11-20), Ryan tested the line
+tools ("works excellent"), waiting for his OK to merge. UX check list
+(14 items left) in `PLAN.md`. See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).
