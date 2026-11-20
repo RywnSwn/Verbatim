@@ -232,7 +232,7 @@ struct PageModelStatus: View {
         case .downloading(let fraction, let left):
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Getting the speech model, first time only")
+                    Text("Getting the speech model (1 of 3), first time only")
                     Spacer()
                     Text(LiveModelStatusLine.progressText(fraction, left)).monospacedDigit()
                 }
@@ -243,7 +243,7 @@ struct PageModelStatus: View {
                     .controlSize(.small)
                     .tint(Theme.ink)
                 HStack(alignment: .firstTextBaseline) {
-                    note("You can record now. Until it's done, live text uses your Mac's own speech engine, and Voice Memos wait.")
+                    note("You can record now. Until it's done, live text uses your Mac's own speech engine, and Voice Memos wait. Then speaker labels and the word list helper (about 100 MB each) come by themselves.")
                     Spacer()
                     Button("Pause") { live.pauseDownload() }
                         .controlSize(.small)
@@ -367,9 +367,12 @@ struct SpeakerModelNote: View {
         case .downloading(let f):
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Downloading speaker labels")
+                    Text("Downloading speaker labels (2 of 3)")
                     Spacer()
                     Text("\(Int(f * 100))% of \(SpeakerEngine.sizeText)").monospacedDigit()
+                    Button("Pause") { speakers.pause() }
+                        .buttonStyle(.link)
+                        .fontWeight(.medium)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -386,6 +389,15 @@ struct SpeakerModelNote: View {
             Text("Getting speaker labels ready. First time only.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        case .paused(let f):
+            HStack(spacing: 8) {
+                Text("Speaker labels download paused at \(Int(f * 100))%.")
+                Button("Resume") { speakers.resume() }
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         case .failed(let f):
             HStack(spacing: 8) {
                 Text("Speaker labels download stopped at \(Int(f * 100))%. Trying again by itself.")
@@ -419,9 +431,12 @@ struct WordModelNote: View {
         case .downloading(let f):
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Downloading the word list helper")
+                    Text("Downloading the word list helper (3 of 3)")
                     Spacer()
                     Text("\(Int(f * 100))% of \(ParakeetEngine.wordSpotterSizeText)").monospacedDigit()
+                    Button("Pause") { model.pause() }
+                        .buttonStyle(.link)
+                        .fontWeight(.medium)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -433,6 +448,15 @@ struct WordModelNote: View {
             .padding(.top, 2)
         case .preparing:
             line("Getting the word list ready. First time only.")
+        case .paused(let f):
+            HStack(spacing: 8) {
+                Text("Word list helper download paused at \(Int(f * 100))%.")
+                Button("Resume") { model.resume() }
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         case .failed(let f):
             HStack(spacing: 8) {
                 Text("Word list download stopped at \(Int(f * 100))%. Trying again by itself.")

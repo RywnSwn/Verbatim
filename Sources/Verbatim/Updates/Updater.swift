@@ -32,6 +32,10 @@ final class Updater {
     }
 
     @ObservationIgnored private var staged: URL?
+    /// Build number of `staged`; a newer one replaces it.
+    @ObservationIgnored private var stagedBuild = 0
+    /// A check is running (the state stays .ready while it looks for a newer one).
+    @ObservationIgnored private var looking = false
     @ObservationIgnored private var loop: Task<Void, Never>?
 
     private init() {
@@ -78,7 +82,9 @@ final class Updater {
                 if UserDefaults.standard.bool(forKey: Self.autoKey) {
                     await check(userInitiated: false)
                 }
-                try? await Task.sleep(for: Self.checkEvery)
+                // After a failure (no internet, a broken download) try again
+                // in 30 minutes, not 4 hours (B10).
+                try? await Task.sleep(for: problem == nil ? Self.checkEvery : .seconds(30 * 60))
             }
         }
     }
@@ -86,35 +92,64 @@ final class Updater {
     func check(userInitiated: Bool) async {
         switch state {
         case .checking, .downloading: return
-        case .ready(let v):
-            if userInitiated { RecorderModel.shared.show("Version \(v) is downloaded and ready to install.") }
-            return
-        case .idle: break
+        case .ready, .idle: break
         }
-        state = .checking
-        defer { lastChecked = Date() }
+        // B10: a downloaded update stays ready while it looks for a newer one
+        // (it used to stop looking until a restart).
+        guard !looking else { return }
+        looking = true
+        let waiting = state
+        if case .idle = state { state = .checking }
+        defer {
+            lastChecked = Date()
+            looking = false
+        }
 
         do {
-            guard let release = try await newestRelease() else {
-                state = .idle
+            guard let release = try await newestRelease(), release.build > stagedBuild else {
+                if case .ready(let v) = waiting {
+                    state = waiting
+                    if userInitiated { RecorderModel.shared.show("Version \(v) is downloaded and ready to install.") }
+                } else {
+                    state = .idle
+                    if userInitiated { RecorderModel.shared.show("You have the newest version (\(Self.currentVersion)).") }
+                }
                 problem = nil
-                if userInitiated { RecorderModel.shared.show("You have the newest version (\(Self.currentVersion)).") }
+                UserDefaults.standard.removeObject(forKey: Self.failingSinceKey)
                 return
             }
             state = .downloading(version: release.version)
             if userInitiated { RecorderModel.shared.show("Downloading version \(release.version)…") }
+            let older = staged
             staged = try await download(release)
+            stagedBuild = release.build
+            // The older download isn't needed anymore.
+            if let older { try? FileManager.default.removeItem(at: older.deletingLastPathComponent()) }
             problem = nil
+            UserDefaults.standard.removeObject(forKey: Self.failingSinceKey)
             state = .ready(version: release.version)
         } catch {
-            state = .idle
+            // The update already downloaded is still good.
+            if case .ready = waiting, staged != nil { state = waiting } else { state = .idle }
             let text = (error as? Problem)?.text
                 ?? "Couldn't reach GitHub. Check the internet and try again."
             problem = text
-            // Say it even when the check ran by itself, so updates never fail silently.
-            RecorderModel.shared.show("Update didn't work: \(text)")
+            // B1: a check that ran by itself (offline in class, every 4 hours)
+            // took over the bottom bar for the whole class. Now it's in
+            // Settings > Updates, and only says so out loud after 3 days of
+            // failing, when not recording, so updates still never fail silently.
+            let defaults = UserDefaults.standard
+            let since = defaults.object(forKey: Self.failingSinceKey) as? Date ?? Date()
+            defaults.set(since, forKey: Self.failingSinceKey)
+            let longTime = Date().timeIntervalSince(since) > 3 * 24 * 3600
+            if userInitiated || (longTime && !RecorderModel.shared.isBusy) {
+                RecorderModel.shared.show("Update didn't work: \(text)")
+            }
         }
     }
+
+    /// When automatic checks started failing (cleared by one that works).
+    private static let failingSinceKey = "updateFailingSince"
 
     func installAndRestart() {
         guard case .ready = state, let newApp = staged, !RecorderModel.shared.isBusy, installProblem == nil else { return }

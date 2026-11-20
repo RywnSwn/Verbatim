@@ -412,6 +412,7 @@ struct ShortcutSettings: View {
 
 struct UpdateSettings: View {
     @Environment(Updater.self) private var updater
+    @Environment(RecorderModel.self) private var model
     @AppStorage(Updater.autoKey) private var auto = true
     @AppStorage(Updater.testBuildsKey) private var testBuilds = true
 
@@ -433,6 +434,16 @@ struct UpdateSettings: View {
                     Text("Check for an update")
                     if !statusText.isEmpty { Text(statusText) }
                 }
+                // B10: Restart right here, not only in the main window's bottom bar.
+                if case .ready(let v) = updater.state {
+                    LabeledContent {
+                        Button("Restart to Update") { updater.installAndRestart() }
+                            .disabled(model.isBusy || updater.installProblem != nil)
+                    } label: {
+                        Text("Version \(v) is ready")
+                        Text(updater.installProblem ?? (model.isBusy ? "After you stop recording." : "Verbatim closes and opens again in a few seconds."))
+                    }
+                }
             } header: {
                 PageHeader(lede: "Verbatim updates itself from GitHub.")
             }
@@ -443,7 +454,7 @@ struct UpdateSettings: View {
         switch updater.state {
         case .checking: return "Checking…"
         case .downloading(let v): return "Downloading \(v)…"
-        case .ready(let v): return "\(v) is ready. Restart from the bar at the bottom of the window."
+        case .ready: return updater.problem ?? ""
         case .idle:
             if let problem = updater.problem { return problem }
             guard let last = updater.lastChecked else { return "" }
@@ -921,6 +932,7 @@ struct TranscriptionSettings: View {
         case .downloading(let f): "Downloading, \(Int(f * 100))% of \(SpeakerEngine.sizeText)."
         case .preparing: "Getting ready. First time only."
         case .failed(let f): "Stopped at \(Int(f * 100))%. Trying again by itself."
+        case .paused(let f): "Paused at \(Int(f * 100))%. Resume it on the start page."
         }
     }
 

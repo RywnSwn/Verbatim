@@ -265,6 +265,8 @@ final class LiveTranscriber {
     @ObservationIgnored private var generation = 0
 
     private static let preparedKey = "liveModelPrepared"
+    /// Ryan paused the download: where it was, so it stays paused after a relaunch.
+    static let pausedKey = "liveModelPausedAt"
 
     var isModelReady: Bool { modelState == .ready }
 
@@ -293,6 +295,9 @@ final class LiveTranscriber {
             modelState = .ready
             SpeakerModel.shared.startIfNeeded()
             WordModel.shared.startIfNeeded()
+        } else if let f = UserDefaults.standard.object(forKey: Self.pausedKey) as? Double {
+            // Paused before quitting: stays paused (B11: it started again by itself).
+            modelState = .paused(fraction: f)
         } else {
             startDownload()
             // Until Parakeet is here, Apple's engine fills in. Get its model now,
@@ -748,6 +753,7 @@ final class LiveTranscriber {
         retryTask?.cancel()
         retryTask = nil
         progressSamples = []
+        UserDefaults.standard.removeObject(forKey: Self.pausedKey)
         modelState = .downloading(fraction: currentFraction, secondsLeft: nil)
         downloadTask = Task {
             do {
@@ -771,6 +777,7 @@ final class LiveTranscriber {
     func pauseDownload() {
         guard case .downloading(let fraction, _) = modelState else { return }
         modelState = .paused(fraction: fraction)
+        UserDefaults.standard.set(fraction, forKey: Self.pausedKey)
         downloadTask?.cancel()
         downloadTask = nil
     }

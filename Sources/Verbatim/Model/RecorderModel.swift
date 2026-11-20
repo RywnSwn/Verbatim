@@ -17,6 +17,10 @@ final class RecorderModel {
         var text: String
         var action: Action?
         var id = UUID()
+        /// True while it stays true (battery low, chosen mic missing, quiet,
+        /// disk almost full, paused for a problem). A short message only
+        /// covers it for a moment; then it comes back (B1).
+        var standing = false
     }
 
     /// Shown for 10 s after Stop, with Undo Stop.
@@ -80,7 +84,30 @@ final class RecorderModel {
     /// `elapsed`): the menu bar item lives outside the app's own window, so
     /// every change is a round trip to macOS.
     private(set) var menuClock = "00:00"
-    private(set) var status: Status?
+    private(set) var status: Status? {
+        didSet {
+            guard status?.id != oldValue?.id else { return }
+            if status?.standing == true {
+                warning = nil
+                return
+            }
+            // A short message pushed a warning aside: keep it for later.
+            if let old = oldValue, old.standing, status != nil { warning = old }
+            // The short message is gone: the warning comes back.
+            if status == nil, isBusy, let w = warning {
+                warning = nil
+                status = w
+            }
+        }
+    }
+    /// A standing warning covered by a short message (see `Status.standing`).
+    @ObservationIgnored private var warning: Status?
+
+    /// The warning is no longer true: gone from view and from memory.
+    private func clearStanding(_ match: (Status) -> Bool) {
+        if let w = warning, match(w) { warning = nil }
+        if let s = status, match(s) { status = nil }
+    }
     /// Recordings whose last change couldn't be saved (see `persist`).
     @ObservationIgnored private var unsaved: Set<UUID> = []
     private(set) var stoppedNote: StoppedNote?
@@ -309,10 +336,10 @@ final class RecorderModel {
         beginKeepAwake()
 
         if fellBack {
-            status = Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.")
+            status = Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.", standing: true)
         } else if let free = RecordingStore.freeSpace(), free < Self.bytesPerHour * 3 {
             let hours = Double(free) / Double(Self.bytesPerHour)
-            status = Status(text: String(format: "Disk is almost full: room for about %.1f hours of audio.", hours))
+            status = Status(text: String(format: "Disk is almost full: room for about %.1f hours of audio.", hours), standing: true)
         } else {
             status = nil
         }
@@ -328,7 +355,7 @@ final class RecorderModel {
         phase = .paused
         levels = Array(repeating: 0, count: Self.barCount)
         saveCurrent()
-        if status?.action == .stopRecording { status = nil }
+        clearStanding { $0.action == .stopRecording }
         Messages.shared.withdraw("stillRecording")
         // Nothing is being recorded, so the Mac may sleep (A9: it used to stay
         // awake all night when Pause was forgotten). Sleeping while paused
@@ -346,8 +373,8 @@ final class RecorderModel {
             try? await Task.sleep(for: .seconds(Double(Self.pausedAskMinutes) * 60))
             guard !Task.isCancelled, let self, self.phase == .paused, self.currentID == id else { return }
             // A pause for a problem keeps its reason and Resume link.
-            if self.status?.action != .resume {
-                self.status = Status(text: "Paused for \(Self.pausedAskMinutes) minutes. Class over?", action: .stopRecording)
+            if self.status?.action != .resume, self.warning?.action != .resume {
+                self.status = Status(text: "Paused for \(Self.pausedAskMinutes) minutes. Class over?", action: .stopRecording, standing: true)
             }
             Messages.shared.post(Messages.stillPaused(minutes: Self.pausedAskMinutes, elapsed: self.elapsed))
         }
@@ -367,14 +394,14 @@ final class RecorderModel {
             if stillFull || !pipeline.clearWriteError() {
                 status = Status(text: stillFull
                     ? "The disk is still full. Free up space, then"
-                    : "Can't save audio to the disk. Free up space, then", action: .resume)
+                    : "Can't save audio to the disk. Free up space, then", action: .resume, standing: true)
                 return
             }
         }
         do {
             try pipeline.startCapture(device: dev)
         } catch {
-            status = Status(text: "Couldn't use the mic: \(error.localizedDescription)", action: .resume)
+            status = Status(text: "Couldn't use the mic: \(error.localizedDescription)", action: .resume, standing: true)
             return
         }
         device = dev
@@ -388,7 +415,8 @@ final class RecorderModel {
         beginKeepAwake()
         lastLoud = Date()
         quietWarned = false
-        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.") : nil
+        warning = nil // the reasons for the pause are over
+        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.", standing: true) : nil
         saveCurrent()
     }
 
@@ -412,6 +440,7 @@ final class RecorderModel {
         phase = .idle
         currentID = nil
         device = nil
+        warning = nil
         status = nil
         levels = Array(repeating: 0, count: Self.barCount)
         Messages.shared.withdraw("stillRecording")
@@ -477,7 +506,8 @@ final class RecorderModel {
         quietWarned = false
         phase = .recording
         beginKeepAwake()
-        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.") : nil
+        warning = nil
+        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.", standing: true) : nil
         saveCurrent()
     }
 
@@ -1189,12 +1219,12 @@ final class RecorderModel {
             lastLoud = Date()
             if quietWarned {
                 quietWarned = false
-                if status?.action == .stopRecording { status = nil }
+                clearStanding { $0.action == .stopRecording }
                 Messages.shared.withdraw("stillRecording")
             }
         } else if !quietWarned, quietMinutes > 0, Date().timeIntervalSince(lastLoud) > Double(quietMinutes) * 60 {
             quietWarned = true
-            status = Status(text: "Quiet for \(quietMinutes) minutes. Still in class?", action: .stopRecording)
+            status = Status(text: "Quiet for \(quietMinutes) minutes. Still in class?", action: .stopRecording, standing: true)
             Messages.shared.post(Messages.stillRecording(minutes: quietMinutes, elapsed: elapsed))
         }
         if Date().timeIntervalSince(lastBatteryCheck) > 60 {
@@ -1220,12 +1250,12 @@ final class RecorderModel {
             guard !batteryWarned else { return }
             batteryWarned = true
             if status == nil || status?.action == nil {
-                status = Status(text: "Battery at \(battery.percent)%. Plug in to keep recording.")
+                status = Status(text: "Battery at \(battery.percent)%. Plug in to keep recording.", standing: true)
             }
             Messages.shared.post(Messages.battery(battery.percent))
         } else if batteryWarned, !battery.onBattery {
             batteryWarned = false
-            if status?.text.hasPrefix("Battery at") == true { status = nil }
+            clearStanding { $0.text.hasPrefix("Battery at") }
             Messages.shared.withdraw("battery")
         }
     }
@@ -1238,7 +1268,7 @@ final class RecorderModel {
         updateCurrent { $0.state = .paused }
         phase = .paused
         saveCurrent()
-        status = Status(text: "Can't save audio, the disk is full. Free up space, then", action: .resume)
+        status = Status(text: "Can't save audio, the disk is full. Free up space, then", action: .resume, standing: true)
         Messages.shared.post(Messages.problem("Recording paused: the disk is full. Free up space, then press Resume."))
         // Like any pause: the Mac may sleep, and it asks later (A9).
         endKeepAwake()
@@ -1249,7 +1279,7 @@ final class RecorderModel {
         guard phase == .recording, let dev = device ?? Microphones.builtIn() else { return }
         if restartedAfterError {
             pause()
-            status = Status(text: "The mic stopped working. Check it, then", action: .resume)
+            status = Status(text: "The mic stopped working. Check it, then", action: .resume, standing: true)
             Messages.shared.post(Messages.problem("Recording paused: the mic stopped working. Check it, then press Resume."))
             return
         }
@@ -1267,7 +1297,7 @@ final class RecorderModel {
             status = Status(text: message)
         } catch {
             pause()
-            status = Status(text: "Couldn't use the mic. Plug it back in, then", action: .resume)
+            status = Status(text: "Couldn't use the mic. Plug it back in, then", action: .resume, standing: true)
         }
     }
 
@@ -1315,7 +1345,7 @@ final class RecorderModel {
             device = dev
         } catch {
             pause()
-            status = Status(text: "Couldn't restart the mic after sleep.", action: .resume)
+            status = Status(text: "Couldn't restart the mic after sleep.", action: .resume, standing: true)
             return
         }
         addEvent(.woke)
@@ -1336,7 +1366,7 @@ final class RecorderModel {
         guard isBusy, let id, id == device?.uniqueID else { return }
         guard let fallback = Microphones.builtIn(), fallback.uniqueID != id else {
             pause()
-            status = Status(text: "Mic unplugged and no other mic found. Plug one in, then", action: .resume)
+            status = Status(text: "Mic unplugged and no other mic found. Plug one in, then", action: .resume, standing: true)
             Messages.shared.post(Messages.problem("Recording paused: the mic was unplugged. Plug one in, then press Resume."))
             return
         }
@@ -1344,7 +1374,7 @@ final class RecorderModel {
             switchMic(to: fallback, message: "Mic unplugged. Using the MacBook mic.")
         } else {
             device = fallback
-            status = Status(text: "Mic unplugged. Resume will use the MacBook mic.")
+            status = Status(text: "Mic unplugged. Resume will use the MacBook mic.", standing: true)
         }
     }
 
