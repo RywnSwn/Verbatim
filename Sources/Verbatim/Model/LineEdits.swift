@@ -132,18 +132,80 @@ extension RecorderModel {
         offerLineUndo("Deleted a line.\(extra)", in: id) { [weak self] in
             if source == .live { LiveTranscriber.shared.insertLine(id, old) }
             if Self.resolved(id, source, old) == .checked { Transcriber.shared.insertLine(id, old) }
-            if tookMarker { self?.setMarkers(id, oldMarkers) }
-            if tookNote, let self, let i = self.recordingIndex(id) {
-                self.changeRecording(i) { $0.notes = oldNotes.isEmpty ? nil : oldNotes }
+            // Only what went with the line comes back: markers and notes
+            // added since then stay.
+            guard let self else { return }
+            if tookMarker {
+                let gone = oldMarkers.filter { onLine($0) }
+                self.setMarkers(id, self.markers(id) + gone)
+            }
+            if tookNote, let i = self.recordingIndex(id) {
+                let gone = oldNotes.filter { onLine($0.time) }
+                let now = self.info(id)?.notes ?? []
+                self.changeRecording(i) { $0.notes = (now + gone).sorted { $0.time < $1.time } }
             }
         }
+    }
+
+    /// More > Transcribe again. One click, but on ⌘Z and the Undo link, which
+    /// put the text back as it was, names included (item 2: speaker names
+    /// and picks were lost for good).
+    func transcribeAgain(_ id: UUID) {
+        redoWithUndo(id, "Transcribing again.") { Transcriber.shared.redo(id) }
+    }
+
+    /// More > Find speakers again, with the same Undo.
+    func findSpeakersAgain(_ id: UUID) {
+        redoWithUndo(id, "Finding speakers again.") { Transcriber.shared.findSpeakers(id) }
+    }
+
+    private func redoWithUndo(_ id: UUID, _ text: String, start: () -> Void) {
+        let old = LiveTranscriber.shared.texts[id]
+        start()
+        guard let old else { return }
+        offerLineUndo("\(text) Undo puts the text back as it was.", in: id) {
+            let t = Transcriber.shared
+            t.cancel(id)
+            // The pass writes its last words as it stops: put the old text
+            // back after that, or they'd land in it.
+            Task { @MainActor in
+                while t.active?.id == id { try? await Task.sleep(for: .milliseconds(50)) }
+                LiveTranscriber.shared.setText(old, for: id)
+            }
+        }
+    }
+
+    /// Why Transcribe again can't be used right now, nil if it can (item 15).
+    func transcribeAgainBlocker(_ info: RecordingInfo) -> String? {
+        let t = Transcriber.shared
+        if !info.hasAudio { return "the audio was deleted" }
+        if t.isGrowing(info.id) { return "still recording" }
+        if t.importing.contains(info.id) { return "still importing" }
+        if t.active?.id == info.id { return "transcribing now" }
+        return nil
+    }
+
+    /// Why Find speakers again can't be used right now, nil if it can.
+    func findSpeakersBlocker(_ info: RecordingInfo, hasLines: Bool) -> String? {
+        let t = Transcriber.shared
+        if !info.hasAudio { return "the audio was deleted" }
+        if !SpeakerModel.shared.isReady { return "speaker labels are still downloading" }
+        if !hasLines { return "no text yet" }
+        if t.isGrowing(info.id) { return "still recording" }
+        if t.isFindingSpeakers(info.id) || t.active?.id == info.id || t.isUnfinished(info.id) { return "busy with this one now" }
+        return nil
     }
 
     /// Lets later passes change the line again.
     func unlockLine(_ id: UUID, _ source: LineSource, start: Double) {
         guard var line = Self.line(id, source, start: start), line.isLocked else { return }
+        let old = line
         line.locked = nil
         Self.replace(id, source, start: start, with: line)
+        // Item 5: it unlocked silently, with no way back.
+        offerLineUndo("Line unlocked. Transcribe again may change it now.", in: id) {
+            Self.replace(id, source, start: start, with: old)
+        }
     }
 
     func copyLines(_ info: RecordingInfo, _ lines: [Transcript.Line]) {

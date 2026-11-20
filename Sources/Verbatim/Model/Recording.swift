@@ -62,6 +62,8 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     struct Break: Hashable {
         var second: Double
         var text: String
+        /// Which break this is, for a row id that's never shared.
+        var index = 0
     }
 
     var breaks: [Break] {
@@ -79,7 +81,7 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
                 if o.kind == .paused, e.at.timeIntervalSince(o.at) < 30 { continue }
                 let what = o.kind == .asleep ? "Mac was asleep" : "Paused"
                 out.append(Break(second: Double(o.sample) / Double(sampleRate),
-                                 text: "\(what) \(o.at.formatted(t)) to \(e.at.formatted(t))"))
+                                 text: "\(what) \(o.at.formatted(t)) to \(e.at.formatted(t))", index: out.count))
             case .stopped, .recovered:
                 open = nil
             default:
@@ -87,7 +89,7 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
             }
         }
         if let o = open, o.kind == .paused, state == .paused {
-            out.append(Break(second: Double(o.sample) / Double(sampleRate), text: "Paused since \(o.at.formatted(t))"))
+            out.append(Break(second: Double(o.sample) / Double(sampleRate), text: "Paused since \(o.at.formatted(t))", index: out.count))
         }
         return out
     }

@@ -264,8 +264,11 @@ final class SpeakerModel {
                 Transcriber.shared.speakerModelReady()
                 WordModel.shared.startIfNeeded() // the word spotter comes next
             } catch {
+                // Cancelled by Pause: a Resume since then may already have
+                // started a new task; leave it alone.
+                if Task.isCancelled { return }
                 task = nil
-                if case .paused = state { return } // cancelled by Pause
+                if case .paused = state { return }
                 state = .failed(fraction: fraction)
                 WordModel.shared.startIfNeeded() // don't hold it up
                 retryTask = Task {

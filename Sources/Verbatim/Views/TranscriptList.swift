@@ -118,7 +118,7 @@ struct TranscriptList: View {
             case .line(let l, let s): TranscriptRow.id(s, l.start)
             case .checkedUpTo: "checked"
             case .volatile: "volatile"
-            case .pause(let b): "break-\(b.second)-\(b.text.prefix(6))"
+            case .pause(let b): "break-\(b.index)"
             }
         }
     }
@@ -128,20 +128,26 @@ struct TranscriptList: View {
         if !checked.isEmpty, !live.isEmpty || !volatile.isEmpty, let last = checked.last {
             rows.append(.checkedUpTo(checkedUpTo ?? last.end))
         }
-        // Pauses and sleeps go before the first line after them. One still
-        // going (paused now) goes at the end.
+        rows += live.map { Row.line($0, .live) }
+        // Pauses and sleeps go before the first line after them, in old and
+        // live lines alike. One still going (paused now) goes at the end.
         var breaks = info.breaks[...]
-        for line in live {
-            while let b = breaks.first, b.second <= line.start {
-                rows.append(.pause(b))
-                breaks = breaks.dropFirst()
+        var out: [Row] = []
+        var sawLine = false
+        for row in rows {
+            if case .line(let line, _) = row {
+                sawLine = true
+                while let b = breaks.first, b.second <= line.start {
+                    out.append(.pause(b))
+                    breaks = breaks.dropFirst()
+                }
             }
-            rows.append(.line(line, .live))
+            out.append(row)
         }
-        if !live.isEmpty { rows += breaks.map { Row.pause($0) } }
+        if sawLine { out += breaks.map { Row.pause($0) } }
         let v = volatile.trimmingCharacters(in: .whitespaces)
-        if !v.isEmpty { rows.append(.volatile(v)) }
-        return rows
+        if !v.isEmpty { out.append(.volatile(v)) }
+        return out
     }
 
     /// The scrolling list itself. Split from `body` (which adds saving, notes,
@@ -982,7 +988,8 @@ struct LineEditor: View {
     let onCancel: () -> Void
     @State private var text: String
 
-    init(draft: LineDraft, focused: FocusState<Bool>.Binding, font: Font, prompt: String = "Line",
+    init(draft: LineDraft, focused: FocusState<Bool>.Binding, font: Font,
+         prompt: String = "Empty: Enter deletes the line", // item 14: it didn't say so
          onSave: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.draft = draft
         self.focused = focused

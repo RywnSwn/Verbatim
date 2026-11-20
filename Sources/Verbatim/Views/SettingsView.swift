@@ -382,13 +382,17 @@ struct ShortcutSettings: View {
         ("New recording", "\u{2318}N"),
         ("Start or stop", "\u{2318}R"),
         ("Pause or resume", "\u{21E7}\u{2318}P"),
-        ("Add marker", "\u{2318}D"),
-        ("Add note", "\u{21E7}\u{2318}N"),
+        ("Add marker (recording, or audio playing)", "\u{2318}D"),
+        ("Add note (recording, or audio playing)", "\u{21E7}\u{2318}N"),
+        ("Play or pause the audio", "\u{2325}\u{2318}P"),
+        ("Undo", "\u{2318}Z"),
         ("Mini window", "\u{21E7}\u{2318}M"),
         ("Copy all", "\u{21E7}\u{2318}C"),
         ("Copy new since last copy", "\u{2325}\u{2318}C"),
         ("Find in transcript", "\u{2318}F"),
+        ("Next, previous match", "\u{2318}G  \u{21E7}\u{2318}G"),
         ("Text bigger, smaller", "\u{2318}+  \u{2318}\u{2212}"),
+        ("Normal text size", "\u{2318}0"),
         ("Transcribe a Voice Memo", "\u{2318}O"),
         ("Show or hide the sidebar", "\u{2303}\u{2318}S"),
     ]
@@ -404,7 +408,7 @@ struct ShortcutSettings: View {
                     }
                 }
             } header: {
-                PageHeader(lede: "These work anywhere in Verbatim. \u{2318}K finds everything else.")
+                PageHeader(lede: "Keys for what you do most. \u{2318}K finds everything else.")
             }
         }
     }

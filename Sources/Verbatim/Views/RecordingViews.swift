@@ -214,13 +214,13 @@ struct PastRecordingView: View {
                 Menu {
                     Button("Show in Finder") { model.showInFinder(info) }
                     Divider()
-                    Button("Transcribe again") { transcriber.redo(info.id) }
-                        .disabled(!info.hasAudio || transcriber.active?.id == info.id
-                            || transcriber.importing.contains(info.id) || transcriber.isGrowing(info.id))
-                    Button("Find speakers again") { transcriber.findSpeakers(info.id) }
-                        .disabled(!info.hasAudio || !speakerModel.isReady || liveLines.isEmpty
-                            || transcriber.active?.id == info.id || transcriber.isFindingSpeakers(info.id)
-                            || transcriber.isGrowing(info.id) || transcriber.isUnfinished(info.id))
+                    // Greyed items say why (item 15).
+                    let redoBlocker = model.transcribeAgainBlocker(info)
+                    Button(redoBlocker.map { "Transcribe again (\($0))" } ?? "Transcribe again") { model.transcribeAgain(info.id) }
+                        .disabled(redoBlocker != nil)
+                    let speakersBlocker = model.findSpeakersBlocker(info, hasLines: !liveLines.isEmpty)
+                    Button(speakersBlocker.map { "Find speakers again (\($0))" } ?? "Find speakers again") { model.findSpeakersAgain(info.id) }
+                        .disabled(speakersBlocker != nil)
                     Divider()
                     Button(SidebarView.deleteAudioTitle(info, blocker: model.audioDeleteBlocker(info.id))) {
                         model.deleteAudio(info.id)
@@ -386,7 +386,7 @@ struct TranscriptStatusLine: View {
         // Made with the Mac's backup engine before Parakeet was here.
         if text?.pass == nil, text?.madeWithBackupEngine == true, info.hasAudio, live.isModelReady {
             return ("Made with your Mac's built-in engine. Parakeet is more accurate, and your edits are kept.",
-                    "Redo with Parakeet", { transcriber.redo(id) })
+                    "Redo with Parakeet", { model.transcribeAgain(id) })
         }
         return nil
     }

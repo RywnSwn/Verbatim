@@ -37,7 +37,7 @@ struct SidebarView: View {
                 // Inside the scroll area (not a top inset), so they sit below
                 // the window's buttons instead of under them.
                 NewRecordingButton()
-                SidebarAction(title: "Add a Voice Memo", icon: "waveform.badge.plus", shortcut: "⌘O",
+                SidebarAction(title: "Transcribe a Voice Memo", icon: "waveform.badge.plus", shortcut: "⌘O",
                               help: "Pick a Voice Memo or other recording to turn into text. Or drop one anywhere.") {
                     model.chooseFilesToImport()
                 }
@@ -138,7 +138,7 @@ struct SidebarView: View {
         }
         .padding(3)
         .background { DropHighlight(on: drag.target == spot) }
-        .onDrop(of: [.verbatimRecording], delegate: SidebarDropDelegate(spot: spot, model: model, drag: drag))
+        .onDrop(of: [.verbatimRecording, .fileURL], delegate: SidebarDropDelegate(spot: spot, model: model, drag: drag))
     }
 
     private var recentsSection: some View {
@@ -159,7 +159,7 @@ struct SidebarView: View {
         }
         .padding(3)
         .background { DropHighlight(on: drag.target == .recents) }
-        .onDrop(of: [.verbatimRecording], delegate: SidebarDropDelegate(spot: .recents, model: model, drag: drag))
+        .onDrop(of: [.verbatimRecording, .fileURL], delegate: SidebarDropDelegate(spot: .recents, model: model, drag: drag))
     }
 
     private func row(_ info: RecordingInfo) -> some View {
@@ -230,11 +230,11 @@ struct SidebarView: View {
         Button("Change Icon…") { iconFor = info.id }
         Menu("Move to Group") {
             ForEach(store.groups) { group in
-                Button(group.name) { model.moveRecording(info.id, to: group.id) }
+                Button(group.name) { model.moveWithUndo(info.id, to: group.id) }
                     .disabled(info.groupID == group.id)
             }
             if !store.groups.isEmpty { Divider() }
-            Button("Recents (no group)") { model.moveRecording(info.id, to: nil) }
+            Button("Recents (no group)") { model.moveWithUndo(info.id, to: nil) }
                 .disabled(store.group(info.groupID) == nil)
             Divider()
             Button("New Group…") { model.startNewGroup(moving: info.id) }
@@ -459,12 +459,14 @@ struct GroupHeader: View {
     let group: RecordingGroup
     var isTarget = false
     @State private var picking = false
+    @State private var iconBefore: (icon: String?, color: IconColor)?
 
     private var store: GroupStore { .shared }
 
     var body: some View {
         HStack(spacing: 6) {
             Button {
+                iconBefore = (group.icon, group.color)
                 picking = true
             } label: {
                 ItemIcon(name: group.icon, color: group.color, size: 12)
@@ -479,6 +481,12 @@ struct GroupHeader: View {
                         $0.icon = icon
                         $0.color = color
                     }
+                }
+            }
+            .onChange(of: picking) { _, open in
+                if !open, let before = iconBefore {
+                    iconBefore = nil
+                    model.groupIconChanged(group.id, from: before)
                 }
             }
 

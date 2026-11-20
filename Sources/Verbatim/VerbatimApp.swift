@@ -50,7 +50,7 @@ struct VerbatimApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("New Recording") { model.showNewRecording() }
                     .keyboardShortcut("n", modifiers: .command)
-                Button("Transcribe a Recording…") { model.chooseFilesToImport() }
+                Button("Transcribe a Voice Memo…") { model.chooseFilesToImport() }
                     .keyboardShortcut("o", modifiers: .command)
             }
             // ⌘Z: typing in a box undoes the typing; otherwise the last
@@ -102,7 +102,7 @@ struct VerbatimApp: App {
                 .disabled(!model.hasShownLines)
             }
             CommandGroup(replacing: .help) {
-                Button("Copy Layout Details") { LayoutDetails.copy() }
+                Button("Copy Details for a Bug Report") { LayoutDetails.copy() }
                     .keyboardShortcut("l", modifiers: [.control, .command])
             }
             CommandMenu("Recording") {

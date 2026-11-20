@@ -103,7 +103,13 @@ struct MenuBarPanel: View {
             Divider().padding(.horizontal, 10)
             VStack(spacing: 0) {
                 if model.isBusy {
-                    MenuRow("Copy all", shortcut: "⇧⌘C") { model.copy(.all, from: model.currentID) }
+                    MenuRow("Write a note…", shortcut: "⇧⌘N") {
+                        close()
+                        model.requestNote()
+                    }
+                    // No ⇧⌘C here: that copies the recording on screen, which
+                    // may be another one (item 10). This one is the live class.
+                    MenuRow("Copy all of this class") { model.copy(.all, from: model.currentID) }
                     MenuRow("Copy last 10 minutes") { model.copy(.lastTenMinutes, from: model.currentID) }
                 } else {
                     ForEach(groups.groups) { group in
@@ -175,8 +181,9 @@ struct MenuBarPanel: View {
         HStack(spacing: 6) {
             if model.isBusy {
                 BigButton("Copy new", "doc.on.doc") { model.copy(.new, from: model.currentID) }
+                // Works while paused too, like ⌘D (item 8).
                 BigButton("Marker", "flag") { model.addMarker() }
-                    .disabled(!model.canMark || paused) // canMark: doesn't read the clock
+                    .disabled(!model.canMark) // canMark: doesn't read the clock
                 BigButton(paused ? "Resume" : "Pause", paused ? "play.fill" : "pause.fill") { model.togglePause() }
                 BigButton("Stop", "stop.fill") { model.stop() }
             } else {
@@ -205,8 +212,21 @@ struct MenuBarPanel: View {
         }
     }
 
-    /// Copy feedback, or the bottom bar's message, with its link.
+    /// Copy feedback, or the bottom bar's message, with its link. After Stop
+    /// from here: "Saved …" with Undo Stop (item 6: the panel said nothing).
     @ViewBuilder private var message: some View {
+        if let note = model.stoppedNote {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(note.text).font(.caption).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Undo Stop") { model.undoStop() }
+                    .buttonStyle(.link)
+                    .font(.caption.weight(.medium))
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+            .transition(.opacity)
+        }
         if let feedback = model.copyFeedback {
             Text(feedback.text)
                 .font(.caption)

@@ -925,13 +925,16 @@ final class RecorderModel {
     }
 
     /// A message in the status spot. When not recording, it clears itself.
+    /// While recording it stays, so it isn't missed, unless a warning is
+    /// waiting under it: then it makes way after 30 s (B1 review).
     func show(_ text: String) {
         let s = Status(text: text)
         status = s
-        guard !isBusy else { return }
+        let busy = isBusy
         Task { [weak self] in
-            try? await Task.sleep(for: .seconds(12))
-            if self?.status == s, self?.isBusy == false { self?.status = nil }
+            try? await Task.sleep(for: .seconds(busy ? 30 : 12))
+            guard let self, self.status == s else { return }
+            if !self.isBusy || self.warning != nil { self.status = nil }
         }
     }
 
@@ -1029,7 +1032,10 @@ final class RecorderModel {
     func redo() {
         if NSApp.keyWindow?.firstResponder is NSTextView {
             NSApp.sendAction(Selector(("redo:")), to: nil, from: nil)
+            return
         }
+        // Item 11: it did nothing, with no word why.
+        flash("Redo only works while typing in a box. Something undone can be done again by hand.")
     }
 
     /// The newest step ⌘Z may take: not one recording, the recording on
@@ -1108,10 +1114,26 @@ final class RecorderModel {
 
     func rename(_ id: UUID, to title: String) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
+        guard !trimmed.isEmpty, let i = recordings.firstIndex(where: { $0.id == id }),
+              recordings[i].title != trimmed else { return }
+        let oldTitle = recordings[i].title
+        let oldAuto = recordings[i].autoTitle
         recordings[i].title = trimmed
         recordings[i].autoTitle = nil // Ryan named it: auto-naming leaves it alone
         persist(recordings[i])
+        // Item 4: renaming had no Undo.
+        offerLineUndo("Renamed to \(trimmed).", in: id) { [weak self] in
+            guard let self, let i = self.recordings.firstIndex(where: { $0.id == id }) else { return }
+            self.recordings[i].title = oldTitle
+            self.recordings[i].autoTitle = oldAuto
+            self.persist(self.recordings[i])
+        }
+    }
+
+    /// On the ⌘Z list without taking over the bottom bar (its message is
+    /// already showing something else, like "Changed to Mr. Yurt").
+    func addUndo(_ text: String, in recording: UUID?, run: @escaping () -> Void) {
+        pushUndo(text, recording: recording, run: run)
     }
 
     /// Auto-naming (step 10): only if Ryan hasn't renamed it meanwhile.
@@ -1322,6 +1344,8 @@ final class RecorderModel {
             refreshMicName()
             addEvent(.micChanged, note: Microphones.mic(for: dev).displayName)
             saveCurrent()
+            // Old mic warnings are no longer true.
+            clearStanding { $0.text.hasPrefix("Your chosen mic") || $0.text.hasPrefix("Mic unplugged") }
             status = Status(text: message)
         } catch {
             pause()
@@ -1379,9 +1403,12 @@ final class RecorderModel {
         addEvent(.woke)
         saveCurrent()
         // The quiet minutes start again: asleep is not quiet (B2: "Still
-        // recording?" used to replace this message at once).
+        // recording?" used to replace this message at once). An old "Still
+        // in class?" from before the sleep goes too, or it would come back.
         lastLoud = Date()
         quietWarned = false
+        clearStanding { $0.action == .stopRecording }
+        Messages.shared.withdraw("stillRecording")
         let t = Date.FormatStyle(date: .omitted, time: .shortened)
         // The tip only the first time.
         let tipKey = "toldKeepLidOpen"

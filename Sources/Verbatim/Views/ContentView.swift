@@ -233,8 +233,7 @@ private struct GroupNameAlert: ViewModifier {
             ) {
                 TextField("Like English 2026", text: $draft)
                 Button("OK") {
-                    if let id = model.renameGroupRequest { store.rename(id, to: draft) }
-                    model.keepNewGroup()
+                    if let id = model.renameGroupRequest { model.finishGroupName(id, draft) } else { model.keepNewGroup() }
                     model.renameGroupRequest = nil
                 }
                 Button("Cancel", role: .cancel) {

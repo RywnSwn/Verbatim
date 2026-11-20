@@ -204,6 +204,10 @@ extension RecorderModel {
         // Back to its own voice: just follow the voice again.
         changed.speaker = choice == line.voice.map(Speakers.token) ? nil : choice
         live.replaceLine(id, start: start, with: changed)
+        // Item 4: on ⌘Z (the bar may be offering "Change them too").
+        addUndo("Speaker changed.", in: id) {
+            LiveTranscriber.shared.replaceLine(id, start: start, with: line)
+        }
 
         let name = before.display(choice)
         guard let voice = line.voice, choice != Speakers.token(voice) else {

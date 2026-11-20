@@ -178,7 +178,9 @@ struct CommandMenuView: View {
             add("marker", "Add marker", "flag", shortcut: "⌘D", words: "mark flag important") { model.addMarker() }
             add("note", "Add note", "pencil", shortcut: "⇧⌘N", words: "note write board comment") { model.requestNote() }
         }
-        let copyFrom = busy ? model.currentID : model.shownID
+        // The recording on screen, same as ⇧⌘C in the menu (item 10: ⌘K
+        // copied the live one while another was on screen).
+        let copyFrom = model.shownID ?? (busy ? model.currentID : nil)
         if let copyFrom, !model.shownLines(copyFrom).isEmpty {
             add("copyNew", "Copy new since last copy", "doc.on.doc", shortcut: "⌥⌘C", words: "copy new latest") { model.copy(.new, from: copyFrom) }
             add("copyAll", "Copy all", "doc.on.doc", shortcut: "⇧⌘C", words: "copy everything") { model.copy(.all, from: copyFrom) }

@@ -13,15 +13,24 @@ struct BottomBar: View {
             Group {
                 if model.isBusy {
                     recordingBar
-                } else if let note = model.stoppedNote {
-                    undoBar(note.text, undo: "Undo Stop") { model.undoStop() }
-                } else if let note = model.deletedNote {
-                    undoBar("Moved \(note.info.title) to Recently deleted.", undo: "Undo") { model.undoDelete() }
-                } else if let status = model.status {
-                    if let action = status.action {
-                        undoBar(status.text, undo: Self.linkTitle(action)) { model.perform(action) }
-                    } else {
-                        undoBar(status.text, undo: "OK") { model.clearStatus() }
+                } else if model.stoppedNote != nil || model.deletedNote != nil || model.status != nil {
+                    // Item 3: the Stop and Delete notes used to hide every other
+                    // message (a line edit's Undo, "Copied", an error) for 10 s.
+                    // Now they stack, newest kind last.
+                    VStack(alignment: .trailing, spacing: 4) {
+                        if let note = model.stoppedNote {
+                            undoBar(note.text, undo: "Undo Stop") { model.undoStop() }
+                        }
+                        if let note = model.deletedNote, model.status?.action != .undoDelete {
+                            undoBar("Moved \(note.info.title) to Recently deleted.", undo: "Undo") { model.undoDelete() }
+                        }
+                        if let status = model.status {
+                            if let action = status.action {
+                                undoBar(status.text, undo: Self.linkTitle(action)) { model.perform(action) }
+                            } else {
+                                undoBar(status.text, undo: "OK") { model.clearStatus() }
+                            }
+                        }
                     }
                 } else if case .ready(let version) = updater.state {
                     if let problem = updater.installProblem {

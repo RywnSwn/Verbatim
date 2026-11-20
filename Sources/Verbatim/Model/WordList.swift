@@ -374,8 +374,11 @@ final class WordModel {
                 state = .ready
                 SpeakerModel.shared.startIfNeeded() // its retry waited for this
             } catch {
+                // Cancelled by Pause: a Resume since then may already have
+                // started a new task; leave it alone.
+                if Task.isCancelled { return }
                 task = nil
-                if case .paused = state { return } // cancelled by Pause
+                if case .paused = state { return }
                 state = .failed(fraction: fraction)
                 SpeakerModel.shared.startIfNeeded()
                 retryTask = Task {
