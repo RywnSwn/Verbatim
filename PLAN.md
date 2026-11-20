@@ -1658,8 +1658,9 @@ picked (time turns accent too), `Theme.markPen` / `notePen` with a tool.
 The tool band is plain paper with a pen-colored chip.
 Smoke test (0.1.214): margin mark and arrow keys look right; widths never
 change. The test's "click" on the dimmed part next to the floating sidebar
-still doesn't close it (Esc does). The test clicks through accessibility,
-not a real mouse, so ask Ryan to try a real click.
+still doesn't close it (Esc does), because the test clicks through
+accessibility. Ryan tried a real click: it closes. Everything in this
+section tested by Ryan and merged 2026-11-20 (RywnSwn/Verbatim#28).
 Not done: the mini window still edits a line on one click (Ryan didn't
 ask; consider the same pick / double-click rule there).
 Test list (for Ryan):
