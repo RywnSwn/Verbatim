@@ -66,6 +66,9 @@ final class RecorderModel {
     var fixOffer: FixOffer?
     /// Set by ⇧⌘N: the transcript starts typing a note on that line, then clears it.
     var noteRequest: NoteRequest?
+    /// The Marker or Note tool picked in the toolbar: clicking a line puts a
+    /// marker or a note there. nil = no tool, a click just picks the line.
+    var lineTool: LineTool?
     /// The main area shows Recently deleted (step 9).
     var showingDeleted = false
     private(set) var levels: [Float] = Array(repeating: 0, count: RecorderModel.barCount)
@@ -735,6 +738,13 @@ final class RecorderModel {
     func undo() {
         if NSApp.keyWindow?.firstResponder is NSTextView {
             NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
+            return
+        }
+        // Not recording, a delete only shows `deletedNote` (no status), so
+        // ⌘Z used to skip it and undo an older line change instead.
+        // A newer change with its own Undo (status) still goes first.
+        if deletedNote != nil, status == nil || status?.action == .undoDelete {
+            undoDelete()
             return
         }
         switch status?.action {

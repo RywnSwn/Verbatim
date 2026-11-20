@@ -85,7 +85,17 @@ One screen, no tour (see `docs/design/`). It shows:
   when there's nothing yet.
 - Copy menu also has: **Copy new since last copy**, **Copy last 10
   minutes**, **Copy marked parts only**.
-- **Markers** (⌘D, toolbar Marker, or right-click a line): flag a moment;
+- **Picking a line** (2026-11-20): one click picks a line (blue pen line in
+  the margin, no box) and
+  shows flag, note and + (add a line below) buttons on it. Double-click or
+  Enter edits. Arrow keys move, Delete deletes (Undo).
+- **Line tools**: toolbar Marker and Note are tools you pick up. The pointer
+  turns into a flag or a pencil, lines get a yellow or red margin line, a
+  click puts a
+  marker (or takes it off) or opens a note. Marker stays on until Esc;
+  Note goes down after one note.
+- **Markers** (⌘D marks what's being said now, the Marker tool, the flag
+  button, or right-click a line): flag a moment;
   shows as a flag next to the time. Copies and exports put ⚑ in front of
   marked lines. Undo in the bottom bar.
 - **Messages** (mic changes, battery, falling behind, long silence) appear

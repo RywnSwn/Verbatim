@@ -6,48 +6,59 @@ struct ContentView: View {
     @Environment(Updater.self) private var updater
     @Environment(\.openWindow) private var openWindow
     /// Small window = small layout, like Claude (Ryan): below `compactWidth`
-    /// the sidebar hides itself so the main area gets the room. The toolbar
-    /// button (or ⌃⌘S) still opens it. Wide again, it comes back by itself.
+    /// the sidebar hides itself so the transcript keeps a readable width.
+    /// Wide again, it comes back by itself.
+    ///
+    /// The window never changes size for the sidebar (Ryan, 2026-11-20: it
+    /// used to grow wider each time he opened it, "bigger and bigger").
+    /// Window at least `compactWidth`: the sidebar opens inside it and the
+    /// transcript gets narrower. Narrower than that: it slides in over the
+    /// transcript (`floating`) and slides away on a click outside, Esc, or
+    /// picking a recording.
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var hidForSpace = false
-    private static let compactWidth: CGFloat = 860
-    private static let roomyWidth: CGFloat = 940
+    @State private var floating = false
+    @State private var width: CGFloat = 1200
+    /// 760: the system sidebar button stopped working below about 745 pt
+    /// (0.1.109 test), and opening it in a window too narrow made macOS fight
+    /// over the layout until it crashed (0.1.98, 0.1.102). So below this the
+    /// split view's sidebar column stays shut and the floating one is used.
+    static let compactWidth: CGFloat = 760
+    private static let roomyWidth: CGFloat = 820
+    static let floatingWidth: CGFloat = 270
 
     private func fitSidebar(to width: CGFloat) {
+        self.width = width
         if width < Self.compactWidth, columns != .detailOnly, !hidForSpace {
             hidForSpace = true
             columns = .detailOnly
-        } else if width >= Self.roomyWidth, hidForSpace {
+        } else if width >= Self.roomyWidth, hidForSpace || floating {
+            // Room again: the floating sidebar becomes the normal one.
             hidForSpace = false
+            floating = false
             columns = .all
         }
     }
 
-    /// Our own sidebar button (the system one is removed). Opening the sidebar
-    /// in a window too narrow for it made macOS fight over the layout until
-    /// the app crashed (0.1.98, 0.1.102), or do nothing at all. So a narrow
-    /// window first grows to make room, then the sidebar opens.
+    /// Our own sidebar button (the system one is removed). Never resizes the window.
     private func toggleSidebar() {
-        if columns == .detailOnly {
-            hidForSpace = false
-            if let window = Messages.mainWindows.first ?? NSApp.keyWindow,
-               window.frame.width < Self.compactWidth {
-                var frame = window.frame
-                frame.size.width = Self.compactWidth + 20
-                if let screen = window.screen?.visibleFrame {
-                    frame.size.width = min(frame.size.width, screen.width)
-                    if frame.maxX > screen.maxX { frame.origin.x = max(screen.minX, screen.maxX - frame.width) }
-                }
-                window.setFrame(frame, display: true, animate: true)
-                guard frame.width >= Self.compactWidth else { return } // tiny screen: no room at all
+        if floating {
+            floating = false // hid for space stays as it was: wide again, it comes back
+        } else if columns == .detailOnly {
+            if width < Self.compactWidth {
+                floating = true
+            } else {
+                hidForSpace = false
+                // After this layout pass, never in the middle of it (0.1.98 crash).
+                Task { @MainActor in columns = .all }
             }
-            // After the resize has been laid out, never in the middle of it.
-            Task { @MainActor in columns = .all }
         } else {
             hidForSpace = false
             columns = .detailOnly
         }
     }
+
+    private var sidebarShown: Bool { floating || columns != .detailOnly }
 
     var body: some View {
         @Bindable var model = model
@@ -73,7 +84,7 @@ struct ContentView: View {
                             Label("Sidebar", systemImage: "sidebar.left")
                         }
                         .keyboardShortcut("s", modifiers: [.control, .command])
-                        .help(columns == .detailOnly ? "Show the sidebar (⌃⌘S)" : "Hide the sidebar (⌃⌘S)")
+                        .help(sidebarShown ? "Hide the sidebar (⌃⌘S)" : "Show the sidebar (⌃⌘S)")
                     }
                 }
                 .dropDestination(for: URL.self) { urls, _ in
@@ -93,6 +104,14 @@ struct ContentView: View {
                 // I'm given" makes the split view follow the window.
                 .frame(minWidth: 0, idealWidth: 400, maxWidth: .infinity,
                        minHeight: 0, idealHeight: 300, maxHeight: .infinity)
+                // In the main column, not over the whole split view: there
+                // the click on the dimmed part went to the split view under
+                // it (smoke test, 2026-11-20) and the sidebar didn't close. With
+                // the sidebar column shut, this column is the whole window.
+                .overlay(alignment: .leading) {
+                    FloatingSidebar(shown: floating) { floating = false }
+                }
+                .animation(.snappy(duration: 0.22), value: floating)
         }
         // Here, not on the sidebar: with the sidebar hidden (narrow window),
         // New Group… from the start page or ⌘K couldn't show it.
@@ -103,8 +122,12 @@ struct ContentView: View {
             }
         }
         .animation(.snappy(duration: 0.18), value: model.showCommandMenu)
+        // Picking a recording (or Recently Deleted, or starting one) closes it.
+        .onChange(of: model.selection) { floating = false }
+        .onChange(of: model.showingDeleted) { floating = false }
         .onAppear {
             MainWindow.open = { openWindow(id: "main") }
+            if let w = (Messages.mainWindows.first ?? NSApp.keyWindow)?.frame.width { width = w }
             LaunchTimer.shared.mark("window shown")
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
@@ -113,6 +136,60 @@ struct ContentView: View {
             // crash (Ryan's crash on 0.1.98).
             Task { @MainActor in fitSidebar(to: width) }
         }
+    }
+}
+
+/// The sidebar in a window too narrow to fit it beside the transcript: it
+/// slides in from the left over the transcript, which is dimmed a little and
+/// doesn't move. A click on the dimmed part or Esc slides it away.
+private struct FloatingSidebar: View {
+    @AppStorage(SidebarLook.key) private var sidebarLook: SidebarLook = .glass
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let shown: Bool
+    let close: () -> Void
+
+    var body: some View {
+        // Slides in and out (quick start, gentle stop, so it never feels slow).
+        ZStack(alignment: .leading) {
+            if shown {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: close)
+                    .accessibilityLabel("Close the sidebar")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { close() } // VoiceOver, and the smoke test's clicks
+                    .transition(.opacity)
+                SidebarView()
+                    .frame(width: ContentView.floatingWidth)
+                    .frame(maxHeight: .infinity)
+                    .background {
+                        Group {
+                            if sidebarLook == .solid || reduceTransparency {
+                                Theme.sidebarSolid
+                            } else {
+                                Rectangle().fill(.regularMaterial)
+                            }
+                        }
+                        .ignoresSafeArea()
+                    }
+                    .overlay(alignment: .trailing) {
+                        Rectangle().fill(Theme.line).frame(width: 1).ignoresSafeArea()
+                    }
+                    .compositingGroup()
+                    .shadow(color: .black.opacity(0.18), radius: 16, x: 4)
+                    .background {
+                        // Esc slides it away.
+                        Button("Close the sidebar", action: close)
+                            .keyboardShortcut(.cancelAction)
+                            .opacity(0)
+                            .accessibilityHidden(true)
+                    }
+                    .transition(.move(edge: .leading))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .allowsHitTesting(shown)
     }
 }
 
@@ -173,6 +250,7 @@ struct DetailView: View {
         }
         .onChange(of: model.selection) {
             model.searchText = ""
+            model.lineTool = nil // a tool belongs to the transcript it was picked up on
             // Audio belongs to the transcript on screen; don't keep playing behind another one.
             if Playback.shared.id != model.selection { Playback.shared.close() }
         }
