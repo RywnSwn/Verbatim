@@ -51,6 +51,12 @@ struct SidebarView: View {
             // Same room above the line as below it (to the first group's
             // name, which has its own padding): Ryan, 2026-11-20, "not even".
             .padding(.bottom, 12)
+            // And the same room between the window's red, yellow and green
+            // dots and New recording as between Recently deleted and the
+            // line (Ryan, 2026-11-20: 28 pt against 18). The window's top
+            // area is taller than the dots need, so the rows move up into
+            // it. Not in the overlay: there the toolbar is right above.
+            .padding(.top, floating ? 0 : -10)
             .frame(maxWidth: .infinity, alignment: .leading)
             Divider()
             list
