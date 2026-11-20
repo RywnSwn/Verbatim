@@ -71,11 +71,22 @@ struct ContentView: View {
 
     /// Shows the sidebar column, watching that the window doesn't grow
     /// (not while Ryan drags the window's edge: that growth is his).
-    private func openInWindow(watch: Bool = true) {
+    private func openInWindow(watch: Bool = true, animated: Bool = false) {
         opening = watch ? (width, Date()) : nil
         // After this layout pass, never in the middle of it (0.1.98 crash).
-        Task { @MainActor in columns = .all }
+        Task { @MainActor in
+            if animated {
+                withAnimation(Self.slide) { columns = .all }
+            } else {
+                columns = .all
+            }
+        }
     }
+
+    /// The sidebar slides in and out when Ryan clicks the button (it used
+    /// to just appear and vanish, 2026-11-20). Not while the window is being
+    /// dragged: then it follows the window's edge.
+    static let slide = Animation.snappy(duration: 0.25)
 
     /// The window grew for the sidebar: put it back and use the overlay.
     private func undoGrowth(from before: CGFloat, to grown: CGFloat) {
@@ -102,11 +113,11 @@ struct ContentView: View {
                 floating = true
             } else {
                 hidForSpace = false
-                openInWindow()
+                openInWindow(animated: true)
             }
         } else {
             hidForSpace = false
-            columns = .detailOnly
+            withAnimation(Self.slide) { columns = .detailOnly }
         }
     }
 

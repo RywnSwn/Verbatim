@@ -1888,6 +1888,8 @@ Test list (for Ryan, these two):
 5. Make the window small (sidebar becomes the overlay), drag it big again:
    the normal sidebar comes back, and the sidebar button gives the normal
    one (not the overlay) from then on.
+6. The sidebar in the window has no scroll line, and slides in and out
+   when you press the sidebar button (it used to just appear and vanish).
 Lesson (2026-11-20): a review subagent ran `git checkout <sha>` in the
 shared checkout, so commits made meanwhile landed on a detached HEAD and
 weren't pushed. Tell review agents to use `git show` / `git diff` only,

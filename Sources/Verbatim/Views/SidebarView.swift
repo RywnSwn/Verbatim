@@ -61,7 +61,9 @@ struct SidebarView: View {
             .animation(.snappy(duration: 0.25), value: store.groups)
             .animation(.snappy(duration: 0.25), value: model.recordings.map(\.groupID))
         }
-        .scrollIndicators(floating ? .never : .automatic)
+        // No scroll line down the side, in the window or as the overlay
+        // (Ryan, 2026-11-20). It still scrolls.
+        .scrollIndicators(.never)
         // B17: the recording that opens (an imported memo, Put Back, a search
         // hit, + on a folded group) is unfolded and scrolled into view.
         .onChange(of: model.selection) { _, id in
