@@ -25,7 +25,8 @@ chat each.
 Sidebar never resizes the window, line tools (click picks, double-click
 edits, Marker/Note tools, margin mark look) and the ⌘Z-after-delete fix
 (RywnSwn/Verbatim#28): tested by Ryan ("all works") and merged 2026-11-20.
-Next: the UX check list (14 items left) in `PLAN.md`. See `PLAN.md` for build order and progress,
+Next: the UX check lists in `PLAN.md` (14 items, plus round 2: A1 to A10
+first, they lose work). See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
 decided and why (read it before re-arguing a choice).

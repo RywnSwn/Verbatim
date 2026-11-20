@@ -1709,3 +1709,136 @@ Still to do (one chat, after the line tools):
     player; ⌥⌘P, ⌘Z, ⌘G, ⌘0 missing.
 14. Emptying a line deletes it, but the line box doesn't say so.
 15. Greyed Transcribe again / Find speakers again don't say why.
+
+### UX check, round 2 (2026-11-20, read from the code by 4 reviewers + CI screenshots)
+Ryan: "investigate for UX errors". Nothing fixed yet. The worst ones (A1,
+A2, A3, A4, A5) were checked by hand in the code. Item 1 above was only
+half fixed: see A4. Branch `claude/speech-model-errors` (1 commit, not
+merged, not tested by Ryan) may already fix A10 and part of B12: check it
+first. Suggested chats: A1 to A4 together, then A5 to A10, then B, then C
+(with items 2 to 15 above where they touch the same code).
+
+A. Loses work or blocks the task
+- A1. Settings > Storage: lowering "Keep audio for" (7 to 3 days) deletes
+  older audio for good within the hour (`AudioCleanup.sweep`, removeItem).
+  No count, no warning days, no undo. Fix: say "N recordings lose their
+  audio" under the picker and give the normal days of warning.
+- A2. Typing in a line / note / new line, then clicking another recording:
+  the text is lost, or saved into the OTHER recording at the same time.
+  `PastRecordingView` / `TranscriptList` have no `.id(info.id)`, so the
+  open box carries over; `EditKey` has no recording id. Fix: `.id(info.id)`
+  and keep the recording id in each open box.
+- A3. Disk full mid-class, free space, Resume: looks like recording, saves
+  nothing for the rest of class. `AudioPipeline.failed` is only reset in
+  `attach`, Resume only calls `startCapture`. Timer and bars freeze.
+- A4. ⌘Z is one list for all recordings: undoes a change in a recording
+  not on screen ("Undid: line edited."), or does nothing for one in
+  Recently deleted but still says "Undid". ⌘Z after Stop undoes an old
+  edit instead of Undo Stop (`undo()` ignores `stoppedNote`). ⌘Z after
+  deleting a recording only works for 10 s (`deletedNote`), later it
+  undoes something older. Fix: tag undos with their recording, put Undo
+  Stop and recording deletes on the ⌘Z list.
+- A5. Normal window (about 1000 wide, sidebar open), finished recording:
+  Copy all is pushed into the "»" overflow (smoke 08, 09). ⇧⌘C then shows
+  no message at all ("Copied" only shows on the hidden button).
+- A6. Voice Memo import: no progress, no Cancel. Delete it while importing
+  then Undo: "Importing…" forever at 0 min, Transcribe again greyed until
+  relaunch (`setImporting(false)` skipped). Quit mid-import: half the memo
+  is transcribed and marked done (imports start as `.stopped`).
+- A7. Download paused, then a memo dropped: "Waiting for the speech model
+  download to finish (42%)" forever, no Resume link there.
+- A8. Mic access off, Record in the menu bar panel: panel closes, nothing
+  happens. The panel has no blocked state (mini and main window do).
+- A9. Paused and forgot: Mac never sleeps (keep-awake kept), no "Still
+  paused?" ever (quiet check only runs while recording). Fix: let it
+  sleep, ask after about 15 paused minutes.
+- A10. First class before Parakeet with no Apple engine: page says "text
+  comes after you press Stop" but nothing is queued until relaunch
+  (`recordingFinal` needs `isModelReady`).
+
+B. Frustrating
+- B1. One status spot: offline, the auto update check's "Update didn't
+  work" takes it over for the whole class (every 4 h). Standing warnings
+  (battery 15%, chosen mic missing, quiet, disk almost full, paused-on-error
+  reason) vanish after any short message (⌘D, edit) and never come back.
+  Fix: auto-check failures only in Settings > Updates; warnings get their
+  own slot.
+- B2. Lid closed over 5 min: "Mac was asleep" is replaced at once by
+  "Still recording?" (`didWake` doesn't reset `lastLoud`). The spec's
+  "Paused 10:12 to 10:20" / "Mac was asleep" dividers are not drawn
+  (events are saved, no view reads them). Tip shows every wake, not once.
+- B3. Record fails to start: a 0 min ghost recording stays (folder made
+  before the failing step), next launch says "Verbatim quit during…". The
+  error has no hint what to do.
+- B4. Deleting a line moves its flag and note onto the line above (notes
+  get joined). Fix: they go with the line, in the same Undo.
+- B5. Audio playing: the list follows the audio and scrolls the note or new
+  line being typed off screen (only `editing` stops it). Also pulls back a
+  line picked with arrows.
+- B6. Double-click with the Note tool: opens the line's text instead of
+  the note. With Marker: adds then removes the flag ("Marker removed.").
+- B7. ⌘F doesn't find notes or speaker names that are on the page.
+- B8. Keyboard: after Enter/Esc closes a box, arrows do nothing until a
+  click (`listFocused` only set by mouse). Nothing picked: arrows ignored.
+  Line picked, then click the same recording in the sidebar, Delete:
+  deletes the whole recording; no pane shows which has the keyboard.
+- B9. Switches ON that can't work: "Name recordings from what was said"
+  next to "This Mac can't run Apple Intelligence" (smoke 21); banners on
+  while macOS notifications are denied; voice "Use" on but not used (only
+  3 newest count). Fix: grey out with the reason and an Open Settings
+  button.
+- B10. Updates: once a build is downloaded, no newer one is ever found
+  until restart. No Restart button in Settings > Updates (only the lowest
+  priority bottom bar). Update download has no progress, no resume, next
+  try in 4 h.
+- B11. Downloads: the speech model says "about 600 MB", then speaker
+  labels and word helper (100 MB each) start one after another with no
+  Pause and no "1 of 3". Pause is forgotten at next launch. Speaker retries
+  and the word download can run at the same time.
+- B12. Live text off: mini window and menu bar still say "Words show up
+  here a couple of seconds after…". Reason is always "still downloading"
+  even when paused, failed or Apple's engine is missing. Speech
+  Recognition permission is first asked when pressing Record in class, and
+  when denied there's no Open Settings button.
+- B13. Settings Words / Voices: only the last removal has Undo, not on ⌘Z.
+  Return in "Heard as" does nothing. Errors look like grey hints.
+- B14. New Group…, then Cancel: the group is still made (and from Move to
+  Group, the recording is already in it).
+- B15. Delete the group the start screen records into, Undo: start screen
+  now says Recents, next ⌘R records there.
+- B16. Memo dropped on the start screen showing "English": lands in
+  Recents. Memos can't be dropped on a sidebar group. Dropping one while
+  recording leaves the live page.
+- B17. Sidebar never scrolls to or unfolds the recording that just opened
+  (import of an old memo, Put Back into a folded group, + on a folded
+  group).
+
+C. Polish
+- C1. Icons: toolbar "+" = New recording, but "+" on a picked line = add a
+  line, sidebar "+" = record into group. Pencil on a line = note. "»" and
+  "⋯" unlabeled. Flag tooltip still says "Right-click to remove".
+- C2. Header counts raw markers: ⌘D twice in one line = 1 flag, "2 markers".
+- C3. Import messages: "Transcribed the first 0 min" when nothing ran; raw
+  "OSStatus error -11829"; picker offers .flac then refuses it; only the
+  first bad file named; no highlight when dragging a file over the window.
+- C4. Start screen reachable while recording (greyed Record, "The class
+  shows up on this page"). Mic denied hides the memo hint and downloads.
+- C5. Floating sidebar stays open when clicking the recording already open.
+- C6. Change Icon on a recording: picking a color before an icon is ignored.
+- C7. Settings > Transcription shows speaker and word downloads twice;
+  "Tells Mr. Yurt apart from students" (Ryan turned down class-only words).
+- C8. AI Apps says "Verbatim was moved" when a second copy (test build) is
+  open but the first is still there.
+- C9. Remove Verbatim and Its Data: quitting writes `text-index.json` and
+  makes the data folder again.
+- C10. ⌘Q, Stop and Quit: bar shows "Undo Stop" instead of "Saving…";
+  Undo Stop there still quits. Undo Stop at the 3 h limit stops again at
+  once (no warning before 3 h). Undo Stop doesn't close the player.
+- C11. Faint text on the start screen ("The class shows up…", "Or drop a
+  Voice Memo here") is hard to read.
+
+Can't tell from code, test on Ryan's Mac: dragging straight out of the
+Voice Memos app (file promise vs file URL); first "Still recording?"
+banner lost while macOS asks for notification permission mid-class;
+right-click on the sidebar hint text itself; mic unplugged mid-class when
+the runtime error comes before the disconnect note (may stay paused).
