@@ -32,7 +32,10 @@ struct ContentView: View {
     /// above it). If opening the sidebar ever grows the window, the window
     /// goes back, the overlay is used, and the width it needed is
     /// remembered here, so next time the overlay comes straight away.
-    private static let learnedKey = "sidebarNeedsWidth"
+    /// "2": the first version learned wrong widths from Ryan's own drags
+    /// (2026-11-20), so what it remembered is dropped once.
+    private static let learnedKey = "sidebarNeedsWidth2"
+    private static let oldLearnedKey = "sidebarNeedsWidth"
     private var compact: CGFloat {
         max(Self.compactWidth, UserDefaults.standard.double(forKey: Self.learnedKey))
     }
@@ -42,8 +45,15 @@ struct ContentView: View {
 
     private func fitSidebar(to width: CGFloat) {
         // Growth while you drag the window's edge is you, not the sidebar.
+        // Ryan (2026-11-20): dragging wider brought the sidebar back halfway
+        // through, the rest of his drag looked like the sidebar growing the
+        // window, and from then on the button only gave the overlay.
         let dragging = Messages.mainWindows.first?.inLiveResize == true
-        if let o = opening, !dragging, Date().timeIntervalSince(o.at) < 1, width > o.before + 1 {
+        if dragging { opening = nil }
+        // The sidebar is under 300 pt wide: more growth than that is the
+        // window being resized some other way (green button, a new screen).
+        if let o = opening, !dragging, Date().timeIntervalSince(o.at) < 1,
+           width > o.before + 1, width - o.before < 320 {
             undoGrowth(from: o.before, to: width)
             return
         }
@@ -55,13 +65,14 @@ struct ContentView: View {
             // Room again: the floating sidebar becomes the normal one.
             hidForSpace = false
             floating = false
-            openInWindow()
+            openInWindow(watch: !dragging)
         }
     }
 
-    /// Shows the sidebar column, watching that the window doesn't grow.
-    private func openInWindow() {
-        opening = (width, Date())
+    /// Shows the sidebar column, watching that the window doesn't grow
+    /// (not while Ryan drags the window's edge: that growth is his).
+    private func openInWindow(watch: Bool = true) {
+        opening = watch ? (width, Date()) : nil
         // After this layout pass, never in the middle of it (0.1.98 crash).
         Task { @MainActor in columns = .all }
     }
@@ -187,6 +198,7 @@ struct ContentView: View {
         .onChange(of: model.showingDeleted) { floating = false }
         .onAppear {
             MainWindow.open = { openWindow(id: "main") }
+            UserDefaults.standard.removeObject(forKey: Self.oldLearnedKey)
             if let w = (Messages.mainWindows.first ?? NSApp.keyWindow)?.frame.width { width = w }
             LaunchTimer.shared.mark("window shown")
         }

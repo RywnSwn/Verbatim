@@ -1870,7 +1870,14 @@ tested by Ryan:
   Also works when the recording had no live text.
 Sidebar fix (5c97fd3, same branch): if opening the sidebar would grow the
 window, the window goes back and the overlay is used; the width it needed
-is remembered (`sidebarNeedsWidth`). Smoke run 98 passed.
+is remembered (`sidebarNeedsWidth2`). Smoke run 98 passed.
+Fix (same chat): Ryan made the window small (overlay), dragged it wider,
+and after that the sidebar button only gave the overlay. Dragging wider
+reopened the sidebar mid-drag, and the rest of the drag (the last width
+change lands just after the drag ends) looked like the sidebar growing the
+window, so a wrong width was learned. Now: no growth watch while or after
+a drag, growth over 320 pt isn't the sidebar, and the old key is dropped
+once (new key `sidebarNeedsWidth2`).
 Test list (for Ryan, these two):
 1. Settings > Updates, Check Now when a new test build is out: the line
    under it counts up ("Downloading …: 42% (17 of 40 MB)").
@@ -1878,6 +1885,9 @@ Test list (for Ryan, these two):
    Wi-Fi on, Check Now: it carries on from about N%, not from 0.
 3. Old recordings from before Parakeet are rare; skip the Whisper Undo.
 4. Open the sidebar at different window widths: the window never grows.
+5. Make the window small (sidebar becomes the overlay), drag it big again:
+   the normal sidebar comes back, and the sidebar button gives the normal
+   one (not the overlay) from then on.
 Lesson (2026-11-20): a review subagent ran `git checkout <sha>` in the
 shared checkout, so commits made meanwhile landed on a detached HEAD and
 weren't pushed. Tell review agents to use `git show` / `git diff` only,
