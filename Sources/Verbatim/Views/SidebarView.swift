@@ -48,7 +48,9 @@ struct SidebarView: View {
                 RecentlyDeletedButton()
             }
             .padding(.horizontal, 8)
-            .padding(.bottom, 6)
+            // Same room above the line as below it (to the first group's
+            // name, which has its own padding): Ryan, 2026-11-20, "not even".
+            .padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             Divider()
             list
@@ -95,7 +97,6 @@ struct SidebarView: View {
                 recentsSection
             }
             .padding(.horizontal, 8)
-            .padding(.top, 8)
             .padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.snappy(duration: 0.25), value: store.groups)
