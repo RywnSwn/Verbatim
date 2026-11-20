@@ -242,6 +242,39 @@ sleep 2
 check "open a recording"
 shot "opened-recording"
 
+# The sidebar never resizes the window (Ryan, 2026-11-20: it grew wider each
+# time he opened it). 760 and up: it opens inside the window. Below: it slides
+# over the transcript. Open and close a few times; the width must not change.
+win_width() {
+  osascript -e 'tell application "System Events" to get item 1 of (size of window 1 of (first process whose unix id is '"$APP_PID"'))' 2>/dev/null
+}
+same_width() {
+  local w; w="$(win_width)"
+  echo "window width after $2: $w (wanted $1)"
+  if [ "$w" != "$1" ]; then echo "::error::Sidebar changed the window width ($2): $w, wanted $1"; FAILED=1; fi
+}
+for width in 800 700; do
+  resize "$width" 600; check "resize to $width"
+  shot "sidebar-$width-start"
+  for round in 1 2 3; do
+    toggle_sidebar; check "sidebar toggle $width #$round"
+    [ "$round" = 1 ] && shot "sidebar-$width-toggled-once"
+    toggle_sidebar; check "sidebar toggle back $width #$round"
+    same_width "$width" "toggle at $width, round $round"
+  done
+done
+# 700 wide: floating sidebar. Esc and a click on the dimmed transcript close it.
+toggle_sidebar; shot "sidebar-700-floating"
+osascript -e 'tell application "System Events" to key code 53' || true
+sleep 1; shot "sidebar-700-after-esc"
+toggle_sidebar
+click_at 600 400
+sleep 1; shot "sidebar-700-after-click-outside"
+same_width 700 "floating sidebar"
+check "floating sidebar"
+resize 960 620; check "back to 960"
+sleep 1; shot "sidebar-960-back"
+
 # Copy All (⇧⌘C) and Export as Markdown read the same text: check the
 # speaker names are in it (Ryan, 2026-11-19: "a copy doesn't show the speaker").
 pbcopy < /dev/null
