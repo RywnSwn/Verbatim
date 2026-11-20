@@ -52,24 +52,8 @@ struct RecordingNowView: View {
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(info.groupedStartedText)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    model.addMarker()
-                } label: {
-                    Label("Marker", systemImage: "flag")
-                }
-                .labelStyle(.titleAndIcon)
-                .help("Mark this moment, like \"write this down\" (⌘D)")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    model.requestNote()
-                } label: {
-                    Label("Note", systemImage: "pencil")
-                }
-                .labelStyle(.titleAndIcon)
-                .help("Type a note on what's being said now, like what's on the board (⇧⌘N)")
-            }
+            ToolbarItem(placement: .primaryAction) { LineToolToggle(tool: .marker) }
+            ToolbarItem(placement: .primaryAction) { LineToolToggle(tool: .note) }
             ToolbarItem(placement: .primaryAction) {
                 ExportMenu(hasLines: !(checked + lines).isEmpty)
             }
@@ -203,6 +187,8 @@ struct PastRecordingView: View {
                 .disabled(!info.hasAudio)
                 .help(info.hasAudio ? (playing ? "Pause the audio (⌥⌘P)" : "Play the audio here (⌥⌘P)")
                     : "The audio was deleted. The text is still here.")
+                LineToolToggle(tool: .marker)
+                LineToolToggle(tool: .note)
                 ExportMenu(hasLines: !(checked + liveLines).isEmpty)
                 Menu {
                     Button("Show in Finder") { model.showInFinder(info) }
@@ -448,4 +434,26 @@ struct FindLine: View {
 extension String {
     /// "about 4 min left" -> "About 4 min left".
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
+}
+
+/// Marker or Note in the toolbar: a tool you pick up (it stays pressed while
+/// on). Clicking a line then marks it or opens a note on it. ⌘D and ⇧⌘N
+/// still go on the line being said (or heard) right now.
+struct LineToolToggle: View {
+    @Environment(RecorderModel.self) private var model
+    let tool: LineTool
+
+    var body: some View {
+        Toggle(isOn: Binding(
+            get: { model.lineTool == tool },
+            set: { model.lineTool = $0 ? tool : nil }
+        )) {
+            Label(tool == .marker ? "Marker" : "Note", systemImage: tool == .marker ? "flag" : "pencil")
+        }
+        .toggleStyle(.button)
+        .labelStyle(.titleAndIcon)
+        .help(tool == .marker
+              ? "Marker tool: click lines to mark them. ⌘D marks what's being said now."
+              : "Note tool: click a line to write a note on it. ⇧⌘N notes what's being said now.")
+    }
 }

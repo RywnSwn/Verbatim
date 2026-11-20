@@ -10,8 +10,12 @@ import SwiftUI
 /// Speakers (step 7): "Speaker 1:" (or a name Ryan gave) in bold in front of
 /// each line. Click it to rename or pick who said it (or right-click > Speaker).
 ///
-/// Editing: click a line (Enter saves, Esc cancels, clicking away
-/// saves), or right-click for Copy / Edit / Delete. While a line is being
+/// Picking and editing (Ryan, 2026-11-20, docs/design/LineTools.html): one
+/// click picks a line (blue box, nothing opens) and shows its flag, note and
+/// + buttons. Double-click or Enter edits (Enter saves, Esc cancels, clicking
+/// away saves). Arrow keys move, Delete deletes. Right-click for the rest.
+/// With the Marker or Note tool on (`RecorderModel.lineTool`) a click puts a
+/// marker or a note on the line instead. While a line is being
 /// typed, the rest of the page is covered (`TypingShield`): a click there
 /// only saves. Edited lines turn full ink and get a lock; new words never go
 /// into them. Every change has Undo in the bottom bar and on ⌘Z.
@@ -37,6 +41,9 @@ struct TranscriptList: View {
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
     @State private var editing: EditKey?
+    /// The line picked with one click. Nothing is typed into it.
+    @State private var picked: EditKey?
+    @FocusState private var listFocused: Bool
     /// What's typed into the line being edited. Not watched on purpose: the
     /// typing lives in `LineEditor`, so a key press redraws that one line and
     /// not the whole transcript.
@@ -233,6 +240,36 @@ struct TranscriptList: View {
 
     var body: some View {
         scroller
+        .focusable()
+        .focused($listFocused)
+        .focusEffectDisabled()
+        .onKeyPress(.upArrow) { movePick(-1) }
+        .onKeyPress(.downArrow) { movePick(1) }
+        .onKeyPress(.return) {
+            guard !isTyping, let p = pickedLine() else { return .ignored }
+            begin(p.line, p.source)
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            guard !isTyping, picked != nil else { return .ignored }
+            picked = nil
+            return .handled
+        }
+        .onDeleteCommand { deletePicked() }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let tool = model.lineTool {
+                LineToolBand(tool: tool) { model.lineTool = nil }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: model.lineTool)
+        .onChange(of: model.lineTool) { _, tool in
+            // Picking up a tool saves and closes whatever was being typed.
+            if tool != nil {
+                stopTyping()
+                picked = nil
+            }
+        }
         .onChange(of: fieldFocused) {
             // Clicking somewhere else saves, like a text field in Notes.
             if !fieldFocused, editing != nil { save() }
@@ -397,6 +434,8 @@ struct TranscriptList: View {
                          options: [Speakers.SpeakerOption], marked: Bool, note: String?) -> some View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
+        let isPicked = picked == key && !isEditing
+        let tool = isEditing ? nil : model.lineTool
         let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
         // Gutter 60 + gap 10 = the 70 pt that notes and offers line up with.
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -434,7 +473,6 @@ struct TranscriptList: View {
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .pointerStyle(.horizontalText) // text cursor: says "you can type here"
             }
             if line.isLocked, !isEditing {
                 Button {
@@ -450,6 +488,9 @@ struct TranscriptList: View {
                 .help("You edited this line. Click to unlock.")
                 .accessibilityLabel("Unlock line")
             }
+            if isPicked, tool == nil {
+                lineActions(line, source, speaker: speaker, marked: marked, note: note)
+            }
         }
         .background {
             if isPlaying {
@@ -459,8 +500,9 @@ struct TranscriptList: View {
                     .padding(.vertical, -5)
             }
         }
+        .modifier(LineHighlight(picked: isPicked, tool: tool))
         .contentShape(Rectangle())
-        .onTapGesture { if !isEditing { begin(line, source) } }
+        .onTapGesture { if !isEditing { tapped(line, source, marked: marked, note: note) } }
         .contextMenu {
             if canPlay {
                 Button("Play from here") { model.playAudio(info.id, from: line.start) }
@@ -632,8 +674,81 @@ struct TranscriptList: View {
         draft = LineDraft()
         draft.text = line.text
         editing = EditKey(source: source, start: line.start)
+        picked = editing // after saving, the line stays picked
         if source == .live { liveTranscriber.editing = (info.id, line.start) }
         Task { @MainActor in fieldFocused = true }
+    }
+
+    // MARK: - Picking a line, line tools
+
+    /// One click: with a tool, put a marker (or take it off) or open a note.
+    /// Without: pick the line. A double-click edits it.
+    private func tapped(_ line: Transcript.Line, _ source: LineSource, marked: Bool, note: String?) {
+        switch model.lineTool {
+        case .marker?:
+            if marked { model.removeMarker(info.id, line: line) } else { model.addMarker(info.id, line: line) }
+        case .note?:
+            model.lineTool = nil // goes down after one note: you type it right away
+            beginNote(line, note ?? "")
+        case nil:
+            if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
+                begin(line, source)
+            } else {
+                stopTyping()
+                picked = EditKey(source: source, start: line.start)
+                listFocused = true
+            }
+        }
+    }
+
+    /// Flag, note and + on the picked line, so they're never hidden in the
+    /// right-click menu only.
+    @ViewBuilder private func lineActions(_ line: Transcript.Line, _ source: LineSource, speaker: String?,
+                                          marked: Bool, note: String?) -> some View {
+        HStack(spacing: 2) {
+            LineActionButton(icon: marked ? "flag.slash" : "flag", help: marked ? "Remove marker" : "Add marker here") {
+                if marked { model.removeMarker(info.id, line: line) } else { model.addMarker(info.id, line: line) }
+            }
+            LineActionButton(icon: "pencil", help: note == nil ? "Add note" : "Edit note") {
+                beginNote(line, note ?? "")
+            }
+            if source == .live {
+                LineActionButton(icon: "plus", help: "Add a line below") {
+                    beginNewLine(below: line, speaker: speaker)
+                }
+            }
+        }
+        .transition(.opacity)
+    }
+
+    /// The lines in the order they're shown, for the arrow keys.
+    private var lineKeys: [EditKey] {
+        checked.map { EditKey(source: .checked, start: $0.start) } + live.map { EditKey(source: .live, start: $0.start) }
+    }
+
+    private func pickedLine() -> (line: Transcript.Line, source: LineSource)? {
+        guard let p = picked else { return nil }
+        let lines = p.source == .checked ? checked : live
+        return lines.first { $0.start == p.start }.map { ($0, p.source) }
+    }
+
+    private func movePick(_ step: Int) -> KeyPress.Result {
+        guard !isTyping, let p = picked else { return .ignored }
+        let keys = lineKeys
+        guard let i = keys.firstIndex(of: p) else { return .ignored }
+        let next = keys[max(0, min(keys.count - 1, i + step))]
+        picked = next
+        position.scrollTo(id: TranscriptRow.id(next.source, next.start))
+        return .handled
+    }
+
+    private func deletePicked() {
+        guard !isTyping, let p = pickedLine() else { return }
+        let keys = lineKeys
+        let i = keys.firstIndex(of: EditKey(source: p.source, start: p.line.start)) ?? 0
+        model.deleteLine(info.id, p.source, start: p.line.start)
+        let rest = keys.filter { $0 != picked }
+        picked = rest.isEmpty ? nil : rest[min(i, rest.count - 1)]
     }
 
     // MARK: - Add line below
@@ -1058,5 +1173,103 @@ struct WordMarkRenderer: TextRenderer {
         for line in layout {
             for run in line { ctx.draw(run) }
         }
+    }
+}
+
+/// Under the pointer a line gets a soft grey; picked, a blue box; with a tool
+/// on, the tool's color (yellow for Marker, red for Note) and its pointer.
+/// Its own view with its own hover state, so moving the mouse redraws one
+/// line and not the whole transcript.
+private struct LineHighlight: ViewModifier {
+    let picked: Bool
+    let tool: LineTool?
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(fill)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .strokeBorder(edge, lineWidth: 1)
+                    }
+                    .padding(.horizontal, -8)
+                    .padding(.vertical, -5)
+            }
+            .onHover { hovering = $0 }
+            .pointerStyle(tool?.pointer ?? .default)
+    }
+
+    private var fill: Color {
+        switch tool {
+        case .marker?: hovering ? Theme.markTint : .clear
+        case .note?: hovering ? Theme.noteTint : .clear
+        case nil: picked ? Theme.accent.opacity(0.10) : hovering ? Theme.ink.opacity(0.045) : .clear
+        }
+    }
+
+    private var edge: Color {
+        switch tool {
+        case .marker?: hovering ? Theme.markEdge : .clear
+        case .note?: hovering ? Theme.noteEdge : .clear
+        case nil: picked ? Theme.accent.opacity(0.35) : .clear
+        }
+    }
+}
+
+/// A small button on the picked line (flag, note, +). 24 pt, easy to hit.
+private struct LineActionButton: View {
+    let icon: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(hovering ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(.secondary))
+                .frame(width: 24, height: 24)
+                .background(Theme.ink.opacity(hovering ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// While a tool is on: a band at the top of the page in the tool's color,
+/// saying what a click does, with a way to put the tool down (Esc).
+private struct LineToolBand: View {
+    let tool: LineTool
+    let putDown: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: tool == .marker ? "flag.fill" : "pencil")
+                    .font(.callout)
+                Text(tool == .marker
+                     ? "Marker tool: click lines to mark them. Click a marked line to take the flag off."
+                     : "Note tool: click the line you want a note on.")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Button("Put it down", action: putDown)
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+                    .keyboardShortcut(.cancelAction)
+                    .help("Put the tool down (Esc)")
+            }
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 8)
+            .background(tool == .marker ? Theme.markTint : Theme.noteTint)
+            Rectangle().fill(tool == .marker ? Theme.markEdge : Theme.noteEdge).frame(height: 1)
+        }
+        .accessibilityElement(children: .contain)
     }
 }

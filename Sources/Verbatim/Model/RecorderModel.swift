@@ -66,6 +66,9 @@ final class RecorderModel {
     var fixOffer: FixOffer?
     /// Set by ⇧⌘N: the transcript starts typing a note on that line, then clears it.
     var noteRequest: NoteRequest?
+    /// The Marker or Note tool picked in the toolbar: clicking a line puts a
+    /// marker or a note there. nil = no tool, a click just picks the line.
+    var lineTool: LineTool?
     /// The main area shows Recently deleted (step 9).
     var showingDeleted = false
     private(set) var levels: [Float] = Array(repeating: 0, count: RecorderModel.barCount)

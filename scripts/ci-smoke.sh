@@ -242,6 +242,15 @@ sleep 2
 check "open a recording"
 shot "opened-recording"
 
+# Line tools: one click on a line only picks it (blue box with flag, note
+# and + buttons), nothing opens for typing. Down arrow moves the pick.
+click_at 620 330
+sleep 1; check "pick a line"; shot "line-picked"
+osascript -e 'tell application "System Events" to key code 125' || true
+sleep 1; shot "line-picked-down-arrow"
+osascript -e 'tell application "System Events" to key code 53' || true
+sleep 0.5
+
 # The sidebar never resizes the window (Ryan, 2026-11-20: it grew wider each
 # time he opened it). 760 and up: it opens inside the window. Below: it slides
 # over the transcript. Open and close a few times; the width must not change.

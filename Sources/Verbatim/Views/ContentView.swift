@@ -246,6 +246,7 @@ struct DetailView: View {
         }
         .onChange(of: model.selection) {
             model.searchText = ""
+            model.lineTool = nil // a tool belongs to the transcript it was picked up on
             // Audio belongs to the transcript on screen; don't keep playing behind another one.
             if Playback.shared.id != model.selection { Playback.shared.close() }
         }
