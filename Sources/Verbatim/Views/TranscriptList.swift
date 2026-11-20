@@ -342,7 +342,7 @@ struct TranscriptList: View {
             withAnimation(.easeOut(duration: 0.3)) { position.scrollTo(id: id, anchor: .center) }
         }
         .onChange(of: model.matchJump) { jumpToMatch() }
-        .alert(naming?.voice != nil ? "Rename \(naming?.oldName ?? "")" : "Who said this line?",
+        .alert(naming?.voice != nil ? "Who is \(naming?.oldName ?? "")?" : "Who said this line?",
                isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil } })) {
             TextField("Name", text: $nameDraft)
             Button("OK") {
@@ -363,7 +363,7 @@ struct TranscriptList: View {
             Button("Cancel", role: .cancel) { naming = nil }
         } message: {
             if let n = naming, n.voice != nil {
-                Text("All \(n.count == 1 ? "1 line" : "\(n.count) lines") of \(n.oldName) change, and Verbatim learns the voice for next time. Typing a name another speaker already has makes them one person.")
+                Text("All \(n.count == 1 ? "1 line" : "\(n.count) lines") of \(n.oldName) get this name, and Verbatim learns the voice for next time.")
             } else {
                 Text("Only this line changes. Names you type are offered in your other recordings too.")
             }
@@ -442,28 +442,26 @@ struct TranscriptList: View {
         return Text("\(Text(name + ":").fontWeight(.semibold)) \(text)")
     }
 
-    /// Click a name: everything here is about the whole speaker (all lines
-    /// with that name), with the line count shown. Fixing one line is in
-    /// "Just This Line". A line with a name typed for just that line, or no
-    /// voice, gets the one-line choices only.
+    /// Click a name: one question, "Who is Speaker 2? (14 lines)". Picking a
+    /// person or typing a new name changes every line with that name.
+    /// Fixing one line is in "Just This Line". A line with a name typed for
+    /// just that line, or no voice, gets the one-line choices only.
     @ViewBuilder private func speakerItems(_ line: Transcript.Line, current: String?, name: String?,
                                            options: [Speakers.SpeakerOption]) -> some View {
         let labels = Speakers.labeler(info.id)
         if let voice = labels.root(of: line), let name {
             let count = labels.count(voice, in: live)
             let lineText = count == 1 ? "1 line" : "\(count) lines"
-            Button("Rename \(name) (\(lineText))…") {
-                nameDraft = name.hasPrefix("Speaker ") ? "" : name
-                naming = Naming(start: line.start, voice: voice, oldName: name, count: count)
-            }
             let others = options.filter { o in
                 o.name != name && (Speakers.voice(of: o.choice).map { labels.root($0) != voice } ?? true)
             }
-            if !others.isEmpty {
-                Section("\(name) is really (all \(lineText)):") {
-                    ForEach(others, id: \.choice) { o in
-                        Button(o.name) { model.renameVoice(info.id, voice: voice, to: o.choice) }
-                    }
+            Section("Who is \(name)? (\(lineText))") {
+                ForEach(others, id: \.choice) { o in
+                    Button(o.name) { model.renameVoice(info.id, voice: voice, to: o.choice) }
+                }
+                Button("New Name…") {
+                    nameDraft = name.hasPrefix("Speaker ") ? "" : name
+                    naming = Naming(start: line.start, voice: voice, oldName: name, count: count)
                 }
             }
             Divider()

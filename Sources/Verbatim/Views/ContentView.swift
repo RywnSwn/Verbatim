@@ -136,6 +136,10 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
         } detail: {
             DetailView()
+                // The top bar as its own section: a solid band with a thin
+                // line under it, the text scrolling under it (Ryan,
+                // 2026-11-20: like the line under New recording in the sidebar).
+                .scrollEdgeEffectStyle(.hard, for: .top)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if let notice = model.recoveryNotice {
                         NoticeLine(text: notice) { model.recoveryNotice = nil }
