@@ -158,6 +158,7 @@ private struct FloatingSidebar: View {
                     .onTapGesture(perform: close)
                     .accessibilityLabel("Close the sidebar")
                     .accessibilityAddTraits(.isButton)
+                    .accessibilityAction(perform: close) // VoiceOver, and the smoke test's clicks
                     .transition(.opacity)
                 SidebarView()
                     .frame(width: ContentView.floatingWidth)

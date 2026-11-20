@@ -244,7 +244,7 @@ shot "opened-recording"
 
 # Line tools: one click on a line only picks it (blue box with flag, note
 # and + buttons), nothing opens for typing. Down arrow moves the pick.
-click_at 620 330
+click_at 620 265
 sleep 1; check "pick a line"; shot "line-picked"
 osascript -e 'tell application "System Events" to key code 125' || true
 sleep 1; shot "line-picked-down-arrow"
@@ -284,6 +284,9 @@ check "floating sidebar"
 resize 960 620; check "back to 960"
 sleep 1; shot "sidebar-960-back"
 
+# Back to part 1 (the steps above may have moved on), then copy it.
+click_at 160 218
+sleep 1.5
 # Copy All (⇧⌘C) and Export as Markdown read the same text: check the
 # speaker names are in it (Ryan, 2026-11-19: "a copy doesn't show the speaker").
 pbcopy < /dev/null

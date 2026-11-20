@@ -534,6 +534,8 @@ struct TranscriptList: View {
                 Button("Unlock") { model.unlockLine(info.id, source, start: line.start) }
             }
         }
+        // Press (VoiceOver, the smoke test's clicks): same as one click.
+        .accessibilityAction { if !isEditing { tapped(line, source, marked: marked, note: note) } }
         .accessibilityAction(named: "Edit line") { begin(line, source) }
         .accessibilityAction(named: "Delete line") { model.deleteLine(info.id, source, start: line.start) }
         .accessibilityAction(named: "Add line below") {
