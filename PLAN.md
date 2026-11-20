@@ -2075,3 +2075,19 @@ commas". Checked so far (no code changed):
   replacing those lines. Breaks "one Parakeet at a time" (8 GB Mac):
   Ryan's call. Unproven that batch punctuates better; test on real audio
   first.
+- TESTED on the CI Mac (branch `claude/punctuation-test`,
+  `tools/PunctTest`, workflow "Punctuation test", run 44740155927):
+  LibriVox "Thunder and Anansi" (413 s), clean and with fake classroom
+  echo + noise. Per 100 words (capitals / commas / . ? ! / quotes):
+  clean: live 9.5/8.4/5.9/0, batch 9.2/7.7/5.9/0, rolling 60 s
+  9.6/7.7/6.0/0, TDT v3 9.9/7.5/6.6/0. Classroom: live 9.1/7.3/5.4/0,
+  batch 9.4/7.1/5.4/0, rolling 9.4/6.6/5.3/0, TDT v3 9.5/7.4/6.6/0.
+  So: live already punctuates as well as batch; a second pass buys
+  nothing (dropped). No Parakeet ever writes quote marks. Bad audio makes
+  run-on patches ("...palm tree he determined to reach... reward him how
+  to get there") with wrong words too.
+- Main suspect now: Nov 19 (RywnSwn/Verbatim#26) Parakeet's 16 kHz audio
+  moved from macOS's converter (left channel only) to Verbatim's own
+  converter with `downmix = true`. Matches "it used to". Asked Ryan:
+  which mic in class, and "Transcribe again" on a recording from before
+  Nov 19 (if the punctuation comes back, the audio path is the cause).
