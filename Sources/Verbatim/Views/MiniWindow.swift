@@ -490,6 +490,7 @@ private struct MiniMessage: View {
         case .undoDelete, .undoLine, .undoAudioDelete: "arrow.uturn.backward"
         case .showFile: "folder"
         case .changeVoice: "person.2"
+        case .openMicSettings: "gearshape"
         }
     }
 }

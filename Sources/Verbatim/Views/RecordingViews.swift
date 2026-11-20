@@ -253,6 +253,7 @@ struct PastRecordingView: View {
 struct TranscriptStatusLine: View {
     @Environment(Transcriber.self) private var transcriber
     @Environment(LiveTranscriber.self) private var live
+    @Environment(RecorderModel.self) private var model
     let info: RecordingInfo
 
     var body: some View {
@@ -271,7 +272,13 @@ struct TranscriptStatusLine: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 10)
-                if let job = transcriber.active, job.id == info.id, job.totalSeconds > 0 {
+                if let copied = transcriber.importProgress[info.id] {
+                    ProgressView(value: copied)
+                        .progressViewStyle(.linear)
+                        .controlSize(.small)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 8)
+                } else if let job = transcriber.active, job.id == info.id, job.totalSeconds > 0 {
                     ProgressView(value: min(job.doneSeconds / job.totalSeconds, 1))
                         .progressViewStyle(.linear)
                         .controlSize(.small)
@@ -289,7 +296,9 @@ struct TranscriptStatusLine: View {
         // Just stopped (Undo Stop still possible).
         if transcriber.isGrowing(id), transcriber.errors[id] == nil { return nil }
         if transcriber.importing.contains(id) {
-            return ("Importing \(info.importedFrom ?? info.title).\(original)", nil, nil)
+            let percent = Int((transcriber.importProgress[id] ?? 0) * 100)
+            return ("Importing \(info.importedFrom ?? info.title), \(percent)%. Text comes next.\(original)",
+                    "Cancel", { model.cancelImport(id) })
         }
         if let error = transcriber.errors[id] {
             if !info.hasAudio { return (error, nil, nil) }
@@ -311,8 +320,18 @@ struct TranscriptStatusLine: View {
         }
         if transcriber.isQueued(id) {
             switch live.modelState {
-            case .downloading(let f, _), .paused(let f), .failed(let f):
-                return ("Waiting for the speech model download to finish (\(Int(f * 100))%).", nil, nil)
+            // A7: a paused or stopped download never finishes by waiting, so
+            // the fix is right here.
+            case .downloading(let f, let left):
+                var text = "Starts when the speech model download is done (\(Int(f * 100))%"
+                if let left { text += ", \(Transcriber.leftText(left))" }
+                return (text + ").", nil, nil)
+            case .paused(let f):
+                return ("Needs the speech model. Its download is paused at \(Int(f * 100))%.",
+                        "Resume download", { live.startDownload() })
+            case .failed(let f):
+                return ("Needs the speech model. Its download stopped at \(Int(f * 100))%, probably the internet. Trying again by itself.",
+                        "Try now", { live.startDownload() })
             case .preparing:
                 return ("Getting the speech model ready. The first time takes a few minutes.", nil, nil)
             case .ready:

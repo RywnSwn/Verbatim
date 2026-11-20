@@ -28,6 +28,10 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     var events: [Event] = []
     /// File name of the Voice Memo (or other file) this was imported from.
     var importedFrom: String?
+    /// Full path of that file, only while its sound is being copied in. Still
+    /// set at launch = Verbatim quit mid-import, so the copy starts over
+    /// (UX round 2, A6).
+    var importingPath: String?
     /// Where the last copy ended (seconds into the audio), for "Copy new since last copy".
     var copiedUpTo: Double?
     /// Set when Ryan deleted only the audio (right-click > Delete Audio Only).

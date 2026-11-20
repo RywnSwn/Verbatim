@@ -78,6 +78,9 @@ struct MenuBarPanel: View {
     private var mini: MiniWindow { .shared }
 
     private var paused: Bool { model.phase == .paused }
+    /// Mic access off: Record can't work, so the panel says so (A8), like
+    /// the mini window and the start screen do.
+    private var blocked: Bool { model.micPermission == .denied || model.micPermission == .restricted }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -108,6 +111,7 @@ struct MenuBarPanel: View {
                             close()
                             Task { await model.start(in: group.id) }
                         }
+                        .disabled(blocked)
                     }
                     MenuRow("Transcribe a Voice Memo…", shortcut: "⌘O") {
                         close()
@@ -136,6 +140,7 @@ struct MenuBarPanel: View {
             .padding(6)
         }
         .frame(width: 310)
+        .onAppear { model.refreshPermission() }
         .animation(.snappy(duration: 0.25), value: model.status?.id)
         .animation(.snappy(duration: 0.25), value: model.copyFeedback?.id)
     }
@@ -150,6 +155,15 @@ struct MenuBarPanel: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+        } else if blocked {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Verbatim can't hear anything")
+                    .font(.callout.weight(.medium))
+                Text("Microphone access is off for Verbatim. Turn it on, then come back.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         } else {
             Text("Not recording")
                 .font(.caption)
@@ -166,9 +180,16 @@ struct MenuBarPanel: View {
                 BigButton(paused ? "Resume" : "Pause", paused ? "play.fill" : "pause.fill") { model.togglePause() }
                 BigButton("Stop", "stop.fill") { model.stop() }
             } else {
-                BigButton("Record", "record.circle") {
-                    close()
-                    Task { await model.start() }
+                if blocked {
+                    BigButton("Mic settings", "gearshape") {
+                        close()
+                        model.openMicSettings()
+                    }
+                } else {
+                    BigButton("Record", "record.circle") {
+                        close()
+                        Task { await model.start() }
+                    }
                 }
                 BigButton("Voice Memo", "waveform.badge.plus") {
                     close()
@@ -266,6 +287,7 @@ private struct MenuRow: View {
     var color: IconColor = .ink
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
 
     init(_ title: String, shortcut: String? = nil, icon: String? = nil, color: IconColor = .ink, action: @escaping () -> Void) {
         self.title = title
@@ -298,6 +320,7 @@ private struct MenuRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .opacity(isEnabled ? 1 : 0.4)
+        .onHover { hovering = $0 && isEnabled }
     }
 }

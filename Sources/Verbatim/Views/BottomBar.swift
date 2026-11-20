@@ -131,6 +131,7 @@ struct BottomBar: View {
         case .undoDelete, .undoLine, .undoAudioDelete: "Undo"
         case .showFile: "Show in Finder"
         case .changeVoice: "Change them too"
+        case .openMicSettings: "Open Microphone settings"
         }
     }
 

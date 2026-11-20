@@ -13,7 +13,7 @@ final class RecorderModel {
 
     /// What the status spot in the bottom bar says. `action` adds a text link.
     struct Status: Equatable {
-        enum Action { case stopRecording, resume, undoDelete, undoLine, showFile, undoAudioDelete, changeVoice }
+        enum Action { case stopRecording, resume, undoDelete, undoLine, showFile, undoAudioDelete, changeVoice, openMicSettings }
         var text: String
         var action: Action?
         var id = UUID()
@@ -137,6 +137,9 @@ final class RecorderModel {
     @ObservationIgnored private var lastSave = Date.distantPast
     @ObservationIgnored private var lastLoud = Date()
     @ObservationIgnored private var quietWarned = false
+    /// Asks "Still paused?" after `pausedAskMinutes` (A9).
+    @ObservationIgnored private var pausedCheck: Task<Void, Never>?
+    static let pausedAskMinutes = 15
     @ObservationIgnored private var lastBatteryCheck = Date.distantPast
     @ObservationIgnored private var batteryWarned = false
     @ObservationIgnored private var asleepSince: Date?
@@ -164,6 +167,8 @@ final class RecorderModel {
         var run: () -> Void
     }
     @ObservationIgnored private var fileToShow: URL?
+    /// Files being copied in (Voice Memo import), for Cancel.
+    @ObservationIgnored private var importTasks: [UUID: Task<Void, Never>] = [:]
     /// What the text link in the status spot does, for `offer`.
     @ObservationIgnored private var offered: (() -> Void)?
     /// Delete Audio Only, for Undo: which recording and where its audio went in the Trash.
@@ -177,6 +182,7 @@ final class RecorderModel {
         let began = Date()
         var all = RecordingStore.loadAll()
         recoverUnfinished(&all)
+        let halfImported = recoverImports(&all)
         recordings = all
         refreshMicName()
         wirePipeline()
@@ -185,6 +191,7 @@ final class RecorderModel {
         Transcriber.shared.start(with: recordings)
         // After init: AudioSquash looks at RecorderModel.shared.
         Task { @MainActor in
+            for (id, url) in halfImported { RecorderModel.shared.runImport(id, from: url, access: false) }
             AudioSquash.shared.run()
             AudioCleanup.start()
         }
@@ -239,6 +246,10 @@ final class RecorderModel {
         }
         guard micPermission == .authorized, phase == .idle else {
             selection = nil
+            // Record from the menu bar or ⌘R used to do nothing at all (A8).
+            if micPermission == .denied || micPermission == .restricted {
+                status = Status(text: "Verbatim can't hear anything: Microphone access is off.", action: .openMicSettings)
+            }
             return
         }
         // The mic would pick up the speakers.
@@ -312,6 +323,28 @@ final class RecorderModel {
         levels = Array(repeating: 0, count: Self.barCount)
         saveCurrent()
         if status?.action == .stopRecording { status = nil }
+        Messages.shared.withdraw("stillRecording")
+        // Nothing is being recorded, so the Mac may sleep (A9: it used to stay
+        // awake all night when Pause was forgotten). Sleeping while paused
+        // loses nothing; Resume starts the mic again.
+        endKeepAwake()
+        askIfStillPaused()
+    }
+
+    /// Paused and forgotten: ask once, after 15 minutes, like "Still
+    /// recording?" (off when that is off in Settings).
+    private func askIfStillPaused() {
+        pausedCheck?.cancel()
+        guard Self.quietMinutes > 0, let id = currentID else { return }
+        pausedCheck = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Double(Self.pausedAskMinutes) * 60))
+            guard !Task.isCancelled, let self, self.phase == .paused, self.currentID == id else { return }
+            // A pause for a problem keeps its reason and Resume link.
+            if self.status?.action != .resume {
+                self.status = Status(text: "Paused for \(Self.pausedAskMinutes) minutes. Class over?", action: .stopRecording)
+            }
+            Messages.shared.post(Messages.stillPaused(minutes: Self.pausedAskMinutes, elapsed: self.elapsed))
+        }
     }
 
     func resume() {
@@ -343,6 +376,10 @@ final class RecorderModel {
         addEvent(.resumed)
         updateCurrent { $0.state = .recording }
         phase = .recording
+        pausedCheck?.cancel()
+        pausedCheck = nil
+        Messages.shared.withdraw("stillRecording")
+        beginKeepAwake()
         lastLoud = Date()
         quietWarned = false
         status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.") : nil
@@ -362,6 +399,8 @@ final class RecorderModel {
         addEvent(.stopped)
         saveCurrent()
         endKeepAwake()
+        pausedCheck?.cancel()
+        pausedCheck = nil
 
         let info = current
         phase = .idle
@@ -454,6 +493,9 @@ final class RecorderModel {
             if let url = fileToShow { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             status = nil
         case .undoAudioDelete: undoAudioDelete()
+        case .openMicSettings:
+            status = nil
+            openMicSettings()
         case .changeVoice:
             let run = offered
             offered = nil
@@ -469,6 +511,12 @@ final class RecorderModel {
     /// Moves the recording to Recently deleted (step 9): Undo for 10 s, Put
     /// Back for 30 days.
     func delete(_ id: UUID) {
+        // Still being copied in: stop the copy instead (A6). It used to go to
+        // Recently deleted half done and say "Importing…" forever after Put Back.
+        if Transcriber.shared.importing.contains(id) {
+            cancelImport(id)
+            return
+        }
         guard canDelete(id), let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         let info = recordings[i]
         let moved: URL
@@ -545,6 +593,10 @@ final class RecorderModel {
     func deleteAll() {
         var moved: [UUID] = []
         for info in recordings where canDelete(info.id) {
+            if Transcriber.shared.importing.contains(info.id) {
+                cancelImport(info.id)
+                continue
+            }
             if (try? RecentlyDeleted.shared.add(info)) != nil {
                 forgetRecording(info.id)
                 moved.append(info.id)
@@ -703,6 +755,11 @@ final class RecorderModel {
     }
 
     private func importOne(_ url: URL) {
+        // Dropped twice while the first copy is still going: show that one.
+        if let same = recordings.first(where: { $0.importingPath == url.path && Transcriber.shared.importing.contains($0.id) }) {
+            selection = same.id
+            return
+        }
         let attrs = try? url.resourceValues(forKeys: [.creationDateKey])
         var info = RecordingInfo(
             id: UUID(),
@@ -711,6 +768,7 @@ final class RecorderModel {
             state: .stopped
         )
         info.importedFrom = url.lastPathComponent
+        info.importingPath = url.path
         info.autoTitle = true
         do {
             try RecordingStore.create(info)
@@ -721,30 +779,72 @@ final class RecorderModel {
         recordings.append(info)
         recordings.sort { $0.createdAt > $1.createdAt }
         selection = info.id
-        Transcriber.shared.setImporting(info.id, true)
+        runImport(info.id, from: url, access: url.startAccessingSecurityScopedResource())
+    }
 
-        let id = info.id
+    /// Copies the sound in, with progress and Cancel (UX round 2, A6). Also
+    /// used at launch for a copy that was cut off by quitting.
+    fileprivate func runImport(_ id: UUID, from url: URL, access: Bool) {
+        Transcriber.shared.setImporting(id, true)
         let destination = RecordingStore.wavURL(id)
-        let access = url.startAccessingSecurityScopedResource()
-        Task { [weak self] in
+        importTasks[id] = Task { [weak self] in
             defer { if access { url.stopAccessingSecurityScopedResource() } }
             do {
-                let samples = try await AudioImport.convert(url, to: destination)
+                let samples = try await AudioImport.convert(url, to: destination) { fraction in
+                    Task { @MainActor in Transcriber.shared.setImportProgress(id, fraction) }
+                }
+                try Task.checkCancellation()
                 guard let self, let i = self.recordings.firstIndex(where: { $0.id == id }) else { return }
+                self.importTasks[id] = nil
                 self.recordings[i].samples = samples
                 self.recordings[i].endedAt = self.recordings[i].createdAt.addingTimeInterval(Double(samples) / 16_000)
+                self.recordings[i].importingPath = nil
                 self.persist(self.recordings[i])
                 Transcriber.shared.setImporting(id, false)
                 Transcriber.shared.enqueue(id)
             } catch {
+                guard let self else { return }
+                self.importTasks[id] = nil
                 Transcriber.shared.setImporting(id, false)
                 try? FileManager.default.removeItem(at: RecordingStore.folder(id))
-                guard let self else { return }
                 self.recordings.removeAll { $0.id == id }
                 if self.selection == id { self.selection = nil }
-                self.show("Couldn't import \(url.lastPathComponent): \(error.localizedDescription)")
+                if error is CancellationError {
+                    self.show("Stopped importing \(url.lastPathComponent). Your original file isn't touched.")
+                } else {
+                    self.show("Couldn't import \(url.lastPathComponent): \(error.localizedDescription)")
+                }
             }
         }
+    }
+
+    /// Cancel while a file is being copied in, or Delete on it: nothing of it
+    /// is kept (it's only a copy, the original stays where it was).
+    func cancelImport(_ id: UUID) {
+        importTasks[id]?.cancel()
+    }
+
+    /// Imports cut off by quitting: the copy starts over if the original file
+    /// is still there. If not, the half copy goes and a note says so.
+    private func recoverImports(_ all: inout [RecordingInfo]) -> [(UUID, URL)] {
+        var again: [(UUID, URL)] = []
+        var lost: [String] = []
+        for info in all {
+            guard let path = info.importingPath else { continue }
+            let url = URL(fileURLWithPath: path)
+            if FileManager.default.isReadableFile(atPath: path) {
+                Transcriber.shared.setImporting(info.id, true) // before Transcriber.start looks
+                again.append((info.id, url))
+            } else {
+                try? FileManager.default.removeItem(at: RecordingStore.folder(info.id))
+                lost.append(info.importedFrom ?? url.lastPathComponent)
+            }
+        }
+        all.removeAll { info in info.importingPath != nil && !again.contains { $0.0 == info.id } }
+        if let name = lost.last {
+            recoveryNotice = "Verbatim quit while importing \(name), and the file isn't there anymore. Drop it in again to transcribe it."
+        }
+        return again
     }
 
     /// A message in the status spot. When not recording, it clears itself.
