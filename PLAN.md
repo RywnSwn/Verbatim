@@ -1716,9 +1716,16 @@ by hand in the code. Item 1 above was only half fixed: see A4.
 
 **BRANCH: `claude/ux-round-2`. Keep working on THIS branch (Ryan asked,
 2026-11-20): start the next chat by checking it out, not a new branch.**
-A1 to A5: BUILT on that branch, not tested by Ryan, not merged. Next chat:
-A6 to A10, then B, then C, all on the same branch. One pull request for the
-whole round when Ryan has tested.
+A1 to A5: BUILT on that branch, not tested by Ryan, not merged. Draft pull
+request RywnSwn/Verbatim#29 (one PR for the whole round; merge only when
+Ryan asks, after testing). Next chat: A6 to A10, then B, then C, all on the
+same branch. Smoke 0.1 run 89 (8e6d67b): passed; Copy all shows at 1000 and
+at 700 wide (only Note and the rest go into "»" at 700).
+Review fixes (second reviewer, same chat): the Undo link only shows for a
+change in the recording on screen (a box saved while switching goes on ⌘Z
+only); "Copied N lines" never replaces a message with a link; a delete
+step is skipped once that recording was put back or deleted for good
+(`UndoStep.restores`), and Put Back removes it.
 What was built (A1 to A5):
 - A1: `AudioCleanup.changed(from:to:)` (called from the Storage picker's
   onChange): shorter than before, or Forever to a number, sets
