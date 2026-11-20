@@ -2091,3 +2091,23 @@ commas". Checked so far (no code changed):
   converter with `downmix = true`. Matches "it used to". Asked Ryan:
   which mic in class, and "Transcribe again" on a recording from before
   Nov 19 (if the punctuation comes back, the audio path is the cause).
+- Two-mic test (run 44745032597, fake receiver: left close + light hiss,
+  right far: 0.3 volume, 15 ms late, echo, noise), live Parakeet, per 100
+  words capitals/commas/stops: left only 9.4/8.4/5.8, averaged
+  9.1/8.5/5.6, louder mic 9.4/8.5/5.9 (text same as left only). So
+  averaging costs a little in this fake setup, not the big drop Ryan sees;
+  the louder mic is at least as good as before Nov 19. Real cause still
+  unproven until Ryan's MIC line / Transcribe again test.
+- Built on branch `claude/louder-mic` (not merged, no PR: small fix),
+  build v0.1.239 (prerelease). `LouderMic` (Audio/LouderMic.swift): 2+
+  channel mics are weighted by recent loudness squared (10 ms steps, fast
+  rise, slow fall, smooth fade), one-channel mics untouched. Same mono
+  sound feeds the 16 kHz and 48 kHz copies. `MicReport` adds a "MIC:" line
+  to Copy Layout Details (name, channels, rate, format, weights).
+Test list for Ryan (v0.1.239):
+1. Record a minute of class (or a video), then Help > Copy Layout Details
+   and paste the MIC line to Claude.
+2. Are capitals and commas back in the live text? After Stop?
+3. If you use the 2-mic receiver: both voices still in the recording and
+   the text; no echo when you listen back.
+4. Transcribe again on a recording from before Nov 19: caps and commas?
