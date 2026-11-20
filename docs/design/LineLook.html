@@ -1,0 +1,229 @@
+<title>Verbatim Line Looks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: where the ideas come from, a style switcher, the same working transcript in each style, then the pick. */
+:root {
+  --page: #EEEBE4; --paper: #FCFBF8; --ink: #1F1D1A; --muted: #69645C; --line: #E6E2DA;
+  --accent: #24427A; --shadow: rgba(31, 29, 26, 0.22); --note: #6B5A2E; --bar: #F4F1EA;
+  --hl-pick: rgba(36, 66, 122, 0.13); --hl-hover: rgba(31, 29, 26, 0.06);
+  --hl-mark: #F7E27C; --hl-mark-soft: rgba(247, 226, 124, 0.55); --pen-red: #C2483A; --pen-red-soft: rgba(194, 72, 58, 0.10);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+    --accent: #8FA9DD; --shadow: rgba(0, 0, 0, 0.55); --note: #D6C08A; --bar: #252421;
+    --hl-pick: rgba(143, 169, 221, 0.20); --hl-hover: rgba(235, 232, 225, 0.07);
+    --hl-mark: #6B5A14; --hl-mark-soft: rgba(150, 125, 30, 0.45); --pen-red: #E07A6C; --pen-red-soft: rgba(224, 122, 108, 0.14);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+  --accent: #8FA9DD; --shadow: rgba(0, 0, 0, 0.55); --note: #D6C08A; --bar: #252421;
+  --hl-pick: rgba(143, 169, 221, 0.20); --hl-hover: rgba(235, 232, 225, 0.07);
+  --hl-mark: #6B5A14; --hl-mark-soft: rgba(150, 125, 30, 0.45); --pen-red: #E07A6C; --pen-red-soft: rgba(224, 122, 108, 0.14);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--page); color: var(--ink); font-family: var(--sans); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px; -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.page { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }
+h1 { font-family: var(--serif); font-weight: 500; font-size: 32px; margin: 0; line-height: 1.1; text-wrap: balance; }
+h2 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0; }
+p { margin: 0; line-height: 1.5; }
+.lead { color: var(--muted); max-width: 64ch; }
+.sec { display: flex; flex-direction: column; gap: 12px; }
+
+.styles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.style { text-align: left; padding: 12px 14px; border-radius: 10px; background: var(--paper);
+  box-shadow: 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 4px; }
+.style[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.style b { font-family: var(--serif); font-weight: 500; font-size: 17px; }
+.style span { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.style i { font-style: normal; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+@media (max-width: 640px) { .styles { grid-template-columns: 1fr; } }
+
+/* Fake Verbatim window */
+.win { position: relative; background: var(--paper); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 25%, transparent), 0 14px 40px var(--shadow); }
+.tb { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.lights { display: flex; gap: 7px; margin-right: 6px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.tbtitle { font-weight: 600; font-size: 13px; margin-right: auto; min-width: 0; }
+.tool { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 7px; font-size: 13px; }
+.tool:hover { background: var(--hl-hover); }
+.tool svg { width: 15px; height: 15px; }
+.tool[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.band { display: none; align-items: center; gap: 10px; padding: 8px 24px; font-size: 13px; border-bottom: 1px solid var(--line); }
+.band.on { display: flex; }
+.band .x { margin-left: auto; color: var(--accent); font-weight: 500; }
+.band .chip { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+
+.scroll { padding: 22px 28px 26px; }
+.lines { display: flex; flex-direction: column; gap: 14px; outline: none; }
+.row { position: relative; display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; }
+.time { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; position: relative; }
+.flag { position: absolute; left: -4px; top: 1px; width: 10px; height: 10px; color: var(--ink); }
+.txt { font-family: var(--serif); font-size: 16px; line-height: 1.6; min-width: 0; }
+.who { font-weight: 700; }
+.words { padding: 1px 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; border-radius: 2px; }
+.acts { display: flex; gap: 2px; visibility: hidden; }
+.row.sel .acts { visibility: visible; }
+.act { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); }
+.act:hover { background: var(--hl-hover); color: var(--ink); }
+.act svg { width: 13px; height: 13px; }
+.noterow { display: flex; gap: 6px; align-items: baseline; padding: 0 0 0 70px; margin-top: -8px; color: var(--note); font-size: 13px; }
+.noterow svg { width: 12px; height: 12px; flex: none; transform: translateY(1px); }
+
+/* A: Highlighter. Color sits behind the words only, like a real pen or a
+   Kindle / Apple Books highlight. No box, no outline. */
+.s-hl .row:hover .words { background: var(--hl-hover); }
+.s-hl .row.sel .words { background: var(--hl-pick); }
+.s-hl .row.sel .time { color: var(--accent); font-weight: 600; }
+.s-hl.tool-marker .row:hover .words { background: var(--hl-mark); }
+.s-hl.tool-note .row:hover .words { background: transparent; text-decoration: underline; text-decoration-color: var(--pen-red);
+  text-decoration-thickness: 2px; text-underline-offset: 5px; }
+
+/* B: Margin mark. The words stay clean; a pen mark in the left margin says
+   which line, like a teacher's margin line or Notion's block handle. */
+.s-mg .row::before { content: ""; position: absolute; left: -14px; top: 4px; bottom: 4px; width: 3px; border-radius: 2px; background: transparent; }
+.s-mg .row:hover::before { background: color-mix(in srgb, var(--ink) 22%, transparent); }
+.s-mg .row.sel::before { background: var(--accent); }
+.s-mg .row.sel .time { color: var(--accent); font-weight: 600; }
+.s-mg.tool-marker .row:hover::before { background: #E3B320; width: 5px; left: -15px; }
+.s-mg.tool-marker .row:hover .time { color: var(--ink); }
+.s-mg.tool-note .row:hover::before { background: var(--pen-red); }
+.s-mg.tool-note .row:hover .time { color: var(--pen-red); }
+
+/* C: Flat row. Like Finder or Mail: a flat fill across the row, small
+   corners, no outline. */
+.s-fl .row::after { content: ""; position: absolute; inset: -5px -8px; border-radius: 5px; z-index: -1; background: transparent; }
+.s-fl .row { z-index: 0; }
+.s-fl .row:hover::after { background: var(--hl-hover); }
+.s-fl .row.sel::after { background: var(--hl-pick); }
+.s-fl.tool-marker .row:hover::after { background: var(--hl-mark-soft); }
+.s-fl.tool-note .row:hover::after { background: var(--pen-red-soft); }
+
+.win.tool-marker .row { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23F2C730' stroke='%23000' stroke-width='1'/%3E%3Cpath d='M9 6.5v11' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3Cpath d='M9.5 7h7l-1.8 2.5L16.5 12h-7z' fill='%23000'/%3E%3C/svg%3E") 12 12, pointer; }
+.win.tool-note .row { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23D96B5C' stroke='%23000' stroke-width='1'/%3E%3Cpath d='M8 16.5l.7-2.6 6.1-6.1 1.9 1.9-6.1 6.1z' fill='%23fff'/%3E%3C/svg%3E") 12 12, pointer; }
+.win.tool-marker .acts, .win.tool-note .acts { visibility: hidden !important; }
+
+.bottom { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-top: 1px solid var(--line); background: var(--bar); font-size: 12.5px; min-height: 40px; }
+.bottom .link { color: var(--accent); font-weight: 500; }
+.src { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.src div { display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.src b { color: var(--ink); font-weight: 600; }
+@media (max-width: 640px) { .src { grid-template-columns: 1fr; } .scroll { padding: 18px 16px; } .row { grid-template-columns: 46px minmax(0, 1fr) auto; } .noterow { padding-left: 56px; } }
+</style>
+
+<div class="page">
+  <div class="sec">
+    <h1>Line looks</h1>
+    <p class="lead">The tinted box with a thin outline is the look every AI-made app uses. Here are three looks taken from
+      real things people use, all working the same way as now. Pick a style, then hover, click, double-click,
+      and try the Marker and Note tools.</p>
+  </div>
+
+  <div class="src">
+    <div><b>Highlighter</b>Kindle and Apple Books: the color sits behind the words only, like a real highlighter pen. Notes in Books are an underline.</div>
+    <div><b>Margin mark</b>A teacher's pen line in the margin, or Notion's handle that shows next to a block. The words stay clean.</div>
+    <div><b>Flat row</b>Finder and Mail: one flat fill across the row, no outline. The safe Mac look.</div>
+  </div>
+
+  <div class="styles" role="group" aria-label="Style">
+    <button class="style" data-s="s-hl" aria-pressed="true"><i>A</i><b>Highlighter</b><span>Yellow pen for markers, red pen underline for notes, soft blue behind a picked line.</span></button>
+    <button class="style" data-s="s-mg" aria-pressed="false"><i>B</i><b>Margin mark</b><span>A short pen line left of the time: grey on hover, blue when picked, yellow or red with a tool.</span></button>
+    <button class="style" data-s="s-fl" aria-pressed="false"><i>C</i><b>Flat row</b><span>What you have now, without the outline and with flatter colors.</span></button>
+  </div>
+
+  <div class="win s-hl" id="win">
+    <div class="tb">
+      <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="tbtitle">Anansi and the sky god</div>
+      <button class="tool" id="markerTool" aria-pressed="false"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 1.5v13h1.5V9.5h8l-2.2-3 2.2-3h-8V1.5z"/></svg>Marker</button>
+      <button class="tool" id="noteTool" aria-pressed="false"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.3 1.6a1.4 1.4 0 0 1 2 0l1.1 1.1a1.4 1.4 0 0 1 0 2L5.6 13.5 2 14.5l1-3.6z"/></svg>Note</button>
+    </div>
+    <div class="band" id="band"><span class="chip" id="chip"></span><span id="bandText"></span><button class="x" id="putDown">Put it down</button></div>
+    <div class="scroll"><div class="lines" id="lines" tabindex="0" aria-label="Transcript lines"></div></div>
+    <div class="bottom" id="msg">Hover a line, click to pick it.</div>
+  </div>
+
+  <div class="sec">
+    <h2>My pick</h2>
+    <p class="lead">A, Highlighter. It's the only one that looks like the app's paper and ink idea, and a marker really is a
+      highlighter pen. B is the calmest if you find A too colorful. Tell me A, B or C, or mix them, like
+      "B for picking, A for the tools".</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const ICON = {
+    flag: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 1.5v13h1.5V9.5h8l-2.2-3 2.2-3h-8V1.5z"/></svg>',
+    pen: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.3 1.6a1.4 1.4 0 0 1 2 0l1.1 1.1a1.4 1.4 0 0 1 0 2L5.6 13.5 2 14.5l1-3.6z"/></svg>',
+    plus: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>'
+  };
+  const lines = [
+    { t: "10:41", who: "Mr. Yurt", text: "Okay everyone, open to page 42. Today we carry on with Anansi and the sky god." },
+    { t: "10:41", who: "Mr. Yurt", text: "Remember, Anansi wanted to buy the stories from Nyame, and the price was very high." },
+    { t: "10:41", who: "Speaker 1", text: "Is the quiz on Friday?" },
+    { t: "10:41", who: "Mr. Yurt", text: "Yes, Friday. It covers the first three folk tales.", marked: true },
+    { t: "10:42", who: "Mr. Yurt", text: "For homework, finish the reading and answer questions one to five.", note: "Questions are on the board, page 45." }
+  ].map((l, i) => ({ id: i, marked: false, note: null, ...l }));
+  let sel = 1, tool = null;
+  const win = document.getElementById("win"), list = document.getElementById("lines"), msg = document.getElementById("msg");
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function render() {
+    list.innerHTML = lines.map((l) =>
+      `<div class="row${sel === l.id ? " sel" : ""}" data-id="${l.id}">` +
+      `<div class="time">${l.marked ? `<span class="flag">${ICON.flag}</span>` : ""}${l.t}</div>` +
+      `<div class="txt"><span class="words"><span class="who">${esc(l.who)}:</span> ${esc(l.text)}</span></div>` +
+      `<div class="acts"><button class="act" data-a="mark" aria-label="Marker">${ICON.flag}</button>` +
+      `<button class="act" data-a="note" aria-label="Note">${ICON.pen}</button>` +
+      `<button class="act" data-a="add" aria-label="Add line below">${ICON.plus}</button></div></div>` +
+      (l.note ? `<div class="noterow">${ICON.pen}<span>${esc(l.note)}</span></div>` : "")
+    ).join("");
+  }
+  function setTool(t) {
+    tool = tool === t ? null : t;
+    win.classList.toggle("tool-marker", tool === "marker");
+    win.classList.toggle("tool-note", tool === "note");
+    document.getElementById("markerTool").setAttribute("aria-pressed", tool === "marker");
+    document.getElementById("noteTool").setAttribute("aria-pressed", tool === "note");
+    const band = document.getElementById("band");
+    band.classList.toggle("on", !!tool);
+    document.getElementById("chip").style.background = tool === "marker" ? "var(--hl-mark)" : "var(--pen-red)";
+    document.getElementById("bandText").textContent = tool === "marker"
+      ? "Marker tool: click lines to mark them." : "Note tool: click the line you want a note on.";
+    if (tool) sel = null;
+    render();
+  }
+  document.getElementById("markerTool").onclick = () => setTool("marker");
+  document.getElementById("noteTool").onclick = () => setTool("note");
+  document.getElementById("putDown").onclick = () => setTool(tool);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && tool) setTool(tool); });
+  list.addEventListener("click", (e) => {
+    const row = e.target.closest(".row"); if (!row) return;
+    const l = lines[+row.dataset.id];
+    if (tool === "marker") { l.marked = !l.marked; msg.textContent = l.marked ? "Marker added." : "Marker removed."; render(); return; }
+    if (tool === "note") { const n = l.note ? null : "Your note goes here."; l.note = n; setTool("note"); msg.textContent = n ? "Note box opens here (mockup)." : "Note removed."; return; }
+    const a = e.target.closest("[data-a]");
+    if (a) { msg.textContent = a.dataset.a === "add" ? "A new line opens under it." : a.dataset.a === "mark" ? "Marker toggled." : "Note box opens."; if (a.dataset.a === "mark") { l.marked = !l.marked; render(); } return; }
+    sel = l.id; msg.textContent = "Picked. Double-click to edit."; render();
+  });
+  document.querySelectorAll(".style").forEach((b) => b.onclick = () => {
+    document.querySelectorAll(".style").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    win.classList.remove("s-hl", "s-mg", "s-fl"); win.classList.add(b.dataset.s);
+  });
+  render();
+})();
+</script>
