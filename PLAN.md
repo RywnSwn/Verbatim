@@ -2123,3 +2123,34 @@ Test list for Ryan (v0.1.239):
   reuse (runs only when its files or LouderMic.swift change).
 - Next (Ryan): speaker rename UX problems ("the speaker system is
   finicky"), new chat.
+
+## Speaker menu (Ryan, 2026-11-20), branch `claude/speaker-menu`
+Ryan: renaming Speaker 1 didn't change all Speaker 1s; "everywhere"
+seemed to rename the wrong people; picking a person should change all of
+that speaker's lines. Causes: `Labeler` numbered only unnamed voices by
+word count (renaming renumbered the rest), the main picker changed one
+line, and voice renames skip lines set one by one. Built:
+- `Speakers.numbers` + `LiveText.voiceNumbers`: first heard = Speaker 1,
+  given once and kept (`LiveTranscriber.keepNumbers` in `put`/`commit`,
+  and in `setVoiceName` before the name is set). `applyVoices` (Find
+  speakers) clears them, since its voice numbers are new.
+- `Labeler.root` follows "#v5" chains; `count` = lines showing that name.
+- Menu (`TranscriptList.speakerItems`): "Rename X (N lines)…", section
+  "X is really (all N lines):" (other speakers + past names: picking one
+  renames the whole voice, a speaker joins them), "Just This Line"
+  submenu (`lineOnlyItems`: picker + Someone Else…), Forget a Name. Lines
+  with a typed one-line name or no voice get the one-line choices only.
+- `renameVoice` acts on the root voice; a typed name equal to another
+  speaker's name joins them (no two Mr. Yurts); same name = nothing.
+  `setSpeaker` is one line only, with Undo (no "Change them too").
+- Rename alert: OK greyed out while empty; message says how many lines.
+Test list for Ryan:
+1. Open a recording with Speaker 1 and 2. Rename Speaker 1 to Mr. Yurt:
+   every Speaker 1 line changes, and Speaker 2 is still Speaker 2.
+2. Click a Speaker 2 name: the menu says how many lines. Under "Speaker 2
+   is really", pick a name: all Speaker 2 lines change. Undo puts them back.
+3. Rename Speaker 3 to the same name as another speaker (like Mr. Yurt):
+   they become one; renaming Mr. Yurt again changes both.
+4. Just This Line > pick someone: only that line changes. ⌘Z undoes it.
+5. Rename box: OK can't be pressed while the name is empty.
+6. While recording: the numbers don't swap as the class goes on.

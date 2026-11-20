@@ -410,8 +410,17 @@ final class LiveTranscriber {
     }
 
     private func commit(_ t: LiveText, _ id: UUID) {
+        var t = t
+        Self.keepNumbers(&t)
         put(t, id)
         write(t, id)
+    }
+
+    /// Gives new voices their "Speaker N" number and keeps the ones given
+    /// (`LiveText.voiceNumbers`), so numbers never move.
+    static func keepNumbers(_ t: inout LiveText) {
+        let n = Speakers.numbers(lines: t.lines, names: t.voiceNames, given: t.voiceNumbers)
+        if n != (t.voiceNumbers ?? [:]) { t.voiceNumbers = n.isEmpty ? nil : n }
     }
 
     /// Saves live.json and keeps the index in step with it. All saves go
@@ -474,7 +483,8 @@ final class LiveTranscriber {
 
     /// The one place texts change. nil removes it.
     private func put(_ t: LiveText?, _ id: UUID) {
-        if let t {
+        if var t {
+            Self.keepNumbers(&t)
             noFile.remove(id)
             if let box = boxes[id] {
                 box.text = t
@@ -600,6 +610,9 @@ final class LiveTranscriber {
     /// Ryan named a whole voice ("Change them too"). nil takes it back.
     func setVoiceName(_ id: UUID, voice: Int, to choice: String?) {
         guard var t = texts[id] else { return }
+        // Numbers first, while this voice has none of its names yet: so
+        // naming it never renumbers the others.
+        Self.keepNumbers(&t)
         var names = t.voiceNames ?? [:]
         names["\(voice)"] = choice
         t.voiceNames = names.isEmpty ? nil : names
@@ -615,6 +628,7 @@ final class LiveTranscriber {
         var known: [String: String] = [:]
         for (slot, name) in names { known["\(base + slot)"] = name }
         t.voiceNames = known.isEmpty ? nil : known
+        t.voiceNumbers = nil // new voice numbers: count again from first heard
         t.speakersFound = true
         commit(t, id)
     }

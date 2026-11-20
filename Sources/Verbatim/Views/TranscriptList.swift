@@ -84,6 +84,8 @@ struct TranscriptList: View {
         var oldName: String
         /// For the line being added (not saved yet).
         var newLine = false
+        /// Renaming a voice: how many lines change.
+        var count = 0
     }
 
     private struct NewLine {
@@ -357,11 +359,14 @@ struct TranscriptList: View {
                 }
                 naming = nil
             }
+            .disabled(nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button("Cancel", role: .cancel) { naming = nil }
         } message: {
-            Text(naming?.voice != nil
-                 ? "Every line in this voice changes. Names you type are offered in your other recordings too."
-                 : "Only this line changes. Names you type are offered in your other recordings too.")
+            if let n = naming, n.voice != nil {
+                Text("All \(n.count == 1 ? "1 line" : "\(n.count) lines") of \(n.oldName) change, and Verbatim learns the voice for next time. Typing a name another speaker already has makes them one person.")
+            } else {
+                Text("Only this line changes. Names you type are offered in your other recordings too.")
+            }
         }
         .alert("Add to the word list", isPresented: $addingWord) {
             TextField("Name, like Kweku Tsin", text: $wordDraft)
@@ -437,28 +442,34 @@ struct TranscriptList: View {
         return Text("\(Text(name + ":").fontWeight(.semibold)) \(text)")
     }
 
-    /// Rename this voice everywhere, or pick who said this line: this
-    /// recording's speakers, names used before, or a new name.
+    /// Click a name: everything here is about the whole speaker (all lines
+    /// with that name), with the line count shown. Fixing one line is in
+    /// "Just This Line". A line with a name typed for just that line, or no
+    /// voice, gets the one-line choices only.
     @ViewBuilder private func speakerItems(_ line: Transcript.Line, current: String?, name: String?,
                                            options: [Speakers.SpeakerOption]) -> some View {
-        if let voice = line.voice, let name {
-            Button("Rename \(name) everywhere…") {
+        let labels = Speakers.labeler(info.id)
+        if let voice = labels.root(of: line), let name {
+            let count = labels.count(voice, in: live)
+            let lineText = count == 1 ? "1 line" : "\(count) lines"
+            Button("Rename \(name) (\(lineText))…") {
                 nameDraft = name.hasPrefix("Speaker ") ? "" : name
-                naming = Naming(start: line.start, voice: voice, oldName: name)
+                naming = Naming(start: line.start, voice: voice, oldName: name, count: count)
+            }
+            let others = options.filter { o in
+                o.name != name && (Speakers.voice(of: o.choice).map { labels.root($0) != voice } ?? true)
+            }
+            if !others.isEmpty {
+                Section("\(name) is really (all \(lineText)):") {
+                    ForEach(others, id: \.choice) { o in
+                        Button(o.name) { model.renameVoice(info.id, voice: voice, to: o.choice) }
+                    }
+                }
             }
             Divider()
-        }
-        let pick = Binding<String>(
-            get: { current ?? "" },
-            set: { model.setSpeaker(info.id, start: line.start, to: $0) }
-        )
-        Picker("This line is:", selection: pick) {
-            ForEach(options, id: \.choice) { Text($0.name).tag($0.choice) }
-        }
-        .pickerStyle(.inline)
-        Button("Someone else…") {
-            nameDraft = ""
-            naming = Naming(start: line.start, voice: nil, oldName: name ?? "")
+            Menu("Just This Line") { lineOnlyItems(line, current: current, name: name, options: options) }
+        } else {
+            lineOnlyItems(line, current: current, name: name, options: options)
         }
         let past = Speakers.recentNames
         if !past.isEmpty {
@@ -475,6 +486,24 @@ struct TranscriptList: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Who said just this one line: this recording's speakers, names used
+    /// before, or a new name.
+    @ViewBuilder private func lineOnlyItems(_ line: Transcript.Line, current: String?, name: String?,
+                                            options: [Speakers.SpeakerOption]) -> some View {
+        let pick = Binding<String>(
+            get: { current ?? "" },
+            set: { model.setSpeaker(info.id, start: line.start, to: $0) }
+        )
+        Picker("This line is:", selection: pick) {
+            ForEach(options, id: \.choice) { Text($0.name).tag($0.choice) }
+        }
+        .pickerStyle(.inline)
+        Button("Someone Else…") {
+            nameDraft = ""
+            naming = Naming(start: line.start, voice: nil, oldName: name ?? "")
         }
     }
 
