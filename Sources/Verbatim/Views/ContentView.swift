@@ -204,14 +204,22 @@ private struct GroupNameAlert: ViewModifier {
         content
             .alert("Name this group", isPresented: Binding(
                 get: { model.renameGroupRequest != nil },
-                set: { if !$0 { model.renameGroupRequest = nil } })
+                set: { if !$0, model.renameGroupRequest != nil {
+                    // Closed without OK (Esc): same as Cancel.
+                    model.renameGroupRequest = nil
+                    model.cancelNewGroup()
+                } })
             ) {
                 TextField("Like English 2026", text: $draft)
                 Button("OK") {
                     if let id = model.renameGroupRequest { store.rename(id, to: draft) }
+                    model.keepNewGroup()
                     model.renameGroupRequest = nil
                 }
-                Button("Cancel", role: .cancel) { model.renameGroupRequest = nil }
+                Button("Cancel", role: .cancel) {
+                    model.renameGroupRequest = nil
+                    model.cancelNewGroup()
+                }
             } message: {
                 Text("One group per class works well. Pick an icon by clicking the one next to its name.")
             }

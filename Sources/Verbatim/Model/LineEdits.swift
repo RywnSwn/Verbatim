@@ -107,15 +107,35 @@ extension RecorderModel {
         return (start, start)
     }
 
+    /// The line's flags and note go with it, in the same Undo (B4: they used
+    /// to move onto the line above, and notes got joined there).
     func deleteLine(_ id: UUID, _ source: LineSource, start: Double) {
+        let lines = shownLines(id).map(\.line)
+        let oldMarkers = info(id)?.markers ?? []
+        let oldNotes = info(id)?.notes ?? []
+        let onLine: (Double) -> Bool = { !lines.isEmpty && Markers.line(at: $0, in: lines).start == start }
         let removed: Transcript.Line? = switch source {
         case .checked: Transcriber.shared.removeLine(id, start: start)
         case .live: LiveTranscriber.shared.removeLine(id, start: start)
         }
         guard let old = removed else { return }
-        offerLineUndo("Deleted a line.", in: id) {
+        let keptMarkers = oldMarkers.filter { !onLine($0) }
+        let keptNotes = oldNotes.filter { !onLine($0.time) }
+        let tookMarker = keptMarkers.count != oldMarkers.count
+        let tookNote = keptNotes.count != oldNotes.count
+        if tookMarker { setMarkers(id, keptMarkers) }
+        if tookNote, let i = recordingIndex(id) {
+            changeRecording(i) { $0.notes = keptNotes.isEmpty ? nil : keptNotes }
+        }
+        let extra = tookMarker && tookNote ? " Its marker and note went with it."
+            : tookMarker ? " Its marker went with it." : tookNote ? " Its note went with it." : ""
+        offerLineUndo("Deleted a line.\(extra)", in: id) { [weak self] in
             if source == .live { LiveTranscriber.shared.insertLine(id, old) }
             if Self.resolved(id, source, old) == .checked { Transcriber.shared.insertLine(id, old) }
+            if tookMarker { self?.setMarkers(id, oldMarkers) }
+            if tookNote, let self, let i = self.recordingIndex(id) {
+                self.changeRecording(i) { $0.notes = oldNotes.isEmpty ? nil : oldNotes }
+            }
         }
     }
 

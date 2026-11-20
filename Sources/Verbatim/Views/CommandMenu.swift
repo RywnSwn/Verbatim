@@ -192,8 +192,7 @@ struct CommandMenuView: View {
         add("mini", MiniWindow.shared.isShown ? "Hide mini window" : "Show mini window", "pip", shortcut: "⇧⌘M", words: "small float window") { MiniWindow.shared.toggle() }
         add("memo", "Transcribe a Voice Memo", "waveform.badge.plus", shortcut: "⌘O", words: "import file audio") { model.chooseFilesToImport() }
         add("newGroup", "New group", "folder.badge.plus", words: "class folder section") {
-            let group = GroupStore.shared.add()
-            model.renameGroupRequest = group.id
+            model.startNewGroup()
         }
         add("bigger", "Make text bigger", "textformat.size.larger", shortcut: "⌘+", words: "text size font larger zoom") { TextSize.change(by: 1) }
         add("smaller", "Make text smaller", "textformat.size.smaller", shortcut: "⌘−", words: "text size font zoom") { TextSize.change(by: -1) }

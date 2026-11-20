@@ -67,6 +67,9 @@ struct TranscriptList: View {
     @FocusState private var fieldFocused: Bool
     /// Last time you scrolled by hand, so playing audio doesn't yank the view away.
     @State private var lastUserScroll = Date.distantPast
+    /// The line a Marker or Note tool click just went to: the second click of
+    /// a double-click there does nothing more (B6).
+    @State private var toolClickLine: Double?
     /// Typing a name: for a whole voice (Rename) or one line (Someone else).
     @State private var naming: Naming?
     @State private var nameDraft = ""
@@ -107,12 +110,15 @@ struct TranscriptList: View {
         case line(Transcript.Line, LineSource)
         case checkedUpTo(Double)
         case volatile(String)
+        /// "Paused 10:12 to 10:20" between the lines (B2).
+        case pause(RecordingInfo.Break)
 
         var id: String {
             switch self {
             case .line(let l, let s): TranscriptRow.id(s, l.start)
             case .checkedUpTo: "checked"
             case .volatile: "volatile"
+            case .pause(let b): "break-\(b.second)-\(b.text.prefix(6))"
             }
         }
     }
@@ -122,7 +128,17 @@ struct TranscriptList: View {
         if !checked.isEmpty, !live.isEmpty || !volatile.isEmpty, let last = checked.last {
             rows.append(.checkedUpTo(checkedUpTo ?? last.end))
         }
-        rows += live.map { Row.line($0, .live) }
+        // Pauses and sleeps go before the first line after them. One still
+        // going (paused now) goes at the end.
+        var breaks = info.breaks[...]
+        for line in live {
+            while let b = breaks.first, b.second <= line.start {
+                rows.append(.pause(b))
+                breaks = breaks.dropFirst()
+            }
+            rows.append(.line(line, .live))
+        }
+        if !live.isEmpty { rows += breaks.map { Row.pause($0) } }
         let v = volatile.trimmingCharacters(in: .whitespaces)
         if !v.isEmpty { rows.append(.volatile(v)) }
         return rows
@@ -171,7 +187,9 @@ struct TranscriptList: View {
                                 if notingLine?.start == line.start {
                                     noteEditor
                                 } else if let note = notes[line.start] {
-                                    NoteRow(text: note) { beginNote(line, note) }
+                                    NoteRow(text: note, shown: query.isEmpty ? nil : highlighted(note, source, line.start, .note)) {
+                                        beginNote(line, note)
+                                    }
                                 }
                                 if let offer = model.fixOffer, offer.recordingID == info.id, offer.start == line.start {
                                     fixOfferRow(offer.fix)
@@ -186,6 +204,16 @@ struct TranscriptList: View {
                         case .checkedUpTo(let seconds):
                             HStack(spacing: 10) {
                                 Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
+                                    .font(.system(size: 13, design: .serif).italic())
+                                    .foregroundStyle(.secondary)
+                                Rectangle().fill(Theme.line).frame(height: 1)
+                            }
+                            .padding(.leading, 70)
+                            .padding(.vertical, 4)
+                            .modifier(TypingShield(active: isTyping) { stopTyping() })
+                        case .pause(let b):
+                            HStack(spacing: 10) {
+                                Text(b.text)
                                     .font(.system(size: 13, design: .serif).italic())
                                     .foregroundStyle(.secondary)
                                 Rectangle().fill(Theme.line).frame(height: 1)
@@ -299,8 +327,9 @@ struct TranscriptList: View {
             if byHand.contains(phase) { lastUserScroll = Date() }
         }
         .onChange(of: playingRowID) { _, id in
-            // Follow the audio, unless you scrolled in the last 8 seconds or are editing/searching.
-            guard let id, playback.isPlaying, editing == nil, model.searchText.isEmpty,
+            // Follow the audio, unless you scrolled or moved the picked line in
+            // the last 8 seconds, or are typing (line, note or new line, B5) or searching.
+            guard let id, playback.isPlaying, !isTyping, model.searchText.isEmpty,
                   Date().timeIntervalSince(lastUserScroll) > 8 else { return }
             withAnimation(.easeOut(duration: 0.3)) { position.scrollTo(id: id, anchor: .center) }
         }
@@ -356,7 +385,7 @@ struct TranscriptList: View {
 
     /// Don't scroll away from a line you're editing or a search hit.
     private var followsLive: Bool {
-        isLive && atBottom && editing == nil && notingLine == nil && model.searchText.isEmpty
+        isLive && atBottom && !isTyping && model.searchText.isEmpty
     }
 
     // MARK: - Search
@@ -377,10 +406,11 @@ struct TranscriptList: View {
     }
 
     /// The line's text with search hits in yellow; the current hit stronger.
-    private func highlighted(_ text: String, _ source: LineSource, _ start: Double) -> AttributedString {
+    private func highlighted(_ text: String, _ source: LineSource, _ start: Double,
+                             _ part: SearchMatch.Part = .text) -> AttributedString {
         let ranges = RecorderModel.ranges(of: query, in: text)
         guard !ranges.isEmpty else { return AttributedString(text) }
-        let current = currentMatch.flatMap { $0.source == source && $0.start == start ? $0.occurrence : nil }
+        let current = currentMatch.flatMap { $0.source == source && $0.start == start && $0.part == part ? $0.occurrence : nil }
         var result = AttributedString()
         var cursor = text.startIndex
         for (k, r) in ranges.enumerated() {
@@ -469,7 +499,11 @@ struct TranscriptList: View {
             } else {
                 Group {
                     if !query.isEmpty {
-                        Self.labelled(Text(highlighted(line.text, source, line.start)), name)
+                        if let name {
+                            Text("\(Text(highlighted(name + ":", source, line.start, .speaker)).fontWeight(.semibold)) \(Text(highlighted(line.text, source, line.start)))")
+                        } else {
+                            Text(highlighted(line.text, source, line.start))
+                        }
                     } else if isPlaying {
                         PlayingLineText(line: line, name: name)
                     } else {
@@ -700,10 +734,17 @@ struct TranscriptList: View {
     /// One click: with a tool, put a marker (or take it off) or open a note.
     /// Without: pick the line. A double-click edits it.
     private func tapped(_ line: Transcript.Line, _ source: LineSource, marked: Bool, note: String?) {
+        // B6: a double-click with a tool used to add then remove the flag, or
+        // open the line's text instead of the note.
+        let clicks = NSApp.currentEvent?.clickCount ?? 1
+        if clicks >= 2, toolClickLine == line.start { return }
+        toolClickLine = nil
         switch model.lineTool {
         case .marker?:
+            toolClickLine = line.start
             if marked { model.removeMarker(info.id, line: line) } else { model.addMarker(info.id, line: line) }
         case .note?:
+            toolClickLine = line.start
             model.lineTool = nil // goes down after one note: you type it right away
             beginNote(line, note ?? "")
         case nil:
@@ -754,6 +795,7 @@ struct TranscriptList: View {
         guard let i = keys.firstIndex(of: p) else { return .ignored }
         let next = keys[max(0, min(keys.count - 1, i + step))]
         picked = next
+        lastUserScroll = Date() // the audio doesn't pull the view back (B5)
         position.scrollTo(id: TranscriptRow.id(next.source, next.start))
         return .handled
     }
@@ -958,6 +1000,8 @@ struct LineEditor: View {
 /// smaller than the transcript, so it never looks like speech. Click to change it.
 private struct NoteRow: View {
     let text: String
+    /// The note with search hits marked, while searching.
+    var shown: AttributedString?
     let action: () -> Void
     @State private var hovering = false
 
@@ -966,7 +1010,7 @@ private struct NoteRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 Image(systemName: "pencil")
                     .font(.caption)
-                Text(text)
+                Text(shown ?? AttributedString(text))
                     .font(.callout)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)

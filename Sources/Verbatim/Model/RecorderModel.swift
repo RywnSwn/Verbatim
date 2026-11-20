@@ -128,6 +128,8 @@ final class RecorderModel {
     var showCommandMenu = false
     /// A group to rename in the sidebar (a new one gets named right away).
     var renameGroupRequest: UUID?
+    /// Takes back a group just made by New Group… if its name box is cancelled.
+    @ObservationIgnored var newGroupCancel: (() -> Void)?
     private(set) var micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
     private(set) var micName = "MacBook mic"
 
@@ -279,7 +281,11 @@ final class RecorderModel {
         } catch {
             pipeline.detach()
             LiveTranscriber.shared.recordingStopped()
-            status = Status(text: "Couldn't start recording: \(error.localizedDescription)")
+            // Nothing was recorded: no 0 min recording left behind, and no
+            // "Verbatim quit during…" at next launch (B3).
+            LiveTranscriber.shared.forget(info.id)
+            try? FileManager.default.removeItem(at: RecordingStore.folder(info.id))
+            status = Status(text: "Couldn't start recording: \(error.localizedDescription) Try again, or pick another mic in Settings > General.")
             return
         }
 
@@ -809,7 +815,7 @@ final class RecorderModel {
                 try? FileManager.default.removeItem(at: RecordingStore.folder(id))
                 self.recordings.removeAll { $0.id == id }
                 if self.selection == id { self.selection = nil }
-                if error is CancellationError {
+                if error is CancellationError || Task.isCancelled {
                     self.show("Stopped importing \(url.lastPathComponent). Your original file isn't touched.")
                 } else {
                     self.show("Couldn't import \(url.lastPathComponent): \(error.localizedDescription)")
@@ -842,7 +848,7 @@ final class RecorderModel {
         }
         all.removeAll { info in info.importingPath != nil && !again.contains { $0.0 == info.id } }
         if let name = lost.last {
-            recoveryNotice = "Verbatim quit while importing \(name), and the file isn't there anymore. Drop it in again to transcribe it."
+            recoveryNotice = "Verbatim quit while importing \(name) and couldn't open the file again. Drop it in again to transcribe it."
         }
         return again
     }
@@ -1103,6 +1109,8 @@ final class RecorderModel {
 
     func refreshPermission() {
         micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
+        // Turned back on: the "access is off" message is old news.
+        if micPermission == .authorized, status?.action == .openMicSettings { status = nil }
     }
 
     func openMicSettings() {
@@ -1192,6 +1200,9 @@ final class RecorderModel {
         saveCurrent()
         status = Status(text: "Can't save audio, the disk is full. Free up space, then", action: .resume)
         Messages.shared.post(Messages.problem("Recording paused: the disk is full. Free up space, then press Resume."))
+        // Like any pause: the Mac may sleep, and it asks later (A9).
+        endKeepAwake()
+        askIfStillPaused()
     }
 
     private func captureFailed() {
@@ -1269,8 +1280,16 @@ final class RecorderModel {
         }
         addEvent(.woke)
         saveCurrent()
+        // The quiet minutes start again: asleep is not quiet (B2: "Still
+        // recording?" used to replace this message at once).
+        lastLoud = Date()
+        quietWarned = false
         let t = Date.FormatStyle(date: .omitted, time: .shortened)
-        status = Status(text: "Mac was asleep \(since.formatted(t)) to \(Date().formatted(t)). Keep the lid open in class.")
+        // The tip only the first time.
+        let tipKey = "toldKeepLidOpen"
+        let tip = UserDefaults.standard.bool(forKey: tipKey) ? "" : " Keep the lid open in class."
+        UserDefaults.standard.set(true, forKey: tipKey)
+        status = Status(text: "Mac was asleep \(since.formatted(t)) to \(Date().formatted(t)).\(tip)")
     }
 
     private func deviceDisconnected(_ id: String?) {

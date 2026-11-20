@@ -143,11 +143,7 @@ struct GroupTitleMenu: View {
             } label: {
                 Label("Recents (no group)", systemImage: current == nil ? "checkmark" : "clock")
             }
-            Button("New Group…") {
-                let group = store.add()
-                store.lastUsedID = group.id
-                model.renameGroupRequest = group.id
-            }
+            Button("New Group…") { model.startNewGroup(forNext: true) }
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(current?.name ?? "Recents")

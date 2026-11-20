@@ -202,8 +202,7 @@ struct SidebarView: View {
     }
 
     private func newGroup() {
-        let group = store.add()
-        model.renameGroupRequest = group.id
+        model.startNewGroup()
     }
 
     @ViewBuilder private func recordingMenu(_ info: RecordingInfo) -> some View {
@@ -221,11 +220,7 @@ struct SidebarView: View {
             Button("Recents (no group)") { model.moveRecording(info.id, to: nil) }
                 .disabled(store.group(info.groupID) == nil)
             Divider()
-            Button("New Group…") {
-                let group = store.add()
-                model.moveRecording(info.id, to: group.id)
-                model.renameGroupRequest = group.id
-            }
+            Button("New Group…") { model.startNewGroup(moving: info.id) }
         }
         Button("Show in Finder") { model.showInFinder(info) }
         Divider()
