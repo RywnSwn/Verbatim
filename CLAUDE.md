@@ -31,6 +31,10 @@ slide) (RywnSwn/Verbatim#29): merged 2026-11-20 at Ryan's word after he
 tried the sidebar; most test lists in `PLAN.md` not run yet. Not merged:
 RywnSwn/Verbatim#27 (speech model errors; one `recordingFinal` line
 conflicts with A10, keep both).
+Punctuation (2026-11-20): Parakeet already punctuates as well as batch
+mode; 2-channel mics now follow the louder mic (merged); Ryan's grammar is
+good again on the Mac's own mic, cause unproven (see `PLAN.md`). Next:
+speaker rename UX, new chat.
 See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was

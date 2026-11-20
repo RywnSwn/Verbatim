@@ -2111,3 +2111,15 @@ Test list for Ryan (v0.1.239):
 3. If you use the 2-mic receiver: both voices still in the recording and
    the text; no echo when you listen back.
 4. Transcribe again on a recording from before Nov 19: caps and commas?
+- Ryan tested v0.1.239 (2026-11-20): "the grammar is excellent", loud
+  typing and the words still right. But his MIC line was "MacBook Air
+  Microphone, 1 ch, 48000 Hz, float32": LouderMic never ran, so the build
+  sounds the same as before for him. Cause of the earlier missing
+  punctuation NOT proven: likely class audio (far teacher) vs talking
+  close, or the app/models having been open a long time. If it comes back
+  in class, ask for Copy Layout Details right then (MIC line, live text
+  timings). Merged `claude/louder-mic` into main at Ryan's word
+  (2026-11-20). `tools/PunctTest` + "Punctuation test" workflow kept for
+  reuse (runs only when its files or LouderMic.swift change).
+- Next (Ryan): speaker rename UX problems ("the speaker system is
+  finicky"), new chat.
