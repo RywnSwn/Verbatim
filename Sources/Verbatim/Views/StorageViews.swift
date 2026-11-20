@@ -128,6 +128,17 @@ struct StorageSettings: View {
 
     var body: some View {
         Form {
+            // Item 7: the Undo for a delete made here was only in the main
+            // window's bottom bar, hidden behind Settings.
+            if let s = model.status, let action = s.action, action == .undoAudioDelete || action == .undoLine {
+                Section {
+                    HStack(spacing: 10) {
+                        Text(s.text).font(.callout)
+                        Spacer(minLength: 8)
+                        Button("Undo") { model.perform(action) }
+                    }
+                }
+            }
             Section {
                 if let sizes {
                     SpaceBar(recordings: sizes.recordings, models: sizes.models, deleted: deleted.totalSize)
@@ -213,7 +224,7 @@ struct StorageSettings: View {
                 model.deleteAudio(info.id)
             }
             .disabled(blocker != nil)
-            .help(blocker ?? "The text stays. Undo in the bottom bar of the main window.")
+            .help(blocker ?? "The text stays. Undo shows at the top of this page.")
         }
     }
 

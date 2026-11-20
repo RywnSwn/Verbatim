@@ -1727,7 +1727,7 @@ by hand in the code. Item 1 above was only half fixed: see A4.
 
 **BRANCH: `claude/ux-round-2`. Keep working on THIS branch (Ryan asked,
 2026-11-20): start the next chat by checking it out, not a new branch.**
-A1 to A10: BUILT on that branch, not tested by Ryan, not merged. Draft pull
+A1 to A10, B1 to B17, C1 to C11 and items 2 to 15: BUILT on that branch, not tested by Ryan, not merged. Draft pull
 request RywnSwn/Verbatim#29 (one PR for the whole round; merge only when
 Ryan asks, after testing). Next chat: A6 to A10, then B, then C, all on the
 same branch. Smoke 0.1 run 89 (8e6d67b): passed; Copy all shows at 1000 and
@@ -1836,9 +1836,56 @@ Test list (for Ryan, A6 to A10):
 6. A7 and A10 need a fresh Mac without the speech model, so they can only
    be checked on a test account. Skip them.
 
-Suggested chats: A1 to A4 together, then A5 to A10, then B, then C
-(with items 2 to 15 above where they touch the same code). Next: B1 to
-B17 on this same branch.
+B1 to B17, C1 to C11 and the older list's items 2 to 15: BUILT (same
+chat, 2026-11-20), not tested by Ryan, same branch and PR. Two code
+reviews done (A6 to A10, then all of B); their findings are fixed.
+Smoke passed for b7432ac (B8 to B17). How the trickier parts work:
+- B1: `Status.standing` marks a warning that stays true (battery, chosen
+  mic missing, quiet, disk almost full, paused for a problem, 10 min
+  before 3 h). `status` didSet keeps it in `warning` while a short message
+  covers it and puts it back after. `clearStanding` ends one for good.
+  `show()` makes way after 30 s while recording if a warning waits.
+  Automatic update check failures only reach the bar after 3 days of
+  failing (`updateFailingSince`), never while recording.
+- B2: `RecordingInfo.breaks` (pause/resume and asleep/woke events, pauses
+  under 30 s skipped) draw "Paused 10:12 to 10:20" dividers (`Row.pause`).
+- B11: `liveModelPausedAt`, `speakerModelPausedAt`, `wordModelPausedAt`
+  remember Pause. Speaker and word downloads never run at once.
+- B13 / item 2: `settingsUndo` and `addUndo` put steps on ⌘Z without the
+  bottom bar link; `transcribeAgain` / `findSpeakersAgain` keep the old
+  LiveText and put it back on Undo (after the pass has stopped).
+- B14: `startNewGroup` / `cancelNewGroup` / `finishGroupName`.
+- B16: imports go to `groupOnScreen`; sidebar groups take `.fileURL` drops.
+Not done: update download progress and resume (B10, needs a URLSession
+delegate); restoring an old Whisper transcript on Undo of Transcribe
+again (rare, old recordings only).
+Lesson (2026-11-20): a review subagent ran `git checkout <sha>` in the
+shared checkout, so commits made meanwhile landed on a detached HEAD and
+weren't pushed. Tell review agents to use `git show` / `git diff` only,
+never checkout, and check `git status -sb` before pushing.
+Test list (for Ryan, B, C and the older items; the main ones):
+1. Record, put the Mac to sleep a minute, wake it: "Mac was asleep" and a
+   divider line in the transcript. Pause over 30 s, Resume: "Paused …"
+   divider.
+2. While recording, unplug the charger under 15% (or wait for "Quiet for
+   5 minutes"), then press ⌘D: the marker message shows, then the warning
+   comes back by itself.
+3. Delete a line that has a flag and a note: both go, Undo brings all
+   three back.
+4. Settings > Words: remove two words, press ⌘Z twice: both come back.
+5. Right-click a recording > Move to Group > New Group…, then Cancel: no
+   new group, the recording is where it was.
+6. Drop a Voice Memo on a group name in the sidebar: it lands in that
+   group. Drop one while recording: you stay on the live page.
+7. ⌘F a speaker name and a word from a note: both are found and marked.
+8. More (⋯) > Transcribe again, then Undo in the bottom bar: the old text
+   and names come back.
+9. Rename a recording, change a group's icon, move a recording with the
+   menu: each has Undo.
+10. Start page while recording: "A class is being recorded right now.
+    Show it". Drag a file over the window: dashed outline.
+11. ⌘Q while recording, Stop and Quit: the bar says Saving, no Undo Stop.
+12. Settings > Updates: if an update is ready, "Restart to Update" is there.
 
 A. Loses work or blocks the task
 - A1. Settings > Storage: lowering "Keep audio for" (7 to 3 days) deletes

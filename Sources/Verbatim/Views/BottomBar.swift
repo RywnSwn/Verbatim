@@ -152,10 +152,16 @@ struct BottomBar: View {
                 .lineLimit(3)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
-            Button(undo, action: action)
-                .buttonStyle(.link)
-                .font(.callout.weight(.medium))
-                .fixedSize() // the link never wraps or gets cut
+            Button(action: action) {
+                // Item 9: a 24 pt tall target, not just the word.
+                Text(undo)
+                    .padding(.vertical, 5)
+                    .padding(.horizontal, 3)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.link)
+            .font(.callout.weight(.medium))
+            .fixedSize() // the link never wraps or gets cut
         }
     }
 }

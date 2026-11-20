@@ -470,6 +470,7 @@ struct GroupHeader: View {
                 picking = true
             } label: {
                 ItemIcon(name: group.icon, color: group.color, size: 12)
+                    .frame(minWidth: 24, minHeight: 24) // item 9: easier to hit
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -521,7 +522,7 @@ struct GroupHeader: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 11, weight: .semibold))
-                        .frame(width: 20, height: 20)
+                        .frame(width: 24, height: 24) // item 9: easier to hit
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
