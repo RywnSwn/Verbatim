@@ -85,11 +85,13 @@ One screen, no tour (see `docs/design/`). It shows:
   when there's nothing yet.
 - Copy menu also has: **Copy new since last copy**, **Copy last 10
   minutes**, **Copy marked parts only**.
-- **Picking a line** (2026-11-20): one click picks a line (blue box) and
+- **Picking a line** (2026-11-20): one click picks a line (blue pen line in
+  the margin, no box) and
   shows flag, note and + (add a line below) buttons on it. Double-click or
   Enter edits. Arrow keys move, Delete deletes (Undo).
 - **Line tools**: toolbar Marker and Note are tools you pick up. The pointer
-  turns into a flag or a pencil, lines glow yellow or red, a click puts a
+  turns into a flag or a pencil, lines get a yellow or red margin line, a
+  click puts a
   marker (or takes it off) or opens a note. Marker stays on until Esc;
   Note goes down after one note.
 - **Markers** (⌘D marks what's being said now, the Marker tool, the flag

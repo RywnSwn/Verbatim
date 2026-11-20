@@ -1634,7 +1634,7 @@ Test list (for Ryan):
 Part 2, line tools: BUILT in the same chat at Ryan's ask ("implement
 here"), not tested by Ryan yet. Mockup: https://claude.ai/artifact/BSvJ7utAQxyjqokGa3iQ9d
 (copy in `docs/design/LineTools.html`).
-- `TranscriptList`: one click picks a line (`picked`, blue box,
+- `TranscriptList`: one click picks a line (`picked`, blue margin mark,
   `LineHighlight`), double-click (`NSApp.currentEvent.clickCount`) or Enter
   edits, arrows move, Delete deletes, Esc lets go. The list is focusable for
   the keys. Hover: soft grey (own hover state per row, `LineHighlight`).
@@ -1644,25 +1644,33 @@ here"), not tested by Ryan yet. Mockup: https://claude.ai/artifact/BSvJ7utAQxyjq
 - `RecorderModel.lineTool` (`LineTool` in Markers.swift): toolbar Marker and
   Note are now toggles (`LineToolToggle`), in the recording AND finished
   recording toolbars. Pointer: `PointerStyle.image` of a round SF Symbol
-  badge (flag yellow, pencil red). Rows glow `Theme.markTint` / `noteTint`.
+  badge (flag yellow, pencil red). Rows get a yellow / red margin mark.
   `LineToolBand` at the top says what a click does, "Put it down" = Esc.
   Marker stays on; Note goes down after one note. Picking a tool saves and
   closes anything being typed. Switching recordings puts the tool down.
 - ⌘D / ⇧⌘N / menus / mini window unchanged: they mark or note "now".
 - The row text no longer shows a text cursor (a click doesn't type).
+Look (Ryan tested: "works excellent", but the tinted box with an outline
+"looks AI"): he picked B, Margin mark, from https://claude.ai/artifact/66un6nSsuBUANx9UoRYd7P
+(`docs/design/LineLook.html`). No fill or outline on lines; a short pen
+line (Capsule, 3 pt) 24 pt left of the line: grey on hover, accent when
+picked (time turns accent too), `Theme.markPen` / `notePen` with a tool.
+The tool band is plain paper with a pen-colored chip.
 Not done: the mini window still edits a line on one click (Ryan didn't
 ask; consider the same pick / double-click rule there).
 Test list (for Ryan):
-1. Move the mouse over lines: a soft grey shows. Click one: blue box,
-   nothing opens, three small buttons on the right.
+1. Move the mouse over lines: a short grey line shows in the margin. Click
+   one: the margin line turns blue and so does the time, nothing opens,
+   three small buttons on the right.
 2. Double-click a line: you're typing in it. Or click once and press Enter.
 3. With a line picked: ↑ ↓ move, Delete deletes it (Undo brings it back),
    Esc lets go.
 4. Click + on a picked line: an empty line opens under it. Type, Enter.
-5. Click Marker in the top bar: pointer is a yellow flag, lines glow yellow,
+5. Click Marker in the top bar: pointer is a yellow flag, lines get a
+   yellow margin line,
    a band at the top says so. Click a few lines: flags appear. Click a
    flagged line: flag goes. Esc (or Marker again): tool goes down.
-6. Click Note: pointer is a red pencil, lines glow red. Click a line: the
+6. Click Note: pointer is a red pencil, lines get a red margin line. Click a line: the
    note box opens there and the tool goes down.
 7. While recording, ⌘D still marks what's being said right now.
 8. Open an old recording: Marker and Note are in its top bar too.

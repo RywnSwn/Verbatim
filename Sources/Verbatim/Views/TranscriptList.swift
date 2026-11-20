@@ -11,7 +11,7 @@ import SwiftUI
 /// each line. Click it to rename or pick who said it (or right-click > Speaker).
 ///
 /// Picking and editing (Ryan, 2026-11-20, docs/design/LineTools.html): one
-/// click picks a line (blue box, nothing opens) and shows its flag, note and
+/// click picks a line (blue pen line in the margin, nothing opens) and shows its flag, note and
 /// + buttons. Double-click or Enter edits (Enter saves, Esc cancels, clicking
 /// away saves). Arrow keys move, Delete deletes. Right-click for the rest.
 /// With the Marker or Note tool on (`RecorderModel.lineTool`) a click puts a
@@ -439,7 +439,7 @@ struct TranscriptList: View {
         let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
         // Gutter 60 + gap 10 = the 70 pt that notes and offers line up with.
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
-            timeGutter(line, isPlaying: isPlaying)
+            timeGutter(line, isPlaying: isPlaying || isPicked)
                 .overlay(alignment: .leading) {
                     // The flag sits just left of the time, so long times still fit.
                     if marked {
@@ -1178,8 +1178,10 @@ struct WordMarkRenderer: TextRenderer {
     }
 }
 
-/// Under the pointer a line gets a soft grey; picked, a blue box; with a tool
-/// on, the tool's color (yellow for Marker, red for Note) and its pointer.
+/// Margin mark (Ryan's pick, docs/design/LineLook.html): no box or fill
+/// over the words, just a short pen line in the margin left of the time.
+/// Grey under the pointer, blue when picked, yellow (Marker tool) or red
+/// (Note tool) under the pointer with a tool on, which also sets the pointer.
 /// Its own view with its own hover state, so moving the mouse redraws one
 /// line and not the whole transcript.
 private struct LineHighlight: ViewModifier {
@@ -1189,33 +1191,25 @@ private struct LineHighlight: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(fill)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .strokeBorder(edge, lineWidth: 1)
-                    }
-                    .padding(.horizontal, -8)
-                    .padding(.vertical, -5)
+            .overlay(alignment: .leading) {
+                // Left of the flag (which sits 15 pt left of the time).
+                Capsule()
+                    .fill(pen)
+                    .frame(width: tool != nil && hovering ? 4 : 3)
+                    .padding(.vertical, 3)
+                    .offset(x: -24)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
             .onHover { hovering = $0 }
             .pointerStyle(tool?.pointer ?? .default)
     }
 
-    private var fill: Color {
+    private var pen: Color {
         switch tool {
-        case .marker?: hovering ? Theme.markTint : .clear
-        case .note?: hovering ? Theme.noteTint : .clear
-        case nil: picked ? Theme.accent.opacity(0.10) : hovering ? Theme.ink.opacity(0.045) : .clear
-        }
-    }
-
-    private var edge: Color {
-        switch tool {
-        case .marker?: hovering ? Theme.markEdge : .clear
-        case .note?: hovering ? Theme.noteEdge : .clear
-        case nil: picked ? Theme.accent.opacity(0.35) : .clear
+        case .marker?: hovering ? Theme.markPen : .clear
+        case .note?: hovering ? Theme.notePen : .clear
+        case nil: picked ? Theme.accent : hovering ? Theme.ink.opacity(0.22) : .clear
         }
     }
 }
@@ -1243,8 +1237,8 @@ private struct LineActionButton: View {
     }
 }
 
-/// While a tool is on: a band at the top of the page in the tool's color,
-/// saying what a click does, with a way to put the tool down (Esc).
+/// While a tool is on: a band at the top of the page with the tool's pen
+/// color, saying what a click does, with a way to put the tool down (Esc).
 private struct LineToolBand: View {
     let tool: LineTool
     let putDown: () -> Void
@@ -1252,6 +1246,9 @@ private struct LineToolBand: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
+                Capsule()
+                    .fill(tool == .marker ? Theme.markPen : Theme.notePen)
+                    .frame(width: 4, height: 16)
                 Image(systemName: tool == .marker ? "flag.fill" : "pencil")
                     .font(.callout)
                 Text(tool == .marker
@@ -1269,8 +1266,8 @@ private struct LineToolBand: View {
             .foregroundStyle(Theme.ink)
             .padding(.horizontal, 24)
             .padding(.vertical, 8)
-            .background(tool == .marker ? Theme.markTint : Theme.noteTint)
-            Rectangle().fill(tool == .marker ? Theme.markEdge : Theme.noteEdge).frame(height: 1)
+            .background(Theme.paper)
+            Divider()
         }
         .accessibilityElement(children: .contain)
     }

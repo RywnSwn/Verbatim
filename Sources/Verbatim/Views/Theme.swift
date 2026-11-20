@@ -24,12 +24,12 @@ enum Theme {
     static let card = dynamic(light: 0xFFFFFF, dark: 0x2D2C29)
     static let sidebarSolid = dynamic(light: 0xF1EEE7, dark: 0x252421)
 
-    /// Line tools (Ryan, 2026-11-20): a line glows in the tool's color under
-    /// the pointer, yellow for the Marker tool, soft red for the Note tool.
-    static let markTint = dynamic(light: 0xFBF0C2, dark: 0x4A3F12)
-    static let markEdge = dynamic(light: 0xE3C65A, dark: 0xA88A22)
-    static let noteTint = dynamic(light: 0xF8DEDA, dark: 0x4A2723)
-    static let noteEdge = dynamic(light: 0xD98E83, dark: 0xA85A4E)
+    /// Line tools (Ryan, 2026-11-20): the pen line in the margin next to a
+    /// line under the pointer. Yellow for the Marker tool, red for Note.
+    /// Ryan picked "margin mark" over tinted boxes ("looks AI"),
+    /// docs/design/LineLook.html.
+    static let markPen = dynamic(light: 0xE3B320, dark: 0xD6A91E)
+    static let notePen = dynamic(light: 0xC2483A, dark: 0xE07A6C)
 
     /// Search hits, and the current hit (stronger).
     static let highlight = dynamic(light: 0xFBE9A6, dark: 0x5C4B16)
