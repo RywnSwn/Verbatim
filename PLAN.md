@@ -1725,8 +1725,9 @@ Still to do (one chat, after the line tools):
 Ryan: "investigate for UX errors". The worst ones (A1 to A5) were checked
 by hand in the code. Item 1 above was only half fixed: see A4.
 
-**BRANCH: `claude/ux-round-2`. Keep working on THIS branch (Ryan asked,
-2026-11-20): start the next chat by checking it out, not a new branch.**
+**MERGED into main 2026-11-20 (Ryan: "perfect merge"), RywnSwn/Verbatim#29.
+He tried the sidebar changes on 0.1.236; the test lists below were mostly
+not run, so if something here breaks, these notes say how it works.**
 A1 to A10, B1 to B17, C1 to C11 and items 2 to 15: BUILT on that branch, not tested by Ryan, not merged. Draft pull
 request RywnSwn/Verbatim#29 (one PR for the whole round; merge only when
 Ryan asks, after testing). Next chat: A6 to A10, then B, then C, all on the
