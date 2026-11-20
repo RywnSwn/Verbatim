@@ -32,6 +32,7 @@ enum LayoutDetails {
         out.append("")
         out.append("LAUNCH (seconds after Verbatim opened): \(LaunchTimer.shared.text())")
         out.append(HitchMeter.shared.report())
+        out.append(MicReport.shared.text)
         return out.joined(separator: "\n")
     }
 
