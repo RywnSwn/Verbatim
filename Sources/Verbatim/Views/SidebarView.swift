@@ -16,6 +16,9 @@ import UniformTypeIdentifiers
 /// pointer, and shows "Moved to X. Undo" after the drop. Arrow keys, Delete
 /// and right-click work like before.
 struct SidebarView: View {
+    /// Shown as the overlay over the transcript (narrow window): no scroll
+    /// bar there (Ryan, 2026-11-20: a line down its right edge).
+    var floating = false
     @Environment(RecorderModel.self) private var model
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage(SidebarLook.key) private var sidebarLook: SidebarLook = .glass
@@ -30,22 +33,70 @@ struct SidebarView: View {
     private var drag: SidebarDrag { .shared }
     private var solid: Bool { sidebarLook == .solid || reduceTransparency }
 
+    /// Ryan (2026-11-20): recordings scrolled up under the window's red,
+    /// yellow and green dots and down under the settings row. Now the top
+    /// rows and the bottom row stay put, each with a thin line, and only the
+    /// groups scroll between them, so nothing passes under either.
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                // Inside the scroll area (not a top inset), so they sit below
-                // the window's buttons instead of under them.
                 NewRecordingButton()
-                SidebarAction(title: "Add a Voice Memo", icon: "waveform.badge.plus", shortcut: "⌘O",
+                SidebarAction(title: "Transcribe a Voice Memo", icon: "waveform.badge.plus", shortcut: "⌘O",
                               help: "Pick a Voice Memo or other recording to turn into text. Or drop one anywhere.") {
                     model.chooseFilesToImport()
                 }
                 RecentlyDeletedButton()
+            }
+            .padding(.horizontal, 8)
+            // Same room above the line as below it (to the first group's
+            // name, which has its own padding): Ryan, 2026-11-20, "not even".
+            .padding(.bottom, 12)
+            // And the same room between the window's red, yellow and green
+            // dots and New recording as between Recently deleted and the
+            // line (Ryan, 2026-11-20: 28 pt against 18). The window's top
+            // area is taller than the dots need, so the rows move up into
+            // it. Not in the overlay: there the toolbar is right above.
+            .padding(.top, floating ? 0 : -10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Divider()
+            list
+            Divider()
+            footer
+        }
+        .background {
+            if solid { Theme.sidebarSolid.ignoresSafeArea() }
+        }
+        .alert("Rename recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newTitle)
+            Button("Rename") {
+                if let r = renaming { model.rename(r.id, to: newTitle) }
+                renaming = nil
+            }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
+        // "Name this group" is in ContentView (GroupNameAlert), so it also
+        // shows when the sidebar is hidden.
+    }
 
-                Divider()
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 8)
+    /// Settings, under the list.
+    private var footer: some View {
+        HStack(alignment: .center) {
+            Text("Right-click empty space for a new group.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            GearMenu()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
 
+    /// The groups and Recents: the only part that scrolls.
+    private var list: some View {
+        ScrollViewReader { proxy in
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
                 ForEach(store.groups) { group in
                     groupSection(group)
                 }
@@ -56,6 +107,23 @@ struct SidebarView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.snappy(duration: 0.25), value: store.groups)
             .animation(.snappy(duration: 0.25), value: model.recordings.map(\.groupID))
+        }
+        // No scroll line down the side, in the window or as the overlay
+        // (Ryan, 2026-11-20). It still scrolls.
+        .scrollIndicators(.never)
+        // B17: the recording that opens (an imported memo, Put Back, a search
+        // hit, + on a folded group) is unfolded and scrolled into view.
+        .onChange(of: model.selection) { _, id in
+            guard let id, let info = model.info(id) else { return }
+            if let g = store.group(info.groupID) {
+                if g.collapsed { store.update(g.id) { $0.collapsed = false } }
+            } else if recentsCollapsed {
+                recentsCollapsed = false
+            }
+            Task { @MainActor in
+                withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(id) }
+            }
+        }
         }
         // Right-click on empty space. Rows and group names have their own menus.
         .contextMenu {
@@ -69,33 +137,6 @@ struct SidebarView: View {
         .onDeleteCommand {
             if let id = model.selection, model.canDelete(id) { model.delete(id) }
         }
-        .background {
-            if solid { Theme.sidebarSolid.ignoresSafeArea() }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack(alignment: .center) {
-                Text("Right-click empty space for a new group.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                GearMenu()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            // Solid, so recordings scrolling past don't show through the text.
-            .background(solid ? AnyShapeStyle(Theme.sidebarSolid) : AnyShapeStyle(.bar))
-        }
-        .alert("Rename recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $newTitle)
-            Button("Rename") {
-                if let r = renaming { model.rename(r.id, to: newTitle) }
-                renaming = nil
-            }
-            Button("Cancel", role: .cancel) { renaming = nil }
-        }
-        // "Name this group" is in ContentView (GroupNameAlert), so it also
-        // shows when the sidebar is hidden.
     }
 
     /// A group: bold name with its icon and +, then its recordings indented.
@@ -123,7 +164,7 @@ struct SidebarView: View {
         }
         .padding(3)
         .background { DropHighlight(on: drag.target == spot) }
-        .onDrop(of: [.verbatimRecording], delegate: SidebarDropDelegate(spot: spot, model: model, drag: drag))
+        .onDrop(of: [.verbatimRecording, .fileURL], delegate: SidebarDropDelegate(spot: spot, model: model, drag: drag))
     }
 
     private var recentsSection: some View {
@@ -144,7 +185,7 @@ struct SidebarView: View {
         }
         .padding(3)
         .background { DropHighlight(on: drag.target == .recents) }
-        .onDrop(of: [.verbatimRecording], delegate: SidebarDropDelegate(spot: .recents, model: model, drag: drag))
+        .onDrop(of: [.verbatimRecording, .fileURL], delegate: SidebarDropDelegate(spot: .recents, model: model, drag: drag))
     }
 
     private func row(_ info: RecordingInfo) -> some View {
@@ -153,8 +194,10 @@ struct SidebarView: View {
                    isOpen: info.id == model.selection && !model.showingDeleted,
                    isHeld: drag.id == info.id,
                    look: rowLook)
+            .id(info.id)
             .onTapGesture {
                 model.selection = info.id
+                model.sidebarPicks += 1
                 focused = true
             }
             .accessibilityAddTraits(.isButton)
@@ -202,8 +245,7 @@ struct SidebarView: View {
     }
 
     private func newGroup() {
-        let group = store.add()
-        model.renameGroupRequest = group.id
+        model.startNewGroup()
     }
 
     @ViewBuilder private func recordingMenu(_ info: RecordingInfo) -> some View {
@@ -214,18 +256,14 @@ struct SidebarView: View {
         Button("Change Icon…") { iconFor = info.id }
         Menu("Move to Group") {
             ForEach(store.groups) { group in
-                Button(group.name) { model.moveRecording(info.id, to: group.id) }
+                Button(group.name) { model.moveWithUndo(info.id, to: group.id) }
                     .disabled(info.groupID == group.id)
             }
             if !store.groups.isEmpty { Divider() }
-            Button("Recents (no group)") { model.moveRecording(info.id, to: nil) }
+            Button("Recents (no group)") { model.moveWithUndo(info.id, to: nil) }
                 .disabled(store.group(info.groupID) == nil)
             Divider()
-            Button("New Group…") {
-                let group = store.add()
-                model.moveRecording(info.id, to: group.id)
-                model.renameGroupRequest = group.id
-            }
+            Button("New Group…") { model.startNewGroup(moving: info.id) }
         }
         Button("Show in Finder") { model.showInFinder(info) }
         Divider()
@@ -343,12 +381,19 @@ struct SidebarDropDelegate: DropDelegate {
     }
 
     nonisolated func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.verbatimRecording])
+        info.hasItemsConforming(to: [.verbatimRecording, .fileURL])
+    }
+
+    /// A Voice Memo (or other file) from Finder, not one of our recordings
+    /// (B16: memos couldn't be dropped on a group).
+    nonisolated private func isFile(_ info: DropInfo) -> Bool {
+        !info.hasItemsConforming(to: [.verbatimRecording]) && info.hasItemsConforming(to: [.fileURL])
     }
 
     nonisolated func dropEntered(info: DropInfo) {
+        let file = isFile(info)
         MainActor.assumeIsolated {
-            guard isNewPlace() else { return }
+            guard file || isNewPlace() else { return }
             drag.target = spot
             if let id = spot.groupID, GroupStore.shared.group(id)?.collapsed == true {
                 drag.springLoad(id)
@@ -357,7 +402,12 @@ struct SidebarDropDelegate: DropDelegate {
     }
 
     nonisolated func dropUpdated(info: DropInfo) -> DropProposal? {
-        MainActor.assumeIsolated {
+        let file = isFile(info)
+        return MainActor.assumeIsolated {
+            if file {
+                if drag.target != spot { drag.target = spot }
+                return DropProposal(operation: .copy)
+            }
             let fresh = isNewPlace()
             if fresh, drag.target != spot { drag.target = spot }
             return DropProposal(operation: fresh ? .move : .forbidden)
@@ -374,7 +424,20 @@ struct SidebarDropDelegate: DropDelegate {
     }
 
     nonisolated func performDrop(info: DropInfo) -> Bool {
-        MainActor.assumeIsolated {
+        if isFile(info) {
+            let providers = info.itemProviders(for: [.fileURL])
+            let group = spot.groupID
+            MainActor.assumeIsolated { drag.end() }
+            Task { @MainActor in
+                var urls: [URL] = []
+                for p in providers {
+                    if let url = await Self.url(from: p) { urls.append(url) }
+                }
+                if !urls.isEmpty { RecorderModel.shared.importAudio(urls, into: group) }
+            }
+            return true
+        }
+        return MainActor.assumeIsolated {
             defer { drag.end() }
             guard isNewPlace(), let id = drag.id ?? drag.lastID, let rec = model.info(id) else { return false }
             let before = GroupStore.shared.group(rec.groupID)?.id
@@ -388,6 +451,13 @@ struct SidebarDropDelegate: DropDelegate {
                 withAnimation(.snappy(duration: 0.25)) { model.moveRecording(id, to: before) }
             }
             return true
+        }
+    }
+
+    /// The file a Finder drop points at.
+    @MainActor private static func url(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { done in
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in done.resume(returning: url) }
         }
     }
 }
@@ -415,15 +485,18 @@ struct GroupHeader: View {
     let group: RecordingGroup
     var isTarget = false
     @State private var picking = false
+    @State private var iconBefore: (icon: String?, color: IconColor)?
 
     private var store: GroupStore { .shared }
 
     var body: some View {
         HStack(spacing: 6) {
             Button {
+                iconBefore = (group.icon, group.color)
                 picking = true
             } label: {
                 ItemIcon(name: group.icon, color: group.color, size: 12)
+                    .frame(minWidth: 24, minHeight: 24) // item 9: easier to hit
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -435,6 +508,12 @@ struct GroupHeader: View {
                         $0.icon = icon
                         $0.color = color
                     }
+                }
+            }
+            .onChange(of: picking) { _, open in
+                if !open, let before = iconBefore {
+                    iconBefore = nil
+                    model.groupIconChanged(group.id, from: before)
                 }
             }
 
@@ -469,7 +548,7 @@ struct GroupHeader: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 11, weight: .semibold))
-                        .frame(width: 20, height: 20)
+                        .frame(width: 24, height: 24) // item 9: easier to hit
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)

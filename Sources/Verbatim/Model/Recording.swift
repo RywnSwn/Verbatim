@@ -28,6 +28,10 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     var events: [Event] = []
     /// File name of the Voice Memo (or other file) this was imported from.
     var importedFrom: String?
+    /// Full path of that file, only while its sound is being copied in. Still
+    /// set at launch = Verbatim quit mid-import, so the copy starts over
+    /// (UX round 2, A6).
+    var importingPath: String?
     /// Where the last copy ended (seconds into the audio), for "Copy new since last copy".
     var copiedUpTo: Double?
     /// Set when Ryan deleted only the audio (right-click > Delete Audio Only).
@@ -51,6 +55,44 @@ struct RecordingInfo: Codable, Identifiable, Hashable {
     var duration: TimeInterval { Double(samples) / Double(sampleRate) }
     var isActive: Bool { state != .stopped }
     var hasAudio: Bool { audioDeletedAt == nil }
+
+    /// A pause or a sleep, for the divider in the transcript (spec: "Paused
+    /// 10:12 to 10:20", "Mac was asleep 10:42 to 10:45"). `second`: where in
+    /// the audio it happened.
+    struct Break: Hashable {
+        var second: Double
+        var text: String
+        /// Which break this is, for a row id that's never shared.
+        var index = 0
+    }
+
+    var breaks: [Break] {
+        let t = Date.FormatStyle(date: .omitted, time: .shortened)
+        var out: [Break] = []
+        var open: Event?
+        for e in events {
+            switch e.kind {
+            case .paused, .asleep:
+                open = e
+            case .resumed, .woke:
+                guard let o = open else { continue }
+                open = nil
+                // A quick pause (under 30 s) isn't worth a line across the page.
+                if o.kind == .paused, e.at.timeIntervalSince(o.at) < 30 { continue }
+                let what = o.kind == .asleep ? "Mac was asleep" : "Paused"
+                out.append(Break(second: Double(o.sample) / Double(sampleRate),
+                                 text: "\(what) \(o.at.formatted(t)) to \(e.at.formatted(t))", index: out.count))
+            case .stopped, .recovered:
+                open = nil
+            default:
+                break
+            }
+        }
+        if let o = open, o.kind == .paused, state == .paused {
+            out.append(Break(second: Double(o.sample) / Double(sampleRate), text: "Paused since \(o.at.formatted(t))", index: out.count))
+        }
+        return out
+    }
 
     /// Clock time for a point in the audio, skipping over pauses and sleep.
     func wallTime(atSecond seconds: Double) -> Date {

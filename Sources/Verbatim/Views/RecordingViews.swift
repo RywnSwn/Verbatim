@@ -52,6 +52,11 @@ struct RecordingNowView: View {
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(info.groupedStartedText)
         .toolbar {
+            // Copy all first, so it's the last to go into "»" (A5).
+            ToolbarItem(placement: .primaryAction) {
+                CopyButton(id: info.id, hasLines: !(checked + lines).isEmpty)
+            }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .primaryAction) { LineToolToggle(tool: .marker) }
             ToolbarItem(placement: .primaryAction) { LineToolToggle(tool: .note) }
             ToolbarItem(placement: .primaryAction) {
@@ -65,10 +70,6 @@ struct RecordingNowView: View {
                 }
                 .help("A small window that floats on top of other apps (⇧⌘M)")
             }
-            ToolbarItem(placement: .primaryAction) {
-                CopyButton(id: info.id, hasLines: !(checked + lines).isEmpty)
-            }
-            .sharedBackgroundVisibility(.hidden)
         }
         .transcriptSearch()
     }
@@ -90,10 +91,16 @@ struct LiveStatusLine: View {
     var body: some View {
         if let text = message {
             VStack(spacing: 0) {
-                HStack {
+                HStack(spacing: 12) {
                     Text(text)
                         .font(.callout)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let fix {
+                        Button(fix.label, action: fix.run)
+                            .buttonStyle(.link)
+                            .font(.callout.weight(.medium))
+                            .fixedSize()
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 24)
@@ -120,6 +127,20 @@ struct LiveStatusLine: View {
         default:
             return nil
         }
+    }
+
+    /// Live text is off for a reason you can fix right here (B12).
+    private var fix: (label: String, run: () -> Void)? {
+        guard !paused, case .off(let reason) = live.status else { return nil }
+        if reason.hasPrefix("Speech Recognition") {
+            return ("Open Speech Recognition settings", {
+                if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") {
+                    NSWorkspace.shared.open(u)
+                }
+            })
+        }
+        if case .paused = live.modelState { return ("Resume download", { live.startDownload() }) }
+        return nil
     }
 
     private var percentText: String {
@@ -170,15 +191,15 @@ struct PastRecordingView: View {
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(subtitle)
         .toolbar {
-            ToolbarItemGroup {
-                if !model.isBusy {
-                    Button {
-                        model.showNewRecording()
-                    } label: {
-                        Label("New recording", systemImage: "plus")
-                    }
-                    .help("New recording (⌘N)")
-                }
+            // Copy all first: a narrow toolbar hides items from the right
+            // end into "»", and Copy all is the one Ryan uses most (UX round
+            // 2, A5). New recording is not here: it's at the top of the
+            // sidebar and on ⌘N, and a bare + looked like "add a line".
+            ToolbarItem(placement: .primaryAction) {
+                CopyButton(id: info.id, hasLines: !(checked + liveLines).isEmpty)
+            }
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     if playback.isShowing(info.id) { playback.toggle() } else { model.playAudio(info.id) }
                 } label: {
@@ -193,13 +214,13 @@ struct PastRecordingView: View {
                 Menu {
                     Button("Show in Finder") { model.showInFinder(info) }
                     Divider()
-                    Button("Transcribe again") { transcriber.redo(info.id) }
-                        .disabled(!info.hasAudio || transcriber.active?.id == info.id
-                            || transcriber.importing.contains(info.id) || transcriber.isGrowing(info.id))
-                    Button("Find speakers again") { transcriber.findSpeakers(info.id) }
-                        .disabled(!info.hasAudio || !speakerModel.isReady || liveLines.isEmpty
-                            || transcriber.active?.id == info.id || transcriber.isFindingSpeakers(info.id)
-                            || transcriber.isGrowing(info.id) || transcriber.isUnfinished(info.id))
+                    // Greyed items say why (item 15).
+                    let redoBlocker = model.transcribeAgainBlocker(info)
+                    Button(redoBlocker.map { "Transcribe again (\($0))" } ?? "Transcribe again") { model.transcribeAgain(info.id) }
+                        .disabled(redoBlocker != nil)
+                    let speakersBlocker = model.findSpeakersBlocker(info, hasLines: !liveLines.isEmpty)
+                    Button(speakersBlocker.map { "Find speakers again (\($0))" } ?? "Find speakers again") { model.findSpeakersAgain(info.id) }
+                        .disabled(speakersBlocker != nil)
                     Divider()
                     Button(SidebarView.deleteAudioTitle(info, blocker: model.audioDeleteBlocker(info.id))) {
                         model.deleteAudio(info.id)
@@ -211,10 +232,6 @@ struct PastRecordingView: View {
                 }
                 .help("Show in Finder, Transcribe again, Find speakers again, Delete audio only, Delete")
             }
-            ToolbarItem(placement: .primaryAction) {
-                CopyButton(id: info.id, hasLines: !(checked + liveLines).isEmpty)
-            }
-            .sharedBackgroundVisibility(.hidden)
         }
         .transcriptSearch()
     }
@@ -256,6 +273,7 @@ struct PastRecordingView: View {
 struct TranscriptStatusLine: View {
     @Environment(Transcriber.self) private var transcriber
     @Environment(LiveTranscriber.self) private var live
+    @Environment(RecorderModel.self) private var model
     let info: RecordingInfo
 
     var body: some View {
@@ -274,7 +292,13 @@ struct TranscriptStatusLine: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 10)
-                if let job = transcriber.active, job.id == info.id, job.totalSeconds > 0 {
+                if let copied = transcriber.importProgress[info.id] {
+                    ProgressView(value: copied)
+                        .progressViewStyle(.linear)
+                        .controlSize(.small)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 8)
+                } else if let job = transcriber.active, job.id == info.id, job.totalSeconds > 0 {
                     ProgressView(value: min(job.doneSeconds / job.totalSeconds, 1))
                         .progressViewStyle(.linear)
                         .controlSize(.small)
@@ -292,7 +316,9 @@ struct TranscriptStatusLine: View {
         // Just stopped (Undo Stop still possible).
         if transcriber.isGrowing(id), transcriber.errors[id] == nil { return nil }
         if transcriber.importing.contains(id) {
-            return ("Importing \(info.importedFrom ?? info.title).\(original)", nil, nil)
+            let percent = Int((transcriber.importProgress[id] ?? 0) * 100)
+            return ("Importing \(info.importedFrom ?? info.title), \(percent)%. Text comes next.\(original)",
+                    "Cancel", { model.cancelImport(id) })
         }
         if let error = transcriber.errors[id] {
             if !info.hasAudio { return (error, nil, nil) }
@@ -314,8 +340,18 @@ struct TranscriptStatusLine: View {
         }
         if transcriber.isQueued(id) {
             switch live.modelState {
-            case .downloading(let f, _), .paused(let f), .failed(let f):
-                return ("Waiting for the speech model download to finish (\(Int(f * 100))%).", nil, nil)
+            // A7: a paused or stopped download never finishes by waiting, so
+            // the fix is right here.
+            case .downloading(let f, let left):
+                var text = "Starts when the speech model download is done (\(Int(f * 100))%"
+                if let left { text += ", \(Transcriber.leftText(left))" }
+                return (text + ").", nil, nil)
+            case .paused(let f):
+                return ("Needs the speech model. Its download is paused at \(Int(f * 100))%.",
+                        "Resume download", { live.startDownload() })
+            case .failed(let f):
+                return ("Needs the speech model. Its download stopped at \(Int(f * 100))%, probably the internet. Trying again by itself.",
+                        "Try now", { live.startDownload() })
             case .preparing:
                 return ("Getting the speech model ready. The first time takes a few minutes.", nil, nil)
             case .ready:
@@ -328,10 +364,16 @@ struct TranscriptStatusLine: View {
         let text = live.texts[id]
         if let pass = text?.pass, !pass.finished {
             let minutes = Int(pass.doneUpTo / 60)
-            if !info.hasAudio {
-                return ("Transcribed the first \(minutes) min. The audio was deleted, so the rest can't be done.", nil, nil)
+            // C3: "Transcribed the first 0 min" when nothing had run.
+            if minutes == 0, text?.lines.isEmpty ?? true {
+                if !info.hasAudio { return ("Not transcribed. The audio was deleted, so it can't be done now.", nil, nil) }
+                return ("Not transcribed yet.", "Transcribe", { transcriber.enqueue(id) })
             }
-            return ("Transcribed the first \(minutes) min.", "Continue", { transcriber.enqueue(id) })
+            let done = minutes == 0 ? "under 1 min" : "the first \(minutes) min"
+            if !info.hasAudio {
+                return ("Transcribed \(done). The audio was deleted, so the rest can't be done.", nil, nil)
+            }
+            return ("Transcribed \(done).", "Continue", { transcriber.enqueue(id) })
         }
         // An old Whisper transcript that stopped halfway, with no text after it.
         if let t = transcriber.transcripts[id], !t.finished, text?.lines.isEmpty ?? true {
@@ -344,7 +386,7 @@ struct TranscriptStatusLine: View {
         // Made with the Mac's backup engine before Parakeet was here.
         if text?.pass == nil, text?.madeWithBackupEngine == true, info.hasAudio, live.isModelReady {
             return ("Made with your Mac's built-in engine. Parakeet is more accurate, and your edits are kept.",
-                    "Redo with Parakeet", { transcriber.redo(id) })
+                    "Redo with Parakeet", { model.transcribeAgain(id) })
         }
         return nil
     }
@@ -363,6 +405,20 @@ struct MicBlockedView: View {
             Button("Open Microphone settings") { model.openMicSettings() }
                 .buttonStyle(.inkLarge)
                 .padding(.top, 6)
+            // C4: without the mic, Voice Memos still work, and the speech
+            // model download still matters. Both were hidden here.
+            HStack(spacing: 6) {
+                Text("Voice Memos still work without the mic.")
+                    .foregroundStyle(.secondary)
+                Button("Transcribe a Voice Memo…") { model.chooseFilesToImport() }
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+            }
+            .font(.callout)
+            .padding(.top, 18)
+            PageModelStatus()
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: 420)
         }
         .multilineTextAlignment(.center)
         .padding(40)

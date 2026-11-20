@@ -45,7 +45,14 @@ enum ClaudeConnector {
         guard let config = try? readConfig(),
               let servers = config["mcpServers"] as? [String: Any],
               let entry = servers[name] as? [String: Any] else { return .notConnected }
-        return entry["command"] as? String == command ? .connected : .moved
+        guard let path = entry["command"] as? String else { return .moved }
+        if path == command { return .connected }
+        // C8: a second copy (a test build) is open, but the copy Claude uses
+        // is still there and still works: that's connected, not moved.
+        if path.hasSuffix(".app/Contents/MacOS/Verbatim"), FileManager.default.isExecutableFile(atPath: path) {
+            return .connected
+        }
+        return .moved
     }
 
     static func connect() throws {

@@ -8,6 +8,8 @@
 	<string>Verbatim</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.rywnswn.verbatim</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
 	<string>Verbatim</string>
 	<key>CFBundlePackageType</key>

@@ -50,7 +50,7 @@ struct VerbatimApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("New Recording") { model.showNewRecording() }
                     .keyboardShortcut("n", modifiers: .command)
-                Button("Transcribe a Recording…") { model.chooseFilesToImport() }
+                Button("Transcribe a Voice Memo…") { model.chooseFilesToImport() }
                     .keyboardShortcut("o", modifiers: .command)
             }
             // ⌘Z: typing in a box undoes the typing; otherwise the last
@@ -102,7 +102,7 @@ struct VerbatimApp: App {
                 .disabled(!model.hasShownLines)
             }
             CommandGroup(replacing: .help) {
-                Button("Copy Layout Details") { LayoutDetails.copy() }
+                Button("Copy Details for a Bug Report") { LayoutDetails.copy() }
                     .keyboardShortcut("l", modifiers: [.control, .command])
             }
             CommandMenu("Recording") {
@@ -193,7 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.addButton(withTitle: "Keep Recording")
             alert.addButton(withTitle: "Stop and Quit")
             if alert.runModal() == .alertSecondButtonReturn {
-                model.stop()
+                model.stopForQuit()
                 quitWhenSaved(sender)
                 return .terminateLater
             }
@@ -215,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Logout or restart: save without asking.
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
+            if Uninstaller.removing { return }
             if RecorderModel.shared.isBusy { RecorderModel.shared.stop() }
             LiveTranscriber.shared.saveNow()
         }

@@ -43,6 +43,18 @@ final class AutoName {
         }
     }
 
+    /// This Mac will never run it (Settings greys the switch out).
+    static var cannotEverRun: Bool {
+        if case .unavailable(.deviceNotEligible) = SystemLanguageModel.default.availability { return true }
+        return false
+    }
+
+    /// Apple Intelligence is off in System Settings (Settings offers a button there).
+    static var needsTurningOn: Bool {
+        if case .unavailable(.appleIntelligenceNotEnabled) = SystemLanguageModel.default.availability { return true }
+        return false
+    }
+
     /// At launch: anything that stopped before it got a name.
     func considerAll(_ recordings: [RecordingInfo]) {
         for r in recordings where r.autoTitle == true && !r.isActive { consider(r.id) }

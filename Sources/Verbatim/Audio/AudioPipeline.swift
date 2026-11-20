@@ -55,6 +55,25 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         }
     }
 
+    /// A write failed (disk full) and nothing is saved until this is cleared.
+    var hasWriteError: Bool { sampleQueue.sync { failed } }
+
+    /// Before Resume after a failed write: put the file back to its last
+    /// good sample and save again. False if the file can't be fixed.
+    /// (UX round 2, A3: Resume used to look like recording but save nothing.)
+    func clearWriteError() -> Bool {
+        sampleQueue.sync {
+            guard failed else { return true }
+            do {
+                try writer?.recoverAfterError()
+                failed = false
+                return true
+            } catch {
+                return false
+            }
+        }
+    }
+
     /// Stops capture, closes the file, returns the number of samples saved.
     @discardableResult
     func detach() -> Int64 {

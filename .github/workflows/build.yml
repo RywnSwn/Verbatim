@@ -25,6 +25,19 @@ jobs:
           xcode-select -p
           swift --version
 
+      - name: Swift version, for the cache key
+        id: swift
+        run: echo "v=$(swift --version 2>&1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      # FluidAudio takes about 3 of the 4.5 build minutes to download and
+      # compile, and it only changes when Package.swift does: keep the built
+      # copy between builds (shared with the other workflow, same key).
+      - name: Reuse the built FluidAudio
+        uses: actions/cache@v4.3.0
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-${{ steps.swift.outputs.v }}-${{ hashFiles('Package.swift') }}
+
       - name: Import signing certificate
         if: env.HAS_SIGNING_CERT == 'true'
         env:

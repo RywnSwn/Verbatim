@@ -25,6 +25,23 @@ final class Updater {
     private(set) var lastChecked: Date?
     /// What went wrong last time, in plain words. nil = last check worked.
     private(set) var problem: String?
+    /// While downloading: how much is here and how big it is, in bytes
+    /// (total 0 = not known yet). B10: there was no progress at all.
+    private(set) var downloaded: (done: Int64, total: Int64)?
+
+    /// "42% (17 of 40 MB)", or "" before the size is known.
+    var progressText: String {
+        guard let d = downloaded, d.total > 0 else { return "" }
+        let mb = { (b: Int64) in Int((Double(b) / 1_000_000).rounded()) }
+        return "\(Int(Double(d.done) / Double(d.total) * 100))% (\(mb(d.done)) of \(mb(d.total)) MB)"
+    }
+
+    var isWorking: Bool {
+        switch state {
+        case .checking, .downloading: return true
+        case .idle, .ready: return false
+        }
+    }
 
     /// A failure with a message Ryan can act on.
     private struct Problem: Error {
@@ -32,6 +49,10 @@ final class Updater {
     }
 
     @ObservationIgnored private var staged: URL?
+    /// Build number of `staged`; a newer one replaces it.
+    @ObservationIgnored private var stagedBuild = 0
+    /// A check is running (the state stays .ready while it looks for a newer one).
+    @ObservationIgnored private var looking = false
     @ObservationIgnored private var loop: Task<Void, Never>?
 
     private init() {
@@ -65,8 +86,10 @@ final class Updater {
             RecorderModel.shared.show("Updated to version \(Self.currentVersion).")
         }
         UserDefaults.standard.set(Self.currentBuild, forKey: key)
-        // Clean up the downloaded copy of the version now running.
+        // Clean up the downloaded copy of the version now running, and any
+        // half download of a version that isn't newer anymore.
         try? FileManager.default.removeItem(at: Self.updatesFolder.appending(path: String(Self.currentBuild)))
+        Self.removePartials { $0 <= Self.currentBuild }
     }
 
     func startAutomaticChecks() {
@@ -78,7 +101,9 @@ final class Updater {
                 if UserDefaults.standard.bool(forKey: Self.autoKey) {
                     await check(userInitiated: false)
                 }
-                try? await Task.sleep(for: Self.checkEvery)
+                // After a failure (no internet, a broken download) try again
+                // in 30 minutes, not 4 hours (B10).
+                try? await Task.sleep(for: problem == nil ? Self.checkEvery : .seconds(30 * 60))
             }
         }
     }
@@ -86,35 +111,64 @@ final class Updater {
     func check(userInitiated: Bool) async {
         switch state {
         case .checking, .downloading: return
-        case .ready(let v):
-            if userInitiated { RecorderModel.shared.show("Version \(v) is downloaded and ready to install.") }
-            return
-        case .idle: break
+        case .ready, .idle: break
         }
-        state = .checking
-        defer { lastChecked = Date() }
+        // B10: a downloaded update stays ready while it looks for a newer one
+        // (it used to stop looking until a restart).
+        guard !looking else { return }
+        looking = true
+        let waiting = state
+        if case .idle = state { state = .checking }
+        defer {
+            lastChecked = Date()
+            looking = false
+        }
 
         do {
-            guard let release = try await newestRelease() else {
-                state = .idle
+            guard let release = try await newestRelease(), release.build > stagedBuild else {
+                if case .ready(let v) = waiting {
+                    state = waiting
+                    if userInitiated { RecorderModel.shared.show("Version \(v) is downloaded and ready to install.") }
+                } else {
+                    state = .idle
+                    if userInitiated { RecorderModel.shared.show("You have the newest version (\(Self.currentVersion)).") }
+                }
                 problem = nil
-                if userInitiated { RecorderModel.shared.show("You have the newest version (\(Self.currentVersion)).") }
+                UserDefaults.standard.removeObject(forKey: Self.failingSinceKey)
                 return
             }
             state = .downloading(version: release.version)
             if userInitiated { RecorderModel.shared.show("Downloading version \(release.version)…") }
+            let older = staged
             staged = try await download(release)
+            stagedBuild = release.build
+            // The older download isn't needed anymore.
+            if let older { try? FileManager.default.removeItem(at: older.deletingLastPathComponent()) }
             problem = nil
+            UserDefaults.standard.removeObject(forKey: Self.failingSinceKey)
             state = .ready(version: release.version)
         } catch {
-            state = .idle
+            // The update already downloaded is still good.
+            if case .ready = waiting, staged != nil { state = waiting } else { state = .idle }
             let text = (error as? Problem)?.text
                 ?? "Couldn't reach GitHub. Check the internet and try again."
             problem = text
-            // Say it even when the check ran by itself, so updates never fail silently.
-            RecorderModel.shared.show("Update didn't work: \(text)")
+            // B1: a check that ran by itself (offline in class, every 4 hours)
+            // took over the bottom bar for the whole class. Now it's in
+            // Settings > Updates, and only says so out loud after 3 days of
+            // failing, when not recording, so updates still never fail silently.
+            let defaults = UserDefaults.standard
+            let since = defaults.object(forKey: Self.failingSinceKey) as? Date ?? Date()
+            defaults.set(since, forKey: Self.failingSinceKey)
+            let longTime = Date().timeIntervalSince(since) > 3 * 24 * 3600
+            if userInitiated || (longTime && !RecorderModel.shared.isBusy) {
+                RecorderModel.shared.show("Update didn't work: \(text)")
+            }
         }
     }
+
+    /// When automatic checks started failing (cleared by one that works).
+    private static let failingSinceKey = "updateFailingSince"
 
     func installAndRestart() {
         guard case .ready = state, let newApp = staged, !RecorderModel.shared.isBusy, installProblem == nil else { return }
@@ -176,6 +230,62 @@ final class Updater {
         return url
     }
 
+    /// What a stopped download had so far (URLSession's resume data), so the
+    /// next try picks up from there instead of starting over (B10).
+    private static func partialURL(_ build: Int) -> URL {
+        updatesFolder.appending(path: "\(build).partial")
+    }
+
+    private static func removePartials(where unwanted: (Int) -> Bool) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: updatesFolder.path)) ?? []
+        for name in names where name.hasSuffix(".partial") {
+            if let build = Int(name.dropLast(".partial".count)), unwanted(build) {
+                try? FileManager.default.removeItem(at: updatesFolder.appending(path: name))
+            }
+        }
+    }
+
+    /// Gets the zip into `zip`, with progress. If it stops halfway, what it
+    /// had is kept for next time.
+    private func fetch(_ url: URL, to zip: URL, build: Int) async throws {
+        let partial = Self.partialURL(build)
+        var resume = try? Data(contentsOf: partial)
+        try? FileManager.default.removeItem(at: partial)
+        // Half downloads of other versions aren't needed anymore.
+        Self.removePartials { $0 != build }
+        downloaded = (0, 0)
+        defer { downloaded = nil }
+        while true {
+            let job = ZipDownload(to: zip) { done, total in
+                Task { @MainActor in
+                    let me = Updater.shared
+                    if me.downloaded != nil { me.downloaded = (done, total) }
+                }
+            }
+            do {
+                try await job.run(from: url, resume: resume)
+                return
+            } catch let stopped as ZipDownload.Stopped {
+                if let data = stopped.resume {
+                    try? data.write(to: partial, options: .atomic)
+                    let sofar = progressText.isEmpty ? "" : " at \(progressText.prefix { $0 != " " })"
+                    let when = UserDefaults.standard.bool(forKey: Self.autoKey) ? "in 30 minutes, or press Check Now" : "when you press Check Now"
+                    throw Problem(text: "The download stopped\(sofar). It carries on from there \(when).")
+                }
+                // What was kept couldn't be used (the file on GitHub changed):
+                // start over once, from the beginning.
+                if resume != nil {
+                    resume = nil
+                    downloaded = (0, 0)
+                    continue
+                }
+                throw stopped.error
+            } catch let refused as ZipDownload.Refused {
+                throw Problem(text: "GitHub answered with error \(refused.code) for the download. Try again later.")
+            }
+        }
+    }
+
     /// Downloads and unzips into Updates/<build>/, then checks it's really Verbatim.
     private func download(_ release: Release) async throws -> URL {
         guard let zipURL = release.zip else { throw URLError(.fileDoesNotExist) }
@@ -183,9 +293,8 @@ final class Updater {
         try? FileManager.default.removeItem(at: folder)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
-        let (tempZip, _) = try await URLSession.shared.download(from: zipURL)
         let zip = folder.appending(path: "Verbatim.zip")
-        try FileManager.default.moveItem(at: tempZip, to: zip)
+        try await fetch(zipURL, to: zip, build: release.build)
 
         let app = folder.appending(path: "Verbatim.app")
         let ok = await Task.detached {
@@ -252,4 +361,102 @@ final class Updater {
     xattr -dr com.apple.quarantine "$OLD" 2>/dev/null
     open "$OLD"
     """
+}
+
+/// One update download with progress. If the internet drops (or the Mac
+/// sleeps), it hands back what it had so the next try carries on (B10: it
+/// used to start over from nothing, with no progress shown).
+private final class ZipDownload: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    /// Stopped halfway. `resume` is what URLSession needs to carry on, if it gave any.
+    struct Stopped: Error {
+        let resume: Data?
+        let error: Error
+    }
+
+    /// GitHub said no (404, 500…).
+    struct Refused: Error {
+        let code: Int
+    }
+
+    private let destination: URL
+    private let progress: @Sendable (Int64, Int64) -> Void
+    private let queue: OperationQueue
+    // Only touched on `queue` (one at a time).
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var finishError: Error?
+    private var finished = false
+    private var lastPercent = -1
+
+    init(to destination: URL, progress: @escaping @Sendable (Int64, Int64) -> Void) {
+        self.destination = destination
+        self.progress = progress
+        queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        super.init()
+    }
+
+    func run(from url: URL, resume: Data?) async throws {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 6 * 3600
+        // The session holds on to its delegate until it's invalidated.
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: queue)
+        defer { session.finishTasksAndInvalidate() }
+        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+            queue.addOperation {
+                self.continuation = c
+                let task = resume.map { session.downloadTask(withResumeData: $0) }
+                    ?? session.downloadTask(with: url)
+                task.resume()
+            }
+        }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
+                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
+                    totalBytesExpectedToWrite: Int64) {
+        let total = max(totalBytesExpectedToWrite, 0)
+        // Tell the window once per whole percent, not for every piece.
+        let percent = total > 0 ? Int(totalBytesWritten * 100 / total) : -1
+        guard percent != lastPercent else { return }
+        lastPercent = percent
+        progress(totalBytesWritten, total)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
+                    didResumeAtOffset fileOffset: Int64, expectedTotalBytes: Int64) {
+        progress(fileOffset, max(expectedTotalBytes, 0))
+    }
+
+    /// The file is deleted as soon as this returns, so it's moved right here.
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
+                    didFinishDownloadingTo location: URL) {
+        let code = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 200
+        guard code == 200 else {
+            finishError = Refused(code: code)
+            return
+        }
+        do {
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: location, to: destination)
+            finished = true
+        } catch {
+            finishError = error
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let c = continuation else { return }
+        continuation = nil
+        if let error {
+            let resume = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+            c.resume(throwing: Stopped(resume: resume, error: error))
+        } else if let finishError {
+            c.resume(throwing: finishError)
+        } else if finished {
+            c.resume()
+        } else {
+            c.resume(throwing: URLError(.cannotWriteToFile))
+        }
+    }
 }

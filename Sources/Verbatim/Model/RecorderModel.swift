@@ -13,16 +13,23 @@ final class RecorderModel {
 
     /// What the status spot in the bottom bar says. `action` adds a text link.
     struct Status: Equatable {
-        enum Action { case stopRecording, resume, undoDelete, undoLine, showFile, undoAudioDelete, changeVoice }
+        enum Action { case stopRecording, resume, undoDelete, undoLine, showFile, undoAudioDelete, changeVoice, openMicSettings }
         var text: String
         var action: Action?
         var id = UUID()
+        /// True while it stays true (battery low, chosen mic missing, quiet,
+        /// disk almost full, paused for a problem). A short message only
+        /// covers it for a moment; then it comes back (B1).
+        var standing = false
     }
 
     /// Shown for 10 s after Stop, with Undo Stop.
     struct StoppedNote: Equatable {
         var recordingID: UUID
         var text: String
+        /// `undoSerial` when it stopped: ⌘Z does Undo Stop only if nothing
+        /// with its own Undo happened since (UX round 2, A4).
+        var serial = 0
     }
 
     static let barCount = 40
@@ -77,7 +84,30 @@ final class RecorderModel {
     /// `elapsed`): the menu bar item lives outside the app's own window, so
     /// every change is a round trip to macOS.
     private(set) var menuClock = "00:00"
-    private(set) var status: Status?
+    private(set) var status: Status? {
+        didSet {
+            guard status?.id != oldValue?.id else { return }
+            if status?.standing == true {
+                warning = nil
+                return
+            }
+            // A short message pushed a warning aside: keep it for later.
+            if let old = oldValue, old.standing, status != nil { warning = old }
+            // The short message is gone: the warning comes back.
+            if status == nil, isBusy, let w = warning {
+                warning = nil
+                status = w
+            }
+        }
+    }
+    /// A standing warning covered by a short message (see `Status.standing`).
+    @ObservationIgnored private var warning: Status?
+
+    /// The warning is no longer true: gone from view and from memory.
+    private func clearStanding(_ match: (Status) -> Bool) {
+        if let w = warning, match(w) { warning = nil }
+        if let s = status, match(s) { status = nil }
+    }
     /// Recordings whose last change couldn't be saved (see `persist`).
     @ObservationIgnored private var unsaved: Set<UUID> = []
     private(set) var stoppedNote: StoppedNote?
@@ -86,6 +116,8 @@ final class RecorderModel {
         var info: RecordingInfo
         var trashURL: URL
         var id = UUID()
+        /// Its step on the ⌘Z list, taken off when the Undo link is used.
+        var step: UUID?
     }
 
     private(set) var deletedNote: DeletedNote?
@@ -123,6 +155,11 @@ final class RecorderModel {
     var showCommandMenu = false
     /// A group to rename in the sidebar (a new one gets named right away).
     var renameGroupRequest: UUID?
+    /// Goes up on every click on a sidebar recording, even the one already
+    /// open, so the floating sidebar closes then too (C5).
+    var sidebarPicks = 0
+    /// Takes back a group just made by New Group… if its name box is cancelled.
+    @ObservationIgnored var newGroupCancel: (() -> Void)?
     private(set) var micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
     private(set) var micName = "MacBook mic"
 
@@ -132,16 +169,40 @@ final class RecorderModel {
     @ObservationIgnored private var lastSave = Date.distantPast
     @ObservationIgnored private var lastLoud = Date()
     @ObservationIgnored private var quietWarned = false
+    /// Asks "Still paused?" after `pausedAskMinutes` (A9).
+    @ObservationIgnored private var pausedCheck: Task<Void, Never>?
+    static let pausedAskMinutes = 15
     @ObservationIgnored private var lastBatteryCheck = Date.distantPast
     @ObservationIgnored private var batteryWarned = false
+    /// "10 minutes left" was said for this recording.
+    @ObservationIgnored private var limitWarned = false
     @ObservationIgnored private var asleepSince: Date?
     @ObservationIgnored private var restartedAfterError = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     /// Every change with Undo (line edits, deletes, markers, notes, speakers,
     /// moves), newest last. ⌘Z takes them back one by one, also after the
     /// Undo link in the bottom bar has gone (Ryan, 2026-11-19).
-    @ObservationIgnored private var undoStack: [(text: String, run: () -> Void)] = []
+    ///
+    /// Each step knows its recording (UX round 2, A4): ⌘Z only undoes steps
+    /// of the recording on screen (or the one recording now), and steps
+    /// with no recording (group delete, moves, recording deletes). A step
+    /// whose recording is in Recently deleted waits until it's put back.
+    @ObservationIgnored private var undoStack: [UndoStep] = []
+    /// Goes up with every new step, so Undo Stop knows if something newer came.
+    @ObservationIgnored private var undoSerial = 0
+
+    private struct UndoStep {
+        var id = UUID()
+        var text: String
+        var recording: UUID?
+        /// A recording delete: the recording it puts back. Only undoable
+        /// while that recording is still in Recently deleted.
+        var restores: UUID?
+        var run: () -> Void
+    }
     @ObservationIgnored private var fileToShow: URL?
+    /// Files being copied in (Voice Memo import), for Cancel.
+    @ObservationIgnored private var importTasks: [UUID: Task<Void, Never>] = [:]
     /// What the text link in the status spot does, for `offer`.
     @ObservationIgnored private var offered: (() -> Void)?
     /// Delete Audio Only, for Undo: which recording and where its audio went in the Trash.
@@ -155,6 +216,7 @@ final class RecorderModel {
         let began = Date()
         var all = RecordingStore.loadAll()
         recoverUnfinished(&all)
+        let halfImported = recoverImports(&all)
         recordings = all
         refreshMicName()
         wirePipeline()
@@ -163,6 +225,7 @@ final class RecorderModel {
         Transcriber.shared.start(with: recordings)
         // After init: AudioSquash looks at RecorderModel.shared.
         Task { @MainActor in
+            for (id, url) in halfImported { RecorderModel.shared.runImport(id, from: url, access: false) }
             AudioSquash.shared.run()
             AudioCleanup.start()
         }
@@ -217,6 +280,10 @@ final class RecorderModel {
         }
         guard micPermission == .authorized, phase == .idle else {
             selection = nil
+            // Record from the menu bar or ⌘R used to do nothing at all (A8).
+            if micPermission == .denied || micPermission == .restricted {
+                status = Status(text: "Verbatim can't hear anything: Microphone access is off.", action: .openMicSettings)
+            }
             return
         }
         // The mic would pick up the speakers.
@@ -246,7 +313,11 @@ final class RecorderModel {
         } catch {
             pipeline.detach()
             LiveTranscriber.shared.recordingStopped()
-            status = Status(text: "Couldn't start recording: \(error.localizedDescription)")
+            // Nothing was recorded: no 0 min recording left behind, and no
+            // "Verbatim quit during…" at next launch (B3).
+            LiveTranscriber.shared.forget(info.id)
+            try? FileManager.default.removeItem(at: RecordingStore.folder(info.id))
+            status = Status(text: "Couldn't start recording: \(error.localizedDescription) Try again, or pick another mic in Settings > General.")
             return
         }
 
@@ -265,15 +336,16 @@ final class RecorderModel {
         lastLoud = Date()
         quietWarned = false
         batteryWarned = false
+        limitWarned = false
         lastBatteryCheck = .distantPast
         phase = .recording
         beginKeepAwake()
 
         if fellBack {
-            status = Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.")
+            status = Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.", standing: true)
         } else if let free = RecordingStore.freeSpace(), free < Self.bytesPerHour * 3 {
             let hours = Double(free) / Double(Self.bytesPerHour)
-            status = Status(text: String(format: "Disk is almost full: room for about %.1f hours of audio.", hours))
+            status = Status(text: String(format: "Disk is almost full: room for about %.1f hours of audio.", hours), standing: true)
         } else {
             status = nil
         }
@@ -289,7 +361,29 @@ final class RecorderModel {
         phase = .paused
         levels = Array(repeating: 0, count: Self.barCount)
         saveCurrent()
-        if status?.action == .stopRecording { status = nil }
+        clearStanding { $0.action == .stopRecording }
+        Messages.shared.withdraw("stillRecording")
+        // Nothing is being recorded, so the Mac may sleep (A9: it used to stay
+        // awake all night when Pause was forgotten). Sleeping while paused
+        // loses nothing; Resume starts the mic again.
+        endKeepAwake()
+        askIfStillPaused()
+    }
+
+    /// Paused and forgotten: ask once, after 15 minutes, like "Still
+    /// recording?" (off when that is off in Settings).
+    private func askIfStillPaused() {
+        pausedCheck?.cancel()
+        guard Self.quietMinutes > 0, let id = currentID else { return }
+        pausedCheck = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Double(Self.pausedAskMinutes) * 60))
+            guard !Task.isCancelled, let self, self.phase == .paused, self.currentID == id else { return }
+            // A pause for a problem keeps its reason and Resume link.
+            if self.status?.action != .resume, self.warning?.action != .resume {
+                self.status = Status(text: "Paused for \(Self.pausedAskMinutes) minutes. Class over?", action: .stopRecording, standing: true)
+            }
+            Messages.shared.post(Messages.stillPaused(minutes: Self.pausedAskMinutes, elapsed: self.elapsed))
+        }
     }
 
     func resume() {
@@ -299,10 +393,21 @@ final class RecorderModel {
             status = Status(text: "No microphone found. Plug one in, then press Resume.")
             return
         }
+        if pipeline.hasWriteError {
+            // Paused because the disk was full: only go on once there's room
+            // and the file is fixed, or nothing would be saved.
+            let stillFull = (RecordingStore.freeSpace() ?? .max) < Self.bytesPerHour / 6
+            if stillFull || !pipeline.clearWriteError() {
+                status = Status(text: stillFull
+                    ? "The disk is still full. Free up space, then"
+                    : "Can't save audio to the disk. Free up space, then", action: .resume, standing: true)
+                return
+            }
+        }
         do {
             try pipeline.startCapture(device: dev)
         } catch {
-            status = Status(text: "Couldn't use the mic: \(error.localizedDescription)", action: .resume)
+            status = Status(text: "Couldn't use the mic: \(error.localizedDescription)", action: .resume, standing: true)
             return
         }
         device = dev
@@ -310,9 +415,14 @@ final class RecorderModel {
         addEvent(.resumed)
         updateCurrent { $0.state = .recording }
         phase = .recording
+        pausedCheck?.cancel()
+        pausedCheck = nil
+        Messages.shared.withdraw("stillRecording")
+        beginKeepAwake()
         lastLoud = Date()
         quietWarned = false
-        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.") : nil
+        warning = nil // the reasons for the pause are over
+        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.", standing: true) : nil
         saveCurrent()
     }
 
@@ -329,11 +439,14 @@ final class RecorderModel {
         addEvent(.stopped)
         saveCurrent()
         endKeepAwake()
+        pausedCheck?.cancel()
+        pausedCheck = nil
 
         let info = current
         phase = .idle
         currentID = nil
         device = nil
+        warning = nil
         status = nil
         levels = Array(repeating: 0, count: Self.barCount)
         Messages.shared.withdraw("stillRecording")
@@ -342,7 +455,7 @@ final class RecorderModel {
         let title = info?.title ?? "Recording"
         let length = Self.minutesText(info?.duration ?? 0)
         let text = note ?? "Saved \(title), \(length)."
-        let stopped = StoppedNote(recordingID: id, text: text)
+        let stopped = StoppedNote(recordingID: id, text: text, serial: undoSerial)
         stoppedNote = stopped
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(10))
@@ -361,10 +474,19 @@ final class RecorderModel {
         AutoName.shared.consider(note.recordingID)
     }
 
+    /// ⌘Q > Stop and Quit: no Undo Stop in the bar (C10: it showed one, and
+    /// pressing it still quit). The bar says it's saving instead.
+    func stopForQuit() {
+        stop()
+        finishStopped()
+    }
+
     /// Continues the recording that was just stopped, in the same audio file.
     func undoStop() {
         guard phase == .idle, let note = stoppedNote,
               let info = recordings.first(where: { $0.id == note.recordingID }) else { return }
+        // The mic would pick up the speakers (C10: the player stayed open).
+        Playback.shared.close()
         let (dev, fellBack) = Microphones.resolve()
         guard let dev else {
             finishStopped()
@@ -399,7 +521,8 @@ final class RecorderModel {
         quietWarned = false
         phase = .recording
         beginKeepAwake()
-        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.") : nil
+        warning = nil
+        status = fellBack ? Status(text: "Your chosen mic isn't plugged in. Using the MacBook mic.", standing: true) : nil
         saveCurrent()
     }
 
@@ -409,12 +532,21 @@ final class RecorderModel {
         case .resume: resume()
         case .undoDelete: undoDelete()
         case .undoLine:
+            // The link belongs to the newest step: undo exactly that one.
             if status?.action == .undoLine { status = nil }
-            undoLastChange()
+            if let i = undoStack.lastIndex(where: { undoable($0) }) {
+                let step = undoStack.remove(at: i)
+                if let id = deletedNote?.step, id == step.id { deletedNote = nil }
+                step.run()
+                flash("Undid: \(Self.undoName(step.text))")
+            }
         case .showFile:
             if let url = fileToShow { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             status = nil
         case .undoAudioDelete: undoAudioDelete()
+        case .openMicSettings:
+            status = nil
+            openMicSettings()
         case .changeVoice:
             let run = offered
             offered = nil
@@ -430,6 +562,12 @@ final class RecorderModel {
     /// Moves the recording to Recently deleted (step 9): Undo for 10 s, Put
     /// Back for 30 days.
     func delete(_ id: UUID) {
+        // Still being copied in: stop the copy instead (A6). It used to go to
+        // Recently deleted half done and say "Importing…" forever after Put Back.
+        if Transcriber.shared.importing.contains(id) {
+            cancelImport(id)
+            return
+        }
         guard canDelete(id), let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         let info = recordings[i]
         let moved: URL
@@ -441,7 +579,16 @@ final class RecorderModel {
         }
         forgetRecording(id)
 
-        let note = DeletedNote(info: info, trashURL: moved)
+        // On the ⌘Z list for good, not only while the Undo link shows.
+        let step = pushUndo("Moved \(info.title) to Recently deleted.", recording: nil, restores: id) { [weak self] in
+            guard RecentlyDeleted.shared.items.contains(where: { $0.id == id }) else { return }
+            if self?.deletedNote?.info.id == id {
+                self?.deletedNote = nil
+                if self?.status?.action == .undoDelete { self?.status = nil }
+            }
+            self?.putBack(id)
+        }
+        let note = DeletedNote(info: info, trashURL: moved, step: step)
         deletedNote = note
         if isBusy {
             status = Status(text: "Moved \(info.title) to Recently deleted.", action: .undoDelete)
@@ -467,6 +614,7 @@ final class RecorderModel {
         guard let note = deletedNote else { return }
         deletedNote = nil
         if status?.action == .undoDelete { status = nil }
+        undoStack.removeAll { $0.id == note.step }
         putBack(note.info.id)
     }
 
@@ -477,6 +625,12 @@ final class RecorderModel {
         } catch {
             status = Status(text: "Couldn't put it back: \(error.localizedDescription)")
             return
+        }
+        // Its delete step (and the 10 s Undo) is done now.
+        undoStack.removeAll { $0.restores == id }
+        if deletedNote?.info.id == id {
+            deletedNote = nil
+            if status?.action == .undoDelete { status = nil }
         }
         reload()
         Transcriber.shared.reload(id)
@@ -490,6 +644,10 @@ final class RecorderModel {
     func deleteAll() {
         var moved: [UUID] = []
         for info in recordings where canDelete(info.id) {
+            if Transcriber.shared.importing.contains(info.id) {
+                cancelImport(info.id)
+                continue
+            }
             if (try? RecentlyDeleted.shared.add(info)) != nil {
                 forgetRecording(info.id)
                 moved.append(info.id)
@@ -629,25 +787,48 @@ final class RecorderModel {
     /// The file picker behind the sidebar button and File > Transcribe a Recording (⌘O).
     func chooseFilesToImport() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.audio, .movie]
+        // Only kinds Verbatim can open (C3: it offered .flac, then refused it).
+        panel.allowedContentTypes = AudioImport.allowedExtensions.compactMap { UTType(filenameExtension: $0) }
         panel.allowsMultipleSelection = true
         panel.message = "Pick a Voice Memo or other recording. Your original file isn't changed."
         panel.prompt = "Transcribe"
         if panel.runModal() == .OK { importAudio(panel.urls) }
     }
 
-    /// Copies each file in as a new recording, then transcribes it.
+    /// Copies each file in as a new recording, then transcribes it. It goes
+    /// into the group on screen (B16: a memo dropped on the start page
+    /// showing "English" used to land in Recents).
     func importAudio(_ urls: [URL]) {
+        importAudio(urls, into: groupOnScreen)
+    }
+
+    /// The group the start page records into, or the open recording's group.
+    private var groupOnScreen: UUID? {
+        if showingDeleted { return nil }
+        guard let id = selection else { return GroupStore.shared.group(GroupStore.shared.lastUsedID)?.id }
+        return GroupStore.shared.group(info(id)?.groupID)?.id
+    }
+
+    /// Dropped on a group in the sidebar, or picked for one.
+    func importAudio(_ urls: [URL], into group: UUID?) {
         let bad = urls.filter { !AudioImport.canImport($0) }
-        if let first = bad.first {
-            show("Verbatim can't open .\(first.pathExtension) files. Use \(AudioImport.allowedText).")
+        if !bad.isEmpty {
+            // Every file that was left out, not only the first (C3).
+            let names = bad.map(\.lastPathComponent)
+            let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+            show("Verbatim can't open \(list). Use \(AudioImport.allowedText).")
         }
         for url in urls where AudioImport.canImport(url) {
-            importOne(url)
+            importOne(url, into: group)
         }
     }
 
-    private func importOne(_ url: URL) {
+    private func importOne(_ url: URL, into group: UUID?) {
+        // Dropped twice while the first copy is still going: show that one.
+        if let same = recordings.first(where: { $0.importingPath == url.path && Transcriber.shared.importing.contains($0.id) }) {
+            selection = same.id
+            return
+        }
         let attrs = try? url.resourceValues(forKeys: [.creationDateKey])
         var info = RecordingInfo(
             id: UUID(),
@@ -656,6 +837,8 @@ final class RecorderModel {
             state: .stopped
         )
         info.importedFrom = url.lastPathComponent
+        info.importingPath = url.path
+        info.groupID = group
         info.autoTitle = true
         do {
             try RecordingStore.create(info)
@@ -665,41 +848,93 @@ final class RecorderModel {
         }
         recordings.append(info)
         recordings.sort { $0.createdAt > $1.createdAt }
-        selection = info.id
-        Transcriber.shared.setImporting(info.id, true)
+        if let group { GroupStore.shared.update(group) { $0.collapsed = false } }
+        if isBusy {
+            // Recording: stay on the live page (B16), say where it went.
+            let place = GroupStore.shared.group(group)?.name ?? "Recents"
+            show("Importing \(url.lastPathComponent) into \(place). The text comes after you stop recording.")
+        } else {
+            selection = info.id
+        }
+        runImport(info.id, from: url, access: url.startAccessingSecurityScopedResource())
+    }
 
-        let id = info.id
+    /// Copies the sound in, with progress and Cancel (UX round 2, A6). Also
+    /// used at launch for a copy that was cut off by quitting.
+    fileprivate func runImport(_ id: UUID, from url: URL, access: Bool) {
+        Transcriber.shared.setImporting(id, true)
         let destination = RecordingStore.wavURL(id)
-        let access = url.startAccessingSecurityScopedResource()
-        Task { [weak self] in
+        importTasks[id] = Task { [weak self] in
             defer { if access { url.stopAccessingSecurityScopedResource() } }
             do {
-                let samples = try await AudioImport.convert(url, to: destination)
+                let samples = try await AudioImport.convert(url, to: destination) { fraction in
+                    Task { @MainActor in Transcriber.shared.setImportProgress(id, fraction) }
+                }
+                try Task.checkCancellation()
                 guard let self, let i = self.recordings.firstIndex(where: { $0.id == id }) else { return }
+                self.importTasks[id] = nil
                 self.recordings[i].samples = samples
                 self.recordings[i].endedAt = self.recordings[i].createdAt.addingTimeInterval(Double(samples) / 16_000)
+                self.recordings[i].importingPath = nil
                 self.persist(self.recordings[i])
                 Transcriber.shared.setImporting(id, false)
                 Transcriber.shared.enqueue(id)
             } catch {
+                guard let self else { return }
+                self.importTasks[id] = nil
                 Transcriber.shared.setImporting(id, false)
                 try? FileManager.default.removeItem(at: RecordingStore.folder(id))
-                guard let self else { return }
                 self.recordings.removeAll { $0.id == id }
                 if self.selection == id { self.selection = nil }
-                self.show("Couldn't import \(url.lastPathComponent): \(error.localizedDescription)")
+                if error is CancellationError || Task.isCancelled {
+                    self.show("Stopped importing \(url.lastPathComponent). Your original file isn't touched.")
+                } else {
+                    self.show("Couldn't import \(url.lastPathComponent): \(AudioImport.plainWords(error))")
+                }
             }
         }
     }
 
+    /// Cancel while a file is being copied in, or Delete on it: nothing of it
+    /// is kept (it's only a copy, the original stays where it was).
+    func cancelImport(_ id: UUID) {
+        importTasks[id]?.cancel()
+    }
+
+    /// Imports cut off by quitting: the copy starts over if the original file
+    /// is still there. If not, the half copy goes and a note says so.
+    private func recoverImports(_ all: inout [RecordingInfo]) -> [(UUID, URL)] {
+        var again: [(UUID, URL)] = []
+        var lost: [String] = []
+        for info in all {
+            guard let path = info.importingPath else { continue }
+            let url = URL(fileURLWithPath: path)
+            if FileManager.default.isReadableFile(atPath: path) {
+                Transcriber.shared.setImporting(info.id, true) // before Transcriber.start looks
+                again.append((info.id, url))
+            } else {
+                try? FileManager.default.removeItem(at: RecordingStore.folder(info.id))
+                lost.append(info.importedFrom ?? url.lastPathComponent)
+            }
+        }
+        all.removeAll { info in info.importingPath != nil && !again.contains { $0.0 == info.id } }
+        if let name = lost.last {
+            recoveryNotice = "Verbatim quit while importing \(name) and couldn't open the file again. Drop it in again to transcribe it."
+        }
+        return again
+    }
+
     /// A message in the status spot. When not recording, it clears itself.
+    /// While recording it stays, so it isn't missed, unless a warning is
+    /// waiting under it: then it makes way after 30 s (B1 review).
     func show(_ text: String) {
         let s = Status(text: text)
         status = s
-        guard !isBusy else { return }
+        let busy = isBusy
         Task { [weak self] in
-            try? await Task.sleep(for: .seconds(12))
-            if self?.status == s, self?.isBusy == false { self?.status = nil }
+            try? await Task.sleep(for: .seconds(busy ? 30 : 12))
+            guard let self, self.status == s else { return }
+            if !self.isBusy || self.warning != nil { self.status = nil }
         }
     }
 
@@ -720,9 +955,14 @@ final class RecorderModel {
 
     /// "Line edited. Undo" in the status spot for 10 seconds, and on the
     /// ⌘Z list for good (until the app quits, last 50 changes).
-    func offerLineUndo(_ text: String, undo: @escaping () -> Void) {
-        undoStack.append((text, undo))
-        if undoStack.count > 50 { undoStack.removeFirst() }
+    /// `recording`: the recording the change is in (nil: not one recording,
+    /// like a group delete or a move).
+    func offerLineUndo(_ text: String, in recording: UUID? = nil, undo: @escaping () -> Void) {
+        pushUndo(text, recording: recording, run: undo)
+        // The Undo link only for a change you can see: a box saved while
+        // switching recordings goes on ⌘Z, but its link would undo a
+        // recording that's not on screen.
+        if let recording, recording != selection, recording != currentID { return }
         let s = Status(text: text, action: .undoLine)
         status = s
         Task { [weak self] in
@@ -732,23 +972,55 @@ final class RecorderModel {
         }
     }
 
+    @discardableResult
+    private func pushUndo(_ text: String, recording: UUID?, restores: UUID? = nil,
+                          run: @escaping () -> Void) -> UUID {
+        let step = UndoStep(text: text, recording: recording, restores: restores, run: run)
+        undoStack.append(step)
+        if undoStack.count > 50 { undoStack.removeFirst() }
+        undoSerial += 1
+        return step.id
+    }
+
+    /// A change made in Settings (a word, a fix, a name removed): on the ⌘Z
+    /// list too, not only its own Undo link there (B13: only the last one
+    /// could be undone). Returns what the link runs. It undoes only once,
+    /// whichever is used.
+    func settingsUndo(_ text: String, run: @escaping () -> Void) -> () -> Void {
+        var done = false
+        let once = {
+            guard !done else { return }
+            done = true
+            run()
+        }
+        let id = pushUndo(text, recording: nil, run: once)
+        return { [weak self] in
+            once()
+            self?.undoStack.removeAll { $0.id == id }
+        }
+    }
+
+    /// The Undo link in the bottom bar went with the recording on screen:
+    /// it goes when another recording opens, so it never changes one you
+    /// can't see (UX round 2, A4).
+    func selectionChanged() {
+        if status?.action == .undoLine { status = nil }
+    }
+
     /// Edit > Undo (⌘Z). Typing in a box: undoes the typing, like any Mac
-    /// app. Otherwise: a deleted recording or audio that still shows Undo,
-    /// then the newest change on the list.
+    /// app. Otherwise: Undo Stop right after Stop, audio that still shows
+    /// Undo, then the newest change in the recording on screen.
     func undo() {
         if NSApp.keyWindow?.firstResponder is NSTextView {
             NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
             return
         }
-        // Not recording, a delete only shows `deletedNote` (no status), so
-        // ⌘Z used to skip it and undo an older line change instead.
-        // A newer change with its own Undo (status) still goes first.
-        if deletedNote != nil, status == nil || status?.action == .undoDelete {
-            undoDelete()
+        // Just stopped and nothing newer: ⌘Z is Undo Stop, not an old edit.
+        if let note = stoppedNote, phase == .idle, note.serial == undoSerial {
+            undoStop()
             return
         }
         switch status?.action {
-        case .undoDelete?: perform(.undoDelete)
         case .undoAudioDelete?: perform(.undoAudioDelete)
         default:
             if status?.action == .undoLine { status = nil }
@@ -760,16 +1032,36 @@ final class RecorderModel {
     func redo() {
         if NSApp.keyWindow?.firstResponder is NSTextView {
             NSApp.sendAction(Selector(("redo:")), to: nil, from: nil)
+            return
         }
+        // Item 11: it did nothing, with no word why.
+        flash("Redo only works while typing in a box. Something undone can be done again by hand.")
+    }
+
+    /// The newest step ⌘Z may take: not one recording, the recording on
+    /// screen, or the one being recorded (the mini window edits that one).
+    /// Steps of a recording in Recently deleted wait (Put Back brings them back).
+    private func undoable(_ step: UndoStep) -> Bool {
+        // Put back or deleted for good already: nothing left to undo.
+        if let r = step.restores { return RecentlyDeleted.shared.items.contains { $0.id == r } }
+        guard let id = step.recording else { return true }
+        guard recordings.contains(where: { $0.id == id }) else { return false }
+        return id == selection || id == currentID
     }
 
     private func undoLastChange() {
-        guard let last = undoStack.popLast() else {
-            flash("Nothing to undo.")
+        guard let i = undoStack.lastIndex(where: { undoable($0) }) else {
+            flash(undoStack.isEmpty ? "Nothing to undo." : "Nothing to undo in this recording.")
             return
         }
-        last.run()
-        flash("Undid: \(Self.undoName(last.text))")
+        let step = undoStack.remove(at: i)
+        if let id = deletedNote?.step, id == step.id { deletedNote = nil }
+        step.run()
+        var text = "Undid: \(Self.undoName(step.text))"
+        if let id = step.recording, id != selection, let title = info(id)?.title {
+            text += " (in \(title))"
+        }
+        flash(text)
     }
 
     /// "Line edited." becomes "line edited." for "Undid: line edited."
@@ -822,10 +1114,26 @@ final class RecorderModel {
 
     func rename(_ id: UUID, to title: String) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let i = recordings.firstIndex(where: { $0.id == id }) else { return }
+        guard !trimmed.isEmpty, let i = recordings.firstIndex(where: { $0.id == id }),
+              recordings[i].title != trimmed else { return }
+        let oldTitle = recordings[i].title
+        let oldAuto = recordings[i].autoTitle
         recordings[i].title = trimmed
         recordings[i].autoTitle = nil // Ryan named it: auto-naming leaves it alone
         persist(recordings[i])
+        // Item 4: renaming had no Undo.
+        offerLineUndo("Renamed to \(trimmed).", in: id) { [weak self] in
+            guard let self, let i = self.recordings.firstIndex(where: { $0.id == id }) else { return }
+            self.recordings[i].title = oldTitle
+            self.recordings[i].autoTitle = oldAuto
+            self.persist(self.recordings[i])
+        }
+    }
+
+    /// On the ⌘Z list without taking over the bottom bar (its message is
+    /// already showing something else, like "Changed to Mr. Yurt").
+    func addUndo(_ text: String, in recording: UUID?, run: @escaping () -> Void) {
+        pushUndo(text, recording: recording, run: run)
     }
 
     /// Auto-naming (step 10): only if Ryan hasn't renamed it meanwhile.
@@ -912,6 +1220,8 @@ final class RecorderModel {
 
     func refreshPermission() {
         micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
+        // Turned back on: the "access is off" message is old news.
+        if micPermission == .authorized, status?.action == .openMicSettings { status = nil }
     }
 
     func openMicSettings() {
@@ -950,12 +1260,12 @@ final class RecorderModel {
             lastLoud = Date()
             if quietWarned {
                 quietWarned = false
-                if status?.action == .stopRecording { status = nil }
+                clearStanding { $0.action == .stopRecording }
                 Messages.shared.withdraw("stillRecording")
             }
         } else if !quietWarned, quietMinutes > 0, Date().timeIntervalSince(lastLoud) > Double(quietMinutes) * 60 {
             quietWarned = true
-            status = Status(text: "Quiet for \(quietMinutes) minutes. Still in class?", action: .stopRecording)
+            status = Status(text: "Quiet for \(quietMinutes) minutes. Still in class?", action: .stopRecording, standing: true)
             Messages.shared.post(Messages.stillRecording(minutes: quietMinutes, elapsed: elapsed))
         }
         if Date().timeIntervalSince(lastBatteryCheck) > 60 {
@@ -967,9 +1277,18 @@ final class RecorderModel {
             updateCurrent { $0.samples = samples }
             saveCurrent()
         }
+        // C10: say so 10 minutes before the 3 hour stop, not only after.
+        if !limitWarned, elapsed >= Self.maxLength - 600, elapsed < Self.maxLength {
+            limitWarned = true
+            status = Status(text: "10 minutes left: a recording stops at 3 hours. Start a new one after.", standing: true)
+        }
         if elapsed >= Self.maxLength {
             let title = current?.title ?? "The recording"
-            stop(note: "Stopped at 3 hours, the longest a recording can be. Saved.")
+            let note = "Stopped at 3 hours, the longest a recording can be. Saved."
+            stop(note: note)
+            // No Undo Stop: it would only stop again at once (C10).
+            finishStopped()
+            show(note)
             Messages.shared.post(Messages.stoppedAtLimit(title))
         }
     }
@@ -981,12 +1300,12 @@ final class RecorderModel {
             guard !batteryWarned else { return }
             batteryWarned = true
             if status == nil || status?.action == nil {
-                status = Status(text: "Battery at \(battery.percent)%. Plug in to keep recording.")
+                status = Status(text: "Battery at \(battery.percent)%. Plug in to keep recording.", standing: true)
             }
             Messages.shared.post(Messages.battery(battery.percent))
         } else if batteryWarned, !battery.onBattery {
             batteryWarned = false
-            if status?.text.hasPrefix("Battery at") == true { status = nil }
+            clearStanding { $0.text.hasPrefix("Battery at") }
             Messages.shared.withdraw("battery")
         }
     }
@@ -999,15 +1318,18 @@ final class RecorderModel {
         updateCurrent { $0.state = .paused }
         phase = .paused
         saveCurrent()
-        status = Status(text: "Can't save audio, the disk is full. Free up space, then", action: .resume)
+        status = Status(text: "Can't save audio, the disk is full. Free up space, then", action: .resume, standing: true)
         Messages.shared.post(Messages.problem("Recording paused: the disk is full. Free up space, then press Resume."))
+        // Like any pause: the Mac may sleep, and it asks later (A9).
+        endKeepAwake()
+        askIfStillPaused()
     }
 
     private func captureFailed() {
         guard phase == .recording, let dev = device ?? Microphones.builtIn() else { return }
         if restartedAfterError {
             pause()
-            status = Status(text: "The mic stopped working. Check it, then", action: .resume)
+            status = Status(text: "The mic stopped working. Check it, then", action: .resume, standing: true)
             Messages.shared.post(Messages.problem("Recording paused: the mic stopped working. Check it, then press Resume."))
             return
         }
@@ -1022,10 +1344,12 @@ final class RecorderModel {
             refreshMicName()
             addEvent(.micChanged, note: Microphones.mic(for: dev).displayName)
             saveCurrent()
+            // Old mic warnings are no longer true.
+            clearStanding { $0.text.hasPrefix("Your chosen mic") || $0.text.hasPrefix("Mic unplugged") }
             status = Status(text: message)
         } catch {
             pause()
-            status = Status(text: "Couldn't use the mic. Plug it back in, then", action: .resume)
+            status = Status(text: "Couldn't use the mic. Plug it back in, then", action: .resume, standing: true)
         }
     }
 
@@ -1073,20 +1397,31 @@ final class RecorderModel {
             device = dev
         } catch {
             pause()
-            status = Status(text: "Couldn't restart the mic after sleep.", action: .resume)
+            status = Status(text: "Couldn't restart the mic after sleep.", action: .resume, standing: true)
             return
         }
         addEvent(.woke)
         saveCurrent()
+        // The quiet minutes start again: asleep is not quiet (B2: "Still
+        // recording?" used to replace this message at once). An old "Still
+        // in class?" from before the sleep goes too, or it would come back.
+        lastLoud = Date()
+        quietWarned = false
+        clearStanding { $0.action == .stopRecording }
+        Messages.shared.withdraw("stillRecording")
         let t = Date.FormatStyle(date: .omitted, time: .shortened)
-        status = Status(text: "Mac was asleep \(since.formatted(t)) to \(Date().formatted(t)). Keep the lid open in class.")
+        // The tip only the first time.
+        let tipKey = "toldKeepLidOpen"
+        let tip = UserDefaults.standard.bool(forKey: tipKey) ? "" : " Keep the lid open in class."
+        UserDefaults.standard.set(true, forKey: tipKey)
+        status = Status(text: "Mac was asleep \(since.formatted(t)) to \(Date().formatted(t)).\(tip)")
     }
 
     private func deviceDisconnected(_ id: String?) {
         guard isBusy, let id, id == device?.uniqueID else { return }
         guard let fallback = Microphones.builtIn(), fallback.uniqueID != id else {
             pause()
-            status = Status(text: "Mic unplugged and no other mic found. Plug one in, then", action: .resume)
+            status = Status(text: "Mic unplugged and no other mic found. Plug one in, then", action: .resume, standing: true)
             Messages.shared.post(Messages.problem("Recording paused: the mic was unplugged. Plug one in, then press Resume."))
             return
         }
@@ -1094,7 +1429,7 @@ final class RecorderModel {
             switchMic(to: fallback, message: "Mic unplugged. Using the MacBook mic.")
         } else {
             device = fallback
-            status = Status(text: "Mic unplugged. Resume will use the MacBook mic.")
+            status = Status(text: "Mic unplugged. Resume will use the MacBook mic.", standing: true)
         }
     }
 

@@ -1,0 +1,786 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- App icon rounds 1 to 6 (2026-11-20). Ryan picked the Ribbon in Note red. Live: https://claude.ai/artifact/36WZyRqXNNYMaz3ziksCF5 -->
+<title>Verbatim Icon Ideas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Noto+Serif+Myanmar:wght@700&family=Caveat:wght@600&display=swap">
+<style>
+/* Layout: one notebook page, one row per idea (light icon, dark icon, real sizes). Colors are Verbatim's own Notebook tokens. */
+:root {
+  --paper: #FCFBF8;
+  --desk: #F1EEE7;
+  --ink: #1F1D1A;
+  --ink-soft: #6E6A62;
+  --line: #E6E2DA;
+  --accent: #24427A;
+  --card: #FFFFFF;
+  --serif: "Newsreader", "New York", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+
+  /* icon colors (light icons) */
+  --i-paper: #FCFBF8;
+  --i-paper2: #F1EEE7;
+  --i-ink: #1F1D1A;
+  --i-ink2: #4A4741;
+  --i-blue: #2D4F8C;
+  --i-blue-deep: #1E3868;
+  --i-rule: #D9D3C7;
+  --i-mark: #EDC23A;
+  --i-red: #C2483A;
+  --i-grey: #8A857B;
+  --i-nib: #FCFBF8;
+  --i-nib2: #F1EEE7;
+  --i-note: #8A7444;
+  --i-pill: #1F1D1A;
+  --i-pilltext: #FCFBF8;
+  --i-blue2: #24427A;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1D1C1A; --desk: #252421; --ink: #EBE8E1; --ink-soft: #A39E94;
+    --line: #34322E; --accent: #8FA9DD; --card: #2D2C29; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1D1C1A; --desk: #252421; --ink: #EBE8E1; --ink-soft: #A39E94;
+  --line: #34322E; --accent: #8FA9DD; --card: #2D2C29; color-scheme: dark;
+}
+/* the dark Mac icon look (macOS 26 shows dark icons in dark mode) */
+.dk {
+  --i-paper: #2A2926;
+  --i-paper2: #201F1D;
+  --i-ink: #EBE8E1;
+  --i-ink2: #B8B2A6;
+  --i-blue: #22345A;
+  --i-blue-deep: #141E35;
+  --i-rule: #46433D;
+  --i-mark: #D6A91E;
+  --i-red: #E07A6C;
+  --i-grey: #9C978D;
+  --i-nib: #DCD6CA;
+  --i-nib2: #B8B2A6;
+  --i-note: #B9A06A;
+  --i-pill: #3A3834;
+  --i-pilltext: #EBE8E1;
+  --i-blue2: #8FA9DD;
+}
+
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); line-height: 1.5; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 48px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { display: grid; gap: 10px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+h1 { font-family: var(--serif); font-weight: 600; font-size: 2.4rem; line-height: 1.1; margin: 0; text-wrap: balance; }
+header p { margin: 0; max-width: 62ch; color: var(--ink-soft); font-size: 1rem; }
+header p strong { color: var(--ink); font-weight: 600; }
+
+.idea { display: grid; grid-template-columns: 200px 1fr; gap: 28px; padding-block: 36px; border-bottom: 1px solid var(--line); }
+.label { display: grid; gap: 6px; align-content: start; }
+.letter { font-family: var(--serif); font-size: 3rem; line-height: 1; color: var(--accent); }
+.label h2 { font-family: var(--serif); font-weight: 600; font-size: 1.45rem; margin: 0; line-height: 1.2; }
+.label p { margin: 0; color: var(--ink-soft); font-size: 0.95rem; }
+.show { display: grid; gap: 18px; min-width: 0; }
+.pair { display: flex; flex-wrap: wrap; gap: 18px; }
+.tile { display: grid; gap: 8px; justify-items: center; }
+.tile .bg { width: 220px; max-width: 100%; aspect-ratio: 1; border-radius: 22px; display: grid; place-items: center; }
+.tile .bg.light { background: #E9E6DF; }
+.tile .bg.darkbg { background: #141413; }
+.tile svg { width: 82%; height: 82%; }
+.cap { font-size: 0.8rem; color: var(--ink-soft); }
+.sizes { display: flex; flex-wrap: wrap; align-items: end; gap: 22px; padding: 16px 18px; background: var(--desk); border-radius: 12px; width: fit-content; max-width: 100%; }
+.sz { display: grid; gap: 6px; justify-items: center; }
+.sz span { font-size: 0.72rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+.dock-sec { padding-block: 40px 0; display: grid; gap: 14px; }
+.dock-sec h2 { font-family: var(--serif); font-weight: 600; font-size: 1.45rem; margin: 0; }
+.dock-sec p { margin: 0; color: var(--ink-soft); }
+.desktop { border-radius: 16px; padding: 40px 16px 18px; display: grid; justify-items: center; gap: 14px;
+  background: linear-gradient(160deg, #8796A8, #C9B9A4 60%, #A99C8E); }
+.desktop.night { background: linear-gradient(160deg, #1B2230, #3A3140 60%, #22202A); }
+.dock { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 8px 12px; border-radius: 24px;
+  background: rgba(255,255,255,0.32); border: 1px solid rgba(255,255,255,0.45); backdrop-filter: blur(10px); }
+.desktop.night .dock { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.18); }
+.dock div { display: grid; justify-items: center; gap: 2px; }
+.dock b { font: 600 11px var(--sans); color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+
+.pal { display: grid; gap: 14px; padding-block: 22px; border-bottom: 1px solid var(--line); position: relative; top: env(safe-area-inset-top, 0px); background: var(--paper); z-index: 5; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 500 0.85rem var(--sans); cursor: pointer; }
+.sw i { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; }
+.sw i b { width: 10px; height: 10px; border-radius: 3px; }
+.sw[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.sw:focus-visible, .own input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.own { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; font-size: 0.85rem; color: var(--ink-soft); }
+.own input { width: 40px; height: 30px; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: var(--card); cursor: pointer; }
+.hex { font-variant-numeric: tabular-nums; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+.old { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 20px; }
+.old summary { cursor: pointer; font-family: var(--serif); font-size: 1.2rem; color: var(--ink-soft); }
+.old summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.label h2.h-my { font-family: "Noto Serif Myanmar", "Myanmar MN", serif; font-size: 1.6rem; line-height: 1.6; }
+@media (max-width: 640px) {
+  .idea { grid-template-columns: 1fr; gap: 16px; }
+  .tile .bg { width: 150px; }
+  h1 { font-size: 1.9rem; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <clipPath id="body"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.30"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.75"/>
+      <stop offset="0.35" stop-color="#fff" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.25"/>
+    </linearGradient>
+    <filter id="drop" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.22"/>
+    </filter>
+
+    <!-- one quote mark, like a "6": round blob with a tail going up -->
+    <g id="qmark">
+      <circle cx="0" cy="0" r="92"/>
+      <path d="M -92 4 C -96 -150 -10 -238 92 -268 L 104 -236 C 34 -206 -6 -150 -2 -88 Z"/>
+    </g>
+
+    <!-- A: Quote -->
+    <symbol id="ic-quote" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <rect x="262" y="555" width="500" height="140" rx="34" fill="var(--i-mark)" transform="rotate(-3 512 625)"/>
+        <g fill="var(--i-ink)">
+          <use href="#qmark" x="390" y="590"/>
+          <use href="#qmark" x="640" y="590"/>
+        </g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+
+    <!-- B: Page -->
+    <symbol id="ic-page" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-blue)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g transform="rotate(-5 512 512)" filter="url(#soft)">
+          <rect x="262" y="200" width="500" height="624" rx="30" fill="var(--i-paper)"/>
+        </g>
+        <g transform="rotate(-5 512 512)">
+          <g stroke="var(--i-rule)" stroke-width="7">
+            <line x1="262" y1="340" x2="762" y2="340"/>
+            <line x1="262" y1="430" x2="762" y2="430"/>
+            <line x1="262" y1="520" x2="762" y2="520"/>
+            <line x1="262" y1="610" x2="762" y2="610"/>
+            <line x1="262" y1="700" x2="762" y2="700"/>
+          </g>
+          <rect x="370" y="458" width="330" height="56" rx="14" fill="var(--i-mark)"/>
+          <line x1="345" y1="200" x2="345" y2="824" stroke="var(--i-red)" stroke-width="9"/>
+        </g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+
+    <!-- C: Said and kept (speech bubble with a folded page corner) -->
+    <symbol id="ic-bubble" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper2)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <path fill="var(--i-ink)" filter="url(#soft)" d="M 320 236 H 676 L 812 372 V 576 Q 812 686 702 686 H 470 L 300 806 L 338 686 H 320 Q 210 686 210 576 V 346 Q 210 236 320 236 Z"/>
+        <path fill="var(--i-ink2)" d="M 676 236 V 340 Q 676 372 708 372 H 812 Z"/>
+        <rect x="300" y="420" width="380" height="74" rx="22" fill="var(--i-mark)"/>
+        <rect x="300" y="540" width="240" height="40" rx="20" fill="var(--i-paper)" opacity="0.28"/>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+
+    <!-- D: Letter V -->
+    <symbol id="ic-v" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <rect x="282" y="590" width="460" height="128" rx="30" fill="var(--i-mark)" transform="rotate(-3 512 654)"/>
+        <polygon fill="var(--i-ink)" transform="translate(0 -12)"
+          points="236,270 500,270 500,302 432,302 566,635 690,302 640,302 640,270 790,270 790,302 726,302 548,782 498,782 306,302 236,302"/>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+
+    <!-- E: Nib -->
+    <symbol id="ic-nib" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-blue)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g transform="translate(0 18)">
+          <rect x="296" y="702" width="432" height="74" rx="26" fill="var(--i-mark)" transform="rotate(-3 512 739)"/>
+          <g filter="url(#soft)">
+            <path fill="var(--i-nib)" d="M 512 712 L 386 470 C 366 428 374 386 406 352 L 438 222 H 586 L 618 352 C 650 386 658 428 638 470 Z"/>
+          </g>
+          <rect x="430" y="196" width="164" height="44" rx="10" fill="var(--i-nib2)"/>
+          <line x1="512" y1="478" x2="512" y2="694" stroke="var(--i-blue)" stroke-width="13" stroke-linecap="round"/>
+          <circle cx="512" cy="460" r="27" fill="var(--i-blue)"/>
+        </g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+
+    <!-- F: Waveform in quotes (the app's signature bars, held inside quote marks) -->
+    <symbol id="ic-wave" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g fill="var(--i-ink)">
+          <use href="#qmark" transform="translate(262 470) scale(0.62)"/>
+          <use href="#qmark" transform="translate(762 554) rotate(180) scale(0.62)"/>
+        </g>
+        <g fill="var(--i-grey)">
+          <rect x="370" y="452" width="34" height="120" rx="17"/>
+          <rect x="430" y="382" width="34" height="260" rx="17"/>
+          <rect x="490" y="322" width="34" height="380" rx="17"/>
+          <rect x="550" y="412" width="34" height="200" rx="17"/>
+          <rect x="610" y="472" width="34" height="80" rx="17"/>
+        </g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <!-- G: Anansi -->
+    <symbol id="ic-anansi" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <path d="M924 100 L924 800 M924 100 L743 776 M924 100 L574 706 M924 100 L429 595 M924 100 L318 450 M924 100 L248 281 M924 100 L224 100 M924 250 Q906 239 885 245 Q871 229 849 230 Q839 211 818 206 Q813 185 794 175 Q795 153 779 139 Q785 118 774 100 M924 450 Q881 423 833 438 Q799 401 749 403 Q725 359 677 347 Q665 299 621 275 Q623 225 586 191 Q601 143 574 100 M924 650 Q857 608 782 631 Q728 574 649 576 Q612 507 535 489 Q517 412 448 375 Q450 296 393 242 Q416 167 374 100" fill="none" stroke="var(--i-rule)" stroke-width="7"/>
+        <path d="M924 350 Q894 331 859 341 Q835 315 799 317 Q782 285 747 277 Q739 242 707 225 Q709 189 683 165 Q693 130 674 100" fill="none" stroke="var(--i-mark)" stroke-width="16" stroke-linecap="round"/>
+        <g transform="translate(-10 20)">
+          <line x1="470" y1="80" x2="470" y2="420" stroke="var(--i-ink)" stroke-width="7"/>
+          <g fill="none" stroke="var(--i-ink)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M440 470 L330 370 L270 430"/><path d="M430 500 L300 480 L235 570"/>
+            <path d="M432 560 L310 610 L270 710"/><path d="M445 610 L350 715 L335 815"/>
+            <path d="M500 470 L610 370 L670 430"/><path d="M510 500 L640 480 L705 570"/>
+            <path d="M508 560 L630 610 L670 710"/><path d="M495 610 L590 715 L605 815"/>
+          </g>
+          <circle cx="470" cy="462" r="58" fill="var(--i-ink)"/>
+          <ellipse cx="470" cy="608" rx="98" ry="114" fill="var(--i-ink)"/>
+          <g fill="var(--i-mark)">
+            <use href="#qmark" transform="translate(440 640) scale(0.27)"/>
+            <use href="#qmark" transform="translate(500 640) scale(0.27)"/>
+          </g>
+        </g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+
+    <!-- H: sa (Burmese for writing, lesson) -->
+    <symbol id="ic-sa" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <rect x="250" y="560" width="524" height="130" rx="32" fill="var(--i-mark)" transform="rotate(-3 512 625)"/>
+        <text x="512" y="640" text-anchor="middle" font-family="'Noto Serif Myanmar', 'Myanmar MN', serif" font-weight="700" font-size="400" fill="var(--i-ink)">စာ</text>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+
+    <!-- I: Your page (a tiny Verbatim transcript) -->
+    <symbol id="ic-mypage" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <rect x="222" y="214" width="300" height="46" rx="12" fill="var(--i-ink)"/>
+        <line x1="222" y1="300" x2="802" y2="300" stroke="var(--i-rule)" stroke-width="7"/>
+        <g font-family="-apple-system, 'SF Pro Text', system-ui, sans-serif" font-weight="600" font-size="54" fill="var(--i-grey)" style="font-variant-numeric: tabular-nums">
+          <text x="222" y="408">10:05</text><text x="222" y="568">10:07</text><text x="222" y="728">10:12</text>
+        </g>
+        <g fill="var(--i-ink)">
+          <rect x="420" y="372" width="382" height="40" rx="20"/><rect x="420" y="432" width="250" height="40" rx="20"/>
+          <rect x="420" y="532" width="382" height="40" rx="20"/><rect x="420" y="592" width="310" height="40" rx="20"/>
+          <rect x="420" y="692" width="330" height="40" rx="20"/>
+        </g>
+        <rect x="384" y="526" width="16" height="112" rx="8" fill="var(--i-mark)"/>
+        <rect x="384" y="686" width="16" height="112" rx="8" fill="var(--i-red)"/>
+        <rect x="420" y="756" width="230" height="34" rx="17" fill="var(--i-note)"/>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+
+    <!-- J: Live pill (the app's own recording bar) -->
+    <symbol id="ic-pill" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper2)" filter="url(#drop)"/>
+      <g clip-path="url(#body)">
+        <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <rect x="160" y="402" width="704" height="220" rx="110" fill="var(--i-pill)" filter="url(#soft)"/>
+        <g fill="var(--i-grey)">
+          <rect x="226" y="482" width="24" height="60" rx="12"/><rect x="268" y="447" width="24" height="130" rx="12"/>
+          <rect x="310" y="427" width="24" height="170" rx="12"/><rect x="352" y="462" width="24" height="100" rx="12"/>
+          <rect x="394" y="492" width="24" height="40" rx="12"/>
+        </g>
+        <text x="806" y="553" text-anchor="end" font-family="-apple-system, 'SF Pro Display', system-ui, sans-serif" font-weight="600" font-size="112" fill="var(--i-pilltext)" style="font-variant-numeric: tabular-nums">45:12</text>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-k" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g fill="var(--i-ink)"><use href="#qmark" x="390" y="610"/><use href="#qmark" x="640" y="610"/></g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-l" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g transform="translate(42 -20)">
+          <line x1="470" y1="60" x2="470" y2="420" stroke="var(--i-ink)" stroke-width="8"/>
+          <g fill="none" stroke="var(--i-ink)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M440 470 L330 370 L270 430"/><path d="M430 500 L300 480 L235 570"/>
+            <path d="M432 560 L310 610 L270 710"/><path d="M445 610 L350 715 L335 815"/>
+            <path d="M500 470 L610 370 L670 430"/><path d="M510 500 L640 480 L705 570"/>
+            <path d="M508 560 L630 610 L670 710"/><path d="M495 610 L590 715 L605 815"/>
+          </g>
+          <circle cx="470" cy="462" r="58" fill="var(--i-ink)"/>
+          <ellipse cx="470" cy="608" rx="98" ry="114" fill="var(--i-ink)"/>
+        </g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-m" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <text x="512" y="640" text-anchor="middle" font-family="'Noto Serif Myanmar', 'Myanmar MN', serif" font-weight="700" font-size="420" fill="var(--i-ink)">စာ</text>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-n" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-blue)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g fill="var(--i-nib)"><use href="#qmark" x="390" y="610"/><use href="#qmark" x="640" y="610"/></g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <g id="hmark">
+      <path d="M -88 6 C -94 -52 -48 -96 6 -90 C 64 -84 98 -40 90 14 C 84 64 40 98 -10 92 C -58 86 -84 52 -88 6 Z"/>
+      <path d="M -86 -6 C -94 -150 -22 -236 98 -280 C 108 -277 112 -264 103 -257 C 22 -212 -18 -150 -6 -84 Z"/>
+    </g>
+    <symbol id="ic-o" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g fill="var(--i-blue2)">
+          <use href="#hmark" transform="translate(392 606) rotate(-5) scale(1.04)"/>
+          <use href="#hmark" transform="translate(646 600) rotate(4) scale(0.97)"/>
+        </g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-p" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-blue)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g fill="var(--i-nib)"><path d="M 360 236 C 418 236 462 282 462 340 C 462 372 448 398 430 418 C 452 540 488 680 512 806 C 440 690 330 560 278 420 C 266 398 258 370 258 340 C 258 282 302 236 360 236 Z"/><path d="M 664 236 C 606 236 562 282 562 340 C 562 372 576 398 594 418 C 572 540 536 680 512 806 C 584 690 694 560 746 420 C 758 398 766 370 766 340 C 766 282 722 236 664 236 Z"/></g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-q" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-blue)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g fill="var(--i-nib)">
+          <use href="#qmark" transform="translate(430 640) scale(1.08)"/>
+          <use href="#qmark" transform="rotate(180 512 512) translate(430 640) scale(1.08)"/>
+        </g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-r" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-paper)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g fill="var(--i-mark)" transform="translate(28 26)"><use href="#qmark" x="390" y="600"/><use href="#qmark" x="640" y="600"/></g>
+        <g fill="var(--i-blue2)"><use href="#qmark" x="390" y="600"/><use href="#qmark" x="640" y="600"/></g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <clipPath id="cutbody"><path d="M 285 100 H 620 L 924 404 V 739 C 924 841 841 924 739 924 H 285 C 183 924 100 841 100 739 V 285 C 100 183 183 100 285 100 Z"/></clipPath>
+    <symbol id="ic-s" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-blue)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <g fill="var(--i-mark)">
+          <rect x="494" y="300" width="36" height="424" rx="18"/>
+          <rect x="414" y="286" width="196" height="36" rx="18"/>
+          <rect x="414" y="702" width="196" height="36" rx="18"/>
+        </g>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-t" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-blue)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <path d="M 402 60 H 622 V 760 L 512 676 L 402 760 Z" fill="var(--i-mark)" filter="url(#soft)"/>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-u" viewBox="0 0 1024 1024">
+      <path d="M 285 100 H 620 L 924 404 V 739 C 924 841 841 924 739 924 H 285 C 183 924 100 841 100 739 V 285 C 100 183 183 100 285 100 Z" fill="var(--i-blue)" filter="url(#drop)"/>
+      <g clip-path="url(#cutbody)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/></g>
+      <path d="M 620 100 V 330 C 620 371 653 404 694 404 H 924 Z" fill="var(--i-mark)" filter="url(#soft)"/>
+      <path d="M 285 100 H 620 L 924 404 V 739 C 924 841 841 924 739 924 H 285 C 183 924 100 841 100 739 V 285 C 100 183 183 100 285 100 Z" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+    <symbol id="ic-w" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="var(--i-blue)" filter="url(#drop)"/>
+      <g clip-path="url(#body)"><rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+        <line x1="330" y1="650" x2="694" y2="400" stroke="var(--i-mark)" stroke-width="150" stroke-linecap="round"/>
+      </g>
+      <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#edge)" stroke-width="4"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header>
+    <h1>App icon ideas for Verbatim</h1>
+    <p>You picked the Ribbon. Here it is in black and three reds, so you can compare.</p>
+    <p><strong>Tell me which ribbon color you want.</strong></p>
+  </header>
+  <div id="ribbons"></div>
+  <section class="dock-sec">
+    <h2>Ribbons in a Dock</h2>
+    <p>Left to right: Black, Note red, Deep red, Brick.</p>
+    <div class="desktop"><div class="dock" id="dockr-light"></div></div>
+    <div class="desktop night"><div class="dock" id="dockr-dark"></div></div>
+  </section>
+
+  <details class="old">
+    <summary>Round 6 (1 to 4, real objects)</summary>
+  <header hidden>
+    <h1>App icon ideas for Verbatim</h1>
+    <p>Round 6: ink on paper, made like real things. Paper grain, a leather cover, a metal nib, real light and shadow. Modern skeuomorphism, like Apple's own icons are going back to.</p>
+    <p><strong>Pick a number and tell me in the chat.</strong> Tweaks are fine, like "1 but a red ribbon".</p>
+  </header>
+
+  <div id="ideas6"></div>
+
+  <section class="dock-sec">
+    <h2>In a Dock</h2>
+    <p>At Dock size, next to each other. Left to right: 1 to 4.</p>
+    <div class="desktop"><div class="dock" id="dock6-light"></div></div>
+    <div class="desktop night"><div class="dock" id="dock6-dark"></div></div>
+  </section>
+  </details>
+
+  <details class="old">
+    <summary>Round 5 (S to W, with the color picker)</summary>
+  <section class="pal" aria-label="Colors">
+    <div class="swatches" id="swatches"></div>
+    <div class="own">
+      <label for="own-bg">Background</label><input type="color" id="own-bg" value="#1F1D1A">
+      <label for="own-fg">Shape</label><input type="color" id="own-fg" value="#FCFBF8">
+      <span id="own-hex" class="hex"></span>
+    </div>
+  </section>
+  <div id="ideas5"></div>
+
+  <section class="dock-sec">
+    <h2>In a Dock</h2>
+    <p>At Dock size, next to each other. Left to right: S, T, U, W.</p>
+    <div class="desktop"><div class="dock" id="dock-light"></div></div>
+    <div class="desktop night"><div class="dock dk" id="dock-dark"></div></div>
+  </section>
+  </details>
+
+  <details class="old">
+    <summary>Round 4 (O to R, P looked like a suit)</summary>
+    <div id="ideas4"></div>
+  </details>
+  <details class="old">
+    <summary>Round 3 (K to N, simple but too generic)</summary>
+    <div id="ideas3"></div>
+  </details>
+  <details class="old">
+    <summary>Round 2 (G to J, too busy)</summary>
+    <div id="ideas2"></div>
+  </details>
+  <details class="old">
+    <summary>Round 1 (A to F, you said these feel generic)</summary>
+    <div id="ideas1"></div>
+  </details>
+</div>
+
+<script>
+const round5 = [
+  { id: "s", letter: "S", name: "Cursor", text: "The typing cursor, the moment just before words appear. That's what Verbatim does all class: words show up as the teacher talks." },
+  { id: "t", letter: "T", name: "Bookmark", text: "A ribbon bookmark hanging into the icon, like in a book. It keeps your place in class. The notch at the bottom is a small V." },
+  { id: "u", letter: "U", name: "Folded corner", text: "The icon itself is a page, with its top corner folded over to show the other color underneath. A page you want to keep." },
+  { id: "w", letter: "W", name: "Marker", text: "One Marker swipe. The thing you do to the part of class that matters." },
+];
+const round4 = [
+  { id: "o", letter: "O", name: "Pen quote", text: "Quote marks that look drawn with a pen, slightly uneven and leaning, like you wrote them in your notebook. Human, not printed." },
+  { id: "p", letter: "P", name: "Quote V", text: "Two quote marks whose tails meet at the bottom and make a V. Word for word, and V for Verbatim, in one shape." },
+  { id: "q", letter: "Q", name: "Open and close", text: "An opening quote and a closing quote hooked into each other, so the whole class is held between them. Honest note: it can look like a chain link." },
+  { id: "r", letter: "R", name: "Marked quote", text: "Quote marks printed slightly off from a yellow copy, like you went over them with your Marker. Blue plus yellow could be Verbatim's colors." },
+];
+const round3 = [
+  { id: "k", letter: "K", name: "Quote", text: "Just two quote marks. Verbatim means word for word, and quote marks are how you write down exactly what someone said." },
+  { id: "l", letter: "L", name: "Spider", text: "Just Anansi hanging from his thread. No web, no extras. A nod to the stories from class." },
+  { id: "m", letter: "M", name: "စာ", my: true, text: "Just the Burmese word for writing and lesson, in ink." },
+  { id: "n", letter: "N", name: "Blue quote", text: "The same quote marks as K, but white on Verbatim's ink blue, so it stands out more in the Dock." },
+];
+const round2 = [
+  { id: "anansi", letter: "G", name: "Anansi", text: "From the stories in Mr. Yurt's class: Anansi the spider got every story in the world from Nyame. Verbatim catches every word the same way. His web has one strand marked in yellow, and he has quote marks on his back." },
+  { id: "sa", letter: "H", name: "စာ", my: true, text: "The Burmese word for writing and for a lesson. One short word that means what the app makes, with the yellow marker swipe under it." },
+  { id: "mypage", letter: "I", name: "Your page", text: "A tiny Verbatim transcript: times in the left gutter (10:05, 10:07), a yellow Marker line and a red Note line in the margin, like the line tools you tested." },
+  { id: "pill", letter: "J", name: "Live", text: "The recording bar from the app: grey bars and the timer at 45:12, near the end of a class. It looks like Verbatim is listening right now." },
+];
+const round1 = [
+  { id: "quote", letter: "A", name: "Quote", text: "Big quote marks with a yellow marker swipe." },
+  { id: "page", letter: "B", name: "Notebook page", text: "A notebook page with a red margin line, on ink blue." },
+  { id: "bubble", letter: "C", name: "Said and kept", text: "A speech bubble with a folded page corner." },
+  { id: "v", letter: "D", name: "Letter V", text: "A book-style V with a marker swipe." },
+  { id: "nib", letter: "E", name: "Pen nib", text: "A fountain pen nib writing a yellow mark." },
+  { id: "wave", letter: "F", name: "Waveform in quotes", text: "The app's grey bars between quote marks." },
+];
+const svg = (id, px) => `<svg viewBox="0 0 1024 1024" width="${px || ""}" height="${px || ""}" aria-hidden="true"><use href="#ic-${id}"/></svg>`;
+const row = i => `
+  <section class="idea">
+    <div class="label">
+      <div class="letter">${i.letter}</div>
+      <h2 class="${i.my ? "h-my" : ""}">${i.name}</h2>
+      <p>${i.text}</p>
+    </div>
+    <div class="show">
+      <div class="pair">
+        <div class="tile"><div class="bg light">${svg(i.id)}</div><span class="cap">Light Mac</span></div>
+        <div class="tile dk"><div class="bg darkbg">${svg(i.id)}</div><span class="cap">Dark Mac</span></div>
+      </div>
+      <div class="sizes">
+        ${[128, 64, 32, 16].map(s => `<div class="sz">${svg(i.id, s)}<span>${s} px</span></div>`).join("")}
+      </div>
+    </div>
+  </section>`;
+document.getElementById("ideas5").innerHTML = round5.map(row).join("");
+document.getElementById("ideas4").innerHTML = round4.map(row).join("");
+document.getElementById("ideas3").innerHTML = round3.map(row).join("");
+document.getElementById("ideas2").innerHTML = round2.map(row).join("");
+document.getElementById("ideas1").innerHTML = round1.map(row).join("");
+const dock = round5.map(i => `<div>${svg(i.id, 64)}<b>${i.letter}</b></div>`).join("");
+document.getElementById("dock-light").innerHTML = dock;
+document.getElementById("dock-dark").innerHTML = dock;
+
+// color pairs: [name, background, shape, dark background, dark shape]
+const pals = [
+  ["Ink on paper", "#FCFBF8", "#1F1D1A", "#2A2926", "#EBE8E1"],
+  ["Paper on ink", "#1F1D1A", "#FCFBF8", "#1F1D1A", "#EBE8E1"],
+  ["Note red", "#FCFBF8", "#C2483A", "#2A2926", "#E07A6C"],
+  ["White on red", "#C2483A", "#FFFFFF", "#8E3329", "#F4E9E6"],
+  ["White on blue", "#24427A", "#FFFFFF", "#1B2B4D", "#C9D6F0"],
+  ["Sage", "#4E7A52", "#F6F3EA", "#2E4A31", "#D9E6D4"],
+  ["Teal", "#1F6F78", "#FFFFFF", "#164E55", "#CDE7E9"],
+  ["Orange", "#E8743B", "#FFFFFF", "#9A4A23", "#FFE3D1"],
+  ["Plum", "#5B4B8A", "#FFFFFF", "#3A3058", "#DCD5F0"],
+  ["Gold on ink", "#1F1D1A", "#EDC23A", "#1F1D1A", "#D6A91E"],
+  ["Ink on gold", "#EDC23A", "#1F1D1A", "#A9861A", "#1F1D1A"],
+  ["Blue and yellow", "#2D4F8C", "#EDC23A", "#22345A", "#D6A91E"],
+];
+const shade = (hex, f) => { const n = parseInt(hex.slice(1), 16); const c = [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(v * f)); return "#" + c.map(v => v.toString(16).padStart(2, "0")).join(""); };
+function paint(bg, fg, bgD, fgD) {
+  const targets = document.querySelectorAll("#ideas5 svg, #dock-light svg, #dock-dark svg");
+  targets.forEach(el => {
+    const dark = !!el.closest(".dk");
+    el.style.setProperty("--i-blue", dark ? bgD : bg);
+    el.style.setProperty("--i-mark", dark ? fgD : fg);
+  });
+}
+const sw = document.getElementById("swatches");
+sw.innerHTML = pals.map((p, n) => `<button type="button" class="sw" id="pal-${n}" aria-pressed="false"><i style="background:${p[1]};box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)"><b style="background:${p[2]}"></b></i>${p[0]}</button>`).join("");
+function choose(n) {
+  sw.querySelectorAll(".sw").forEach((b, k) => b.setAttribute("aria-pressed", String(k === n)));
+  const p = pals[n]; paint(p[1], p[2], p[3], p[4]);
+  document.getElementById("own-hex").textContent = "";
+}
+sw.addEventListener("click", e => { const b = e.target.closest(".sw"); if (b) choose(+b.id.slice(4)); });
+const ownBg = document.getElementById("own-bg"), ownFg = document.getElementById("own-fg");
+function own() {
+  sw.querySelectorAll(".sw").forEach(b => b.setAttribute("aria-pressed", "false"));
+  paint(ownBg.value, ownFg.value, shade(ownBg.value, 0.7), shade(ownFg.value, 0.9));
+  document.getElementById("own-hex").textContent = `Your colors: ${ownBg.value.toUpperCase()} and ${ownFg.value.toUpperCase()} (tell me these)`;
+}
+ownBg.addEventListener("input", own); ownFg.addEventListener("input", own);
+choose(0);
+</script>
+<script>
+// Round 6: modern skeuomorphic icons, ink on paper. Each call builds a full SVG with unique ids.
+let skN = 0;
+const SK = {
+  light: { tA: "#FFFEFB", tB: "#ECE7DC", desk: ["#ECE7DD", "#D8D0C1"], ink: "#1F1D1A", rule: "#DDD6C8", sheet: ["#FFFEFA", "#F3EEE4"], back: "#EDE7DB", faint: "#DCD5C8", flap: ["#E2DACB", "#FBF8F1"], date: "#8A857B" },
+  dark:  { tA: "#3B3935", tB: "#24231F", desk: ["#2E2C29", "#1C1B19"], ink: "#EBE8E1", rule: "#4A4741", sheet: ["#46433E", "#38352F"], back: "#302E2A", faint: "#55524B", flap: ["#2E2C28", "#4E4A44"], date: "#A39E94" },
+};
+const SAT = {
+  black: ["#0C0B0A", "#3E3B37", "#1A1917", "#2C2A27"],
+  note:  ["#7E2A20", "#E0705F", "#B23D30", "#C9564A"],
+  deep:  ["#4E1118", "#B5404A", "#7A1B25", "#93303A"],
+  brick: ["#6A2A1A", "#C8714F", "#99402A", "#B0583E"],
+};
+function sk(id, mode, px, rib) {
+  const sat = SAT[rib || "black"];
+  const c = SK[mode], u = "k" + (skN++);
+  const sz = px ? `width="${px}" height="${px}"` : "";
+  const tile = `M285 100 H739 C841 100 924 183 924 285 V739 C924 841 841 924 739 924 H285 C183 924 100 841 100 739 V285 C100 183 183 100 285 100 Z`;
+  const defs = `
+    <clipPath id="${u}b"><path d="${tile}"/></clipPath>
+    <linearGradient id="${u}t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.tA}"/><stop offset="1" stop-color="${c.tB}"/></linearGradient>
+    <linearGradient id="${u}d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.desk[0]}"/><stop offset="1" stop-color="${c.desk[1]}"/></linearGradient>
+    <linearGradient id="${u}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.sheet[0]}"/><stop offset="1" stop-color="${c.sheet[1]}"/></linearGradient>
+    <linearGradient id="${u}e" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".3" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#fff" stop-opacity=".3"/></linearGradient>
+    <filter id="${u}g" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .25  .22 0 0 0 -.06"/></filter>
+    <filter id="${u}w" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000" flood-opacity=".30"/></filter>
+    <filter id="${u}o" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity=".28"/><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".25"/></filter>
+    <filter id="${u}p" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="14" dy="22" stdDeviation="12" flood-color="#000" flood-opacity=".30"/></filter>
+    <linearGradient id="${u}cyl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A4643"/><stop offset=".22" stop-color="#2B2926"/><stop offset=".55" stop-color="#0E0D0C"/><stop offset=".85" stop-color="#1E1C1A"/><stop offset="1" stop-color="#0A0909"/></linearGradient>
+    <linearGradient id="${u}met" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".35" stop-color="#C9C8C4"/><stop offset=".6" stop-color="#8E8C88"/><stop offset="1" stop-color="#D9D8D4"/></linearGradient>
+    <linearGradient id="${u}sat" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${sat[0]}"/><stop offset=".3" stop-color="${sat[1]}"/><stop offset=".5" stop-color="${sat[2]}"/><stop offset=".8" stop-color="${sat[3]}"/><stop offset="1" stop-color="${sat[0]}"/></linearGradient>
+    <linearGradient id="${u}cov" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3733"/><stop offset="1" stop-color="#121110"/></linearGradient>
+    <linearGradient id="${u}pg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F7F2E7"/><stop offset="1" stop-color="#E2DACA"/></linearGradient>
+    <linearGradient id="${u}f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c.flap[0]}"/><stop offset="1" stop-color="${c.flap[1]}"/></linearGradient>
+    <linearGradient id="${u}gut" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".16"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>`;
+  const grain = `<rect x="100" y="100" width="824" height="824" filter="url(#${u}g)"/>`;
+  const edge = `<path d="${tile}" fill="none" stroke="url(#${u}e)" stroke-width="5"/>`;
+  let body = "";
+
+  if (id === "book") {
+    body = `
+    <path d="${tile}" fill="url(#${u}t)" filter="url(#${u}w)"/>
+    <g clip-path="url(#${u}b)">${grain}
+      <g filter="url(#${u}o)">
+        <rect x="262" y="178" width="508" height="684" rx="26" fill="url(#${u}pg)"/>
+      </g>
+      <g stroke="#D3CAB7" stroke-width="2.5">${[0,1,2,3,4,5].map(k => `<line x1="${752 + k*3.4}" y1="${200 + k*2}" x2="${752 + k*3.4}" y2="${842 - k*2}"/>`).join("")}</g>
+      <path d="M420 840 H466 V916 L443 896 L420 916 Z" fill="url(#${u}sat)"/>
+      <g filter="url(#${u}o)"><rect x="240" y="158" width="504" height="690" rx="30" fill="url(#${u}cov)"/></g>
+      <clipPath id="${u}cc"><rect x="240" y="158" width="504" height="690" rx="30"/></clipPath>
+      <g clip-path="url(#${u}cc)">
+        <rect x="240" y="158" width="504" height="690" filter="url(#${u}g)" opacity=".7"/>
+        <rect x="240" y="158" width="58" height="690" fill="#000" opacity=".28"/>
+        <line x1="298" y1="158" x2="298" y2="848" stroke="#fff" stroke-opacity=".10" stroke-width="3"/>
+        <rect x="240" y="158" width="504" height="690" rx="30" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="4"/>
+      </g>
+      <g filter="url(#${u}o)">
+        <rect x="336" y="318" width="290" height="150" rx="14" fill="url(#${u}pg)"/>
+      </g>
+      <rect x="350" y="332" width="262" height="122" rx="8" fill="none" stroke="#CFC6B3" stroke-width="3"/>
+      <text x="481" y="414" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-style="italic" font-weight="600" font-size="62" fill="#1F1D1A">Verbatim</text>
+      <rect x="664" y="150" width="30" height="706" rx="6" fill="url(#${u}sat)" filter="url(#${u}o)"/>
+    </g>${edge}`;
+  }
+
+  if (id === "sheet") {
+    const lines = [300, 366, 432, 498, 564, 630, 696, 762].map(y => {
+      const end = Math.min(744, 1478 - y - 26);
+      return `<line x1="292" y1="${y}" x2="${end}" y2="${y}"/>`;
+    }).join("");
+    body = `
+    <path d="${tile}" fill="url(#${u}d)" filter="url(#${u}w)"/>
+    <g clip-path="url(#${u}b)">${grain}
+      <rect x="236" y="190" width="532" height="668" rx="16" fill="${c.back}" transform="rotate(5 512 524)" filter="url(#${u}o)"/>
+      <g transform="rotate(-3 512 510)">
+        <path d="M266 170 H756 Q774 170 774 188 V706 L630 850 H266 Q248 850 248 832 V188 Q248 170 266 170 Z" fill="url(#${u}s)" filter="url(#${u}o)"/>
+        <clipPath id="${u}sh"><path d="M266 170 H756 Q774 170 774 188 V706 L630 850 H266 Q248 850 248 832 V188 Q248 170 266 170 Z"/></clipPath>
+        <g clip-path="url(#${u}sh)"><rect x="248" y="170" width="526" height="680" filter="url(#${u}g)" opacity=".8"/></g>
+        <g stroke="${c.rule}" stroke-width="4">${lines}</g>
+        <text x="740" y="244" text-anchor="end" font-family="Caveat, 'Bradley Hand', cursive" font-weight="600" font-size="46" fill="${c.date}">Fri 20 Nov</text>
+        <g font-family="Caveat, 'Bradley Hand', cursive" font-weight="600" font-size="78" fill="${c.ink}">
+          <text x="296" y="356">Every word</text>
+          <text x="296" y="488">from class,</text>
+          <text x="296" y="620">kept.</text>
+        </g>
+        <path d="M774 706 L630 850 L642 718 Z" fill="url(#${u}f)" filter="url(#${u}o)"/>
+      </g>
+    </g>${edge}`;
+  }
+
+  if (id === "ribbon") {
+    const bars = [];
+    let y = 236;
+    const widths = [470, 500, 430, 0, 500, 480, 510, 360, 0, 490, 450, 300];
+    widths.forEach(w => { if (w) bars.push(`<rect x="250" y="${y}" width="${w}" height="16" rx="8"/>`); y += 52; });
+    body = `
+    <path d="${tile}" fill="url(#${u}t)" filter="url(#${u}w)"/>
+    <g clip-path="url(#${u}b)">${grain}
+      <rect x="100" y="100" width="150" height="824" fill="url(#${u}gut)"/>
+      <g fill="${c.faint}">${bars.join("")}</g>
+      <g filter="url(#${u}p)">
+        <path d="M566 60 H672 V790 L619 736 L566 790 Z" fill="url(#${u}sat)"/>
+      </g>
+      <rect x="566" y="60" width="106" height="120" fill="#000" opacity=".25"/>
+      <line x1="578" y1="180" x2="578" y2="770" stroke="#fff" stroke-opacity=".10" stroke-width="3"/>
+    </g>${edge}`;
+  }
+
+  if (id === "pen") {
+    body = `
+    <path d="${tile}" fill="url(#${u}t)" filter="url(#${u}w)"/>
+    <g clip-path="url(#${u}b)">${grain}
+      <path d="M214 742 C 240 690 268 668 286 700 C 302 730 300 770 324 760 C 350 748 352 700 372 692" fill="none" stroke="${c.ink}" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+      <g transform="translate(378 690) rotate(-40)" filter="url(#${u}p)">
+        <path d="M0 0 L72 -28 Q88 -30 100 -26 L100 26 Q88 30 72 28 Z" fill="url(#${u}met)"/>
+        <line x1="10" y1="0" x2="80" y2="0" stroke="#4A4743" stroke-width="3"/>
+        <circle cx="82" cy="0" r="5" fill="#4A4743"/>
+        <rect x="98" y="-32" width="96" height="64" rx="12" fill="url(#${u}cyl)"/>
+        <rect x="190" y="-38" width="16" height="76" rx="3" fill="url(#${u}met)"/>
+        <rect x="204" y="-42" width="440" height="84" rx="42" fill="url(#${u}cyl)"/>
+        <rect x="222" y="-30" width="400" height="9" rx="4.5" fill="#fff" opacity=".22"/>
+        <rect x="270" y="-56" width="300" height="16" rx="8" fill="url(#${u}met)"/>
+        <circle cx="282" cy="-48" r="13" fill="url(#${u}met)"/>
+      </g>
+    </g>${edge}`;
+  }
+  return `<svg viewBox="0 0 1024 1024" ${sz} aria-hidden="true"><defs>${defs}</defs>${body}</svg>`;
+}
+const round6 = [
+  { id: "book", letter: "1", name: "Notebook", text: "A black notebook with a paper label that says Verbatim, an elastic band, cream page edges and a ribbon. Like a real one in your bag." },
+  { id: "sheet", letter: "2", name: "Notebook page", text: "A real sheet of paper with a folded corner and today's date, handwritten: \"Every word from class, kept.\"" },
+  { id: "ribbon", letter: "3", name: "Ribbon", text: "A black satin bookmark ribbon lying on a printed page, with real light and shadow. Calm, like round 5's bookmark, but real." },
+  { id: "pen", letter: "4", name: "Fountain pen", text: "A black fountain pen with a silver nib and clip, lying on paper next to the ink it just wrote." },
+];
+const row6 = i => `
+  <section class="idea">
+    <div class="label">
+      <div class="letter">${i.letter}</div>
+      <h2>${i.name}</h2>
+      <p>${i.text}</p>
+    </div>
+    <div class="show">
+      <div class="pair">
+        <div class="tile"><div class="bg light">${sk(i.id, "light")}</div><span class="cap">Light Mac</span></div>
+        <div class="tile"><div class="bg darkbg">${sk(i.id, "dark")}</div><span class="cap">Dark Mac</span></div>
+      </div>
+      <div class="sizes">
+        ${[128, 64, 32, 16].map(s => `<div class="sz">${sk(i.id, "light", s)}<span>${s} px</span></div>`).join("")}
+      </div>
+    </div>
+  </section>`;
+document.getElementById("ideas6").innerHTML = round6.map(row6).join("");
+document.getElementById("dock6-light").innerHTML = round6.map(i => `<div>${sk(i.id, "light", 64)}<b>${i.letter}</b></div>`).join("");
+const ribs = [
+  { rib: "black", letter: "A", name: "Black", text: "Ink on paper, the one you picked. Quiet and serious." },
+  { rib: "note", letter: "B", name: "Note red", text: "The same red as the Note pen line in the app. Brighter, friendlier, easy to spot in the Dock." },
+  { rib: "deep", letter: "C", name: "Deep red", text: "A dark wine red, like a ribbon in an old hardcover book. Fancy but calm." },
+  { rib: "brick", letter: "D", name: "Brick", text: "A warm brownish red, a bit like terracotta. Softest of the reds." },
+];
+document.getElementById("ribbons").innerHTML = ribs.map(r => `
+  <section class="idea">
+    <div class="label"><div class="letter">${r.letter}</div><h2>${r.name}</h2><p>${r.text}</p></div>
+    <div class="show">
+      <div class="pair">
+        <div class="tile"><div class="bg light">${sk("ribbon", "light", 0, r.rib)}</div><span class="cap">Light Mac</span></div>
+        <div class="tile"><div class="bg darkbg">${sk("ribbon", "dark", 0, r.rib)}</div><span class="cap">Dark Mac</span></div>
+      </div>
+      <div class="sizes">${[128, 64, 32, 16].map(x => `<div class="sz">${sk("ribbon", "light", x, r.rib)}<span>${x} px</span></div>`).join("")}</div>
+    </div>
+  </section>`).join("");
+document.getElementById("dockr-light").innerHTML = ribs.map(r => `<div>${sk("ribbon", "light", 64, r.rib)}<b>${r.letter}</b></div>`).join("");
+document.getElementById("dockr-dark").innerHTML = ribs.map(r => `<div>${sk("ribbon", "dark", 64, r.rib)}<b>${r.letter}</b></div>`).join("");
+document.getElementById("dock6-dark").innerHTML = round6.map(i => `<div>${sk(i.id, "dark", 64)}<b>${i.letter}</b></div>`).join("");
+</script>

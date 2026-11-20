@@ -571,8 +571,8 @@ class depends on it.
 2. [x] **Record.** Record / Pause / Resume / Stop into one crash-safe audio
        file. Sleep prevention, mic picker, level meter, crash recovery.
 2b. [x] **Visual design.** "Notebook" look picked by Ryan and built.
-       App icon still to do (Ryan didn't like the first try: a waveform
-       turning into text lines; do it later, show him options first).
+       App icon: done 2026-11-20 (the red Ribbon, see "App icon" below),
+       on branch `claude/ux-round-2`, not tested by Ryan yet.
 3. [~] **Transcribe a file.** Drop a Voice Memo, WhisperKit transcribes it,
        model download with resume. Ryan tests accuracy on real classes.
 4. [x] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
@@ -694,7 +694,7 @@ Ask Mr. Yurt before recording class.
   Privacy & Security > "Open Anyway" (right-click > Open no longer skips
   the warning on recent macOS).
 - No auto update yet: Ryan downloads each new build by hand until step 11.
-- No app icon yet (generic icon). Ryan wants to pick one later.
+- App icon: the red Ribbon (2026-11-20), see "App icon" below.
 
 ## How recording works (step 2)
 - Audio: `AVCaptureSession` on the chosen mic, converted to 16 kHz mono
@@ -947,10 +947,21 @@ Ask Mr. Yurt before recording class.
 - Start screen animation (Ryan: it stopped abruptly): speech eases in and
   out, pauses at commas and full stops, words hold then fade, then repeat. Live text 62% ink, half-said
   words 45%.
-- App icon: not yet. First try (waveform bars + text lines, drawn with
-  Pillow) was rejected by Ryan. Next time show a few options first; to
-  add one, put `AppIcon.icns` in `Support/`, copy it in
-  `scripts/build-app.sh`, and set `CFBundleIconFile` in Info.plist.
+- App icon (2026-11-20, picked by Ryan after 6 rounds, all in
+  `docs/design/AppIcon.html`, live page
+  https://claude.ai/artifact/36WZyRqXNNYMaz3ziksCF5): a cream printed page
+  with a red satin bookmark ribbon (Note red), real paper grain, light and
+  shadow. Source: `Support/AppIcon.svg`. `node scripts/make-icon.js` makes
+  `Support/AppIcon.icns` (works on Linux, uses Playwright).
+  `scripts/build-app.sh` copies it; Info.plist has `CFBundleIconFile`.
+  Built on `claude/ux-round-2` (Ryan asked), not tested by Ryan yet.
+  Test: the new icon shows in the Dock, Finder and Launchpad (if the old
+  blank one sticks, drag Verbatim out of Applications and back in).
+  What Ryan said no to: waveform turning into lines, anything "generic",
+  busy icons with many ideas, the "Quote V" (looked like a suit), blue and
+  yellow together, flat single shapes ("too blank"). What worked: ink on
+  paper, made like a real object (modern skeuomorphism).
+  Not done: a separate dark-mode icon (needs Xcode's new icon format).
 
 ## How the design pass works (2026-11-12)
 - Sidebar (`Views/SidebarView.swift`) is a ScrollView + VStack, not `List`:
@@ -1711,12 +1722,211 @@ Still to do (one chat, after the line tools):
 15. Greyed Transcribe again / Find speakers again don't say why.
 
 ### UX check, round 2 (2026-11-20, read from the code by 4 reviewers + CI screenshots)
-Ryan: "investigate for UX errors". Nothing fixed yet. The worst ones (A1,
-A2, A3, A4, A5) were checked by hand in the code. Item 1 above was only
-half fixed: see A4. Branch `claude/speech-model-errors` (1 commit, not
-merged, not tested by Ryan) may already fix A10 and part of B12: check it
-first. Suggested chats: A1 to A4 together, then A5 to A10, then B, then C
-(with items 2 to 15 above where they touch the same code).
+Ryan: "investigate for UX errors". The worst ones (A1 to A5) were checked
+by hand in the code. Item 1 above was only half fixed: see A4.
+
+**MERGED into main 2026-11-20 (Ryan: "perfect merge"), RywnSwn/Verbatim#29.
+He tried the sidebar changes on 0.1.236; the test lists below were mostly
+not run, so if something here breaks, these notes say how it works.**
+A1 to A10, B1 to B17, C1 to C11 and items 2 to 15: BUILT on that branch, not tested by Ryan, not merged. Draft pull
+request RywnSwn/Verbatim#29 (one PR for the whole round; merge only when
+Ryan asks, after testing). Next chat: A6 to A10, then B, then C, all on the
+same branch. Smoke 0.1 run 89 (8e6d67b): passed; Copy all shows at 1000 and
+at 700 wide (only Note and the rest go into "»" at 700).
+Review fixes (second reviewer, same chat): the Undo link only shows for a
+change in the recording on screen (a box saved while switching goes on ⌘Z
+only); "Copied N lines" never replaces a message with a link; a delete
+step is skipped once that recording was put back or deleted for good
+(`UndoStep.restores`), and Put Back removes it.
+What was built (A1 to A5):
+- A1: `AudioCleanup.changed(from:to:)` (called from the Storage picker's
+  onChange): shorter than before, or Forever to a number, sets
+  `audioCleanupGraceUntil` = now + 3 days; `deleteDate` never goes before
+  it, so the sidebar's "audio deletes in N days" shows first and changing
+  back loses nothing. Under the picker: "N recordings lose their audio in
+  the next 3 days. The text stays." (`AudioCleanup.dueSoon`).
+- A2: `TranscriptList.boxOwner`: the recording the open box belongs to,
+  used by save / saveNote / saveNewLine. `onChange(of: info.id)` saves and
+  closes the box, clears the picked line and popups.
+  `keepNewLineAnchored` only runs in the box's own recording.
+- A3: `WavWriter.recoverAfterError` (truncate to the last good sample),
+  `AudioPipeline.hasWriteError` / `clearWriteError`. `resume()` refuses
+  with "The disk is still full. Free up space, then Resume" under about
+  10 min of room, else fixes the file and records again.
+- A4: `undoStack` holds `UndoStep` (text, recording, run). `offerLineUndo(
+  _, in: id)` everywhere a change is in one recording. ⌘Z
+  (`undoLastChange`) takes the newest step whose recording is on screen
+  or being recorded, or has none; steps of a deleted recording wait until
+  Put Back. Other recording's step: "Undid: … (in <title>)". Nothing:
+  "Nothing to undo in this recording." Recording delete is a step
+  (Put Back); the bar's Undo removes it. ⌘Z after Stop = Undo Stop if no
+  newer step (`StoppedNote.serial` vs `undoSerial`). Opening another
+  recording clears the "Line edited. Undo" link (`selectionChanged`).
+- A5: Copy all is the first toolbar item (finished and live recording),
+  since a narrow toolbar hides items from the right into "»". The bare
+  toolbar "+" (New recording) is gone (sidebar top and ⌘N still there;
+  also fixes part of C1). Copy shows "Copied N lines" in the bottom bar
+  when not recording.
+Test list (for Ryan, A1 to A5):
+1. Open a finished recording, normal window size: Copy all shows next to
+   the title buttons, not hidden in "»". Press ⇧⌘C: "Copied N lines" at
+   the bottom.
+2. Double-click a line, type something, click another recording in the
+   sidebar. Go back: your words are in the first recording; the other
+   recording didn't change.
+3. Same with a note (pencil button) and a new line (+ on a picked line).
+4. Edit a line in recording A, open recording B, press ⌘Z: "Nothing to
+   undo in this recording." Go back to A, ⌘Z: the edit is undone.
+5. Delete a recording, wait 20 seconds, press ⌘Z: it comes back.
+6. Record a few seconds, Stop, press ⌘Z right away: recording continues.
+7. Settings > Storage: change "Keep audio for" to 3 days. The line under
+   it says how many recordings lose audio in the next 3 days. Change it
+   back to 7 days. (Nothing is deleted for 3 days either way.)
+8. Disk full can't be tested easily; skip it.
+
+A6 to A10: BUILT (2026-11-20, second chat on the branch), not tested by
+Ryan. `claude/speech-model-errors` was checked first: it does NOT fix A10
+(its `recordingFinal` still needs `isModelReady`); it only clashes with this
+branch in the notes files, so it stays its own PR (RywnSwn/Verbatim#27).
+Its `recordingFinal` line will conflict with A10: keep both (`needsRedo`
+from #27, the new `!isModelReady` enqueue branch from here).
+What was built (A6 to A10):
+- A6: `AudioImport.convert` reports progress (by the file's length) and
+  stops on task cancel. `RecorderModel.runImport` keeps the task in
+  `importTasks`; `cancelImport(id)` = Cancel link in the status line
+  ("Importing X, 42%. Text comes next.", with a bar). `delete(id)` and
+  Delete All on an importing recording cancel the copy (folder removed,
+  "Stopped importing X. Your original file isn't touched."), so nothing
+  half done goes to Recently deleted. `RecordingInfo.importingPath` is set
+  until the copy is done: at launch (`recoverImports`) the copy starts over
+  if the file is still readable, else it's removed and a notice says
+  drop it in again. `Transcriber.pickUp` skips importing ids. Same file
+  dropped twice while copying: shows the first.
+- A7: queued + model download paused: "Needs the speech model. Its
+  download is paused at 42%." with "Resume download"; failed: "Try now";
+  downloading: "Starts when the speech model download is done (42%, about
+  3 min left)."
+- A8: menu bar panel with mic access off: "Verbatim can't hear anything",
+  Record becomes "Mic settings", Record in <group> rows greyed. `start()`
+  with mic off sets a status with "Open Microphone settings"
+  (`Status.Action.openMicSettings`) instead of doing nothing. The panel
+  re-reads the permission when it opens.
+- A9: `pause()` ends keep-awake (the Mac may sleep; nothing is recorded)
+  and `askIfStillPaused` asks once after 15 min: bottom bar "Paused for
+  15 minutes. Class over?" with Stop, and a "Still paused?" banner (same
+  id as Still recording, with Stop / Keep going). Off when "Still
+  recording?" is off in Settings. A pause for a problem keeps its own
+  message and Resume link. Resume takes keep-awake again.
+- A10: `recordingFinal`: no text, no pass, Parakeet not ready, audio there
+  = `enqueue`; it waits in the queue (status line says the download) and
+  `modelReady()` starts it. Picked up again after a relaunch as before.
+Test list (for Ryan, A6 to A10):
+1. Drop a long Voice Memo (10 min or more) on the window. Under the
+   title: "Importing …, N%" with a bar, then "Transcribing …".
+2. Drop it again and press Cancel while it says Importing: it goes away,
+   "Stopped importing …" at the bottom. Drop it again, press Delete
+   (⌘⌫) while Importing: same thing, nothing in Recently deleted.
+3. Drop a long memo and quit Verbatim (⌘Q) while it says Importing. Open
+   Verbatim: it imports again from the start, then transcribes all of it.
+4. Mic access: System Settings > Privacy & Security > Microphone, turn
+   Verbatim off. Click the menu bar icon: it says Verbatim can't hear
+   anything, with a Mic settings button. Press ⌘R in the main window:
+   the bottom bar says so with "Open Microphone settings". Turn it back on.
+5. Record, Pause, wait 15 minutes (or come back later): "Paused for 15
+   minutes. Class over?" with Stop. The Mac can go to sleep while paused.
+6. A7 and A10 need a fresh Mac without the speech model, so they can only
+   be checked on a test account. Skip them.
+
+B1 to B17, C1 to C11 and the older list's items 2 to 15: BUILT (same
+chat, 2026-11-20), not tested by Ryan, same branch and PR. Two code
+reviews done (A6 to A10, then all of B); their findings are fixed.
+Smoke passed for b7432ac (B8 to B17). How the trickier parts work:
+- B1: `Status.standing` marks a warning that stays true (battery, chosen
+  mic missing, quiet, disk almost full, paused for a problem, 10 min
+  before 3 h). `status` didSet keeps it in `warning` while a short message
+  covers it and puts it back after. `clearStanding` ends one for good.
+  `show()` makes way after 30 s while recording if a warning waits.
+  Automatic update check failures only reach the bar after 3 days of
+  failing (`updateFailingSince`), never while recording.
+- B2: `RecordingInfo.breaks` (pause/resume and asleep/woke events, pauses
+  under 30 s skipped) draw "Paused 10:12 to 10:20" dividers (`Row.pause`).
+- B11: `liveModelPausedAt`, `speakerModelPausedAt`, `wordModelPausedAt`
+  remember Pause. Speaker and word downloads never run at once.
+- B13 / item 2: `settingsUndo` and `addUndo` put steps on ⌘Z without the
+  bottom bar link; `transcribeAgain` / `findSpeakersAgain` keep the old
+  LiveText and put it back on Undo (after the pass has stopped).
+- B14: `startNewGroup` / `cancelNewGroup` / `finishGroupName`.
+- B16: imports go to `groupOnScreen`; sidebar groups take `.fileURL` drops.
+Last two leftovers: BUILT (2026-11-20, third chat on the branch), not
+tested by Ryan:
+- B10 rest: `ZipDownload` (URLSession delegate) gives progress, shown in
+  Settings > Updates as "Downloading 0.1.N: 42% (17 of 40 MB)". If it
+  stops (internet, sleep), URLSession's resume data is kept in
+  `Updates/<build>.partial` and the next try carries on from there
+  ("The download stopped at 42%. It carries on from there in 30
+  minutes, or press Check Now."). Resume data that no longer works:
+  starts over once by itself. Check Now is greyed while downloading.
+- Undo of Transcribe again on an old recording puts its Whisper
+  transcript (transcript.json) back too (`Transcriber.putBackOld`).
+  Also works when the recording had no live text.
+Sidebar fix (5c97fd3, same branch): if opening the sidebar would grow the
+window, the window goes back and the overlay is used; the width it needed
+is remembered (`sidebarNeedsWidth2`). Smoke run 98 passed.
+Fix (same chat): Ryan made the window small (overlay), dragged it wider,
+and after that the sidebar button only gave the overlay. Dragging wider
+reopened the sidebar mid-drag, and the rest of the drag (the last width
+change lands just after the drag ends) looked like the sidebar growing the
+window, so a wrong width was learned. Now: no growth watch while or after
+a drag, growth over 320 pt isn't the sidebar, and the old key is dropped
+once (new key `sidebarNeedsWidth2`).
+Test list (for Ryan, these two):
+1. Settings > Updates, Check Now when a new test build is out: the line
+   under it counts up ("Downloading …: 42% (17 of 40 MB)").
+2. Same, but turn Wi-Fi off halfway: it says the download stopped at N%.
+   Wi-Fi on, Check Now: it carries on from about N%, not from 0.
+3. Old recordings from before Parakeet are rare; skip the Whisper Undo.
+4. Open the sidebar at different window widths: the window never grows.
+5. Make the window small (sidebar becomes the overlay), drag it big again:
+   the normal sidebar comes back, and the sidebar button gives the normal
+   one (not the overlay) from then on.
+6. The sidebar in the window has no scroll line, and slides in and out
+   when you press the sidebar button (it used to just appear and vanish).
+7. Scroll the sidebar: New recording, Transcribe and Recently deleted stay
+   at the top with a line under them, the settings row stays at the bottom
+   with a line over it, and recordings never slide under the window's dots
+   or under the settings row.
+Faster builds (2026-11-20): Ryan hates waiting. Build 233 took 4.5 min,
+about 3 of them fetching and compiling FluidAudio. Both workflows now keep
+`.build` with actions/cache (key: Swift version + Package.swift hash), so
+from the second build on only Verbatim compiles (about 1.5 min expected).
+If a build ever fails strangely after a toolchain change, change the key.
+Lesson (2026-11-20): a review subagent ran `git checkout <sha>` in the
+shared checkout, so commits made meanwhile landed on a detached HEAD and
+weren't pushed. Tell review agents to use `git show` / `git diff` only,
+never checkout, and check `git status -sb` before pushing.
+Test list (for Ryan, B, C and the older items; the main ones):
+1. Record, put the Mac to sleep a minute, wake it: "Mac was asleep" and a
+   divider line in the transcript. Pause over 30 s, Resume: "Paused …"
+   divider.
+2. While recording, unplug the charger under 15% (or wait for "Quiet for
+   5 minutes"), then press ⌘D: the marker message shows, then the warning
+   comes back by itself.
+3. Delete a line that has a flag and a note: both go, Undo brings all
+   three back.
+4. Settings > Words: remove two words, press ⌘Z twice: both come back.
+5. Right-click a recording > Move to Group > New Group…, then Cancel: no
+   new group, the recording is where it was.
+6. Drop a Voice Memo on a group name in the sidebar: it lands in that
+   group. Drop one while recording: you stay on the live page.
+7. ⌘F a speaker name and a word from a note: both are found and marked.
+8. More (⋯) > Transcribe again, then Undo in the bottom bar: the old text
+   and names come back.
+9. Rename a recording, change a group's icon, move a recording with the
+   menu: each has Undo.
+10. Start page while recording: "A class is being recorded right now.
+    Show it". Drag a file over the window: dashed outline.
+11. ⌘Q while recording, Stop and Quit: the bar says Saving, no Undo Stop.
+12. Settings > Updates: if an update is ready, "Restart to Update" is there.
 
 A. Loses work or blocks the task
 - A1. Settings > Storage: lowering "Keep audio for" (7 to 3 days) deletes

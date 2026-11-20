@@ -18,25 +18,89 @@ struct ContentView: View {
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var hidForSpace = false
     @State private var floating = false
+    /// A file is held over the window (C3: nothing showed it could be dropped).
+    @State private var fileOver = false
     @State private var width: CGFloat = 1200
     /// 760: the system sidebar button stopped working below about 745 pt
     /// (0.1.109 test), and opening it in a window too narrow made macOS fight
     /// over the layout until it crashed (0.1.98, 0.1.102). So below this the
     /// split view's sidebar column stays shut and the floating one is used.
     static let compactWidth: CGFloat = 760
-    private static let roomyWidth: CGFloat = 820
     static let floatingWidth: CGFloat = 270
+    /// Some pages need more room beside the sidebar than others, so a fixed
+    /// width wasn't enough (Ryan, 2026-11-20: the window grew again just
+    /// above it). If opening the sidebar ever grows the window, the window
+    /// goes back, the overlay is used, and the width it needed is
+    /// remembered here, so next time the overlay comes straight away.
+    /// "2": the first version learned wrong widths from Ryan's own drags
+    /// (2026-11-20), so what it remembered is dropped once.
+    private static let learnedKey = "sidebarNeedsWidth2"
+    private static let oldLearnedKey = "sidebarNeedsWidth"
+    private var compact: CGFloat {
+        max(Self.compactWidth, UserDefaults.standard.double(forKey: Self.learnedKey))
+    }
+    private var roomy: CGFloat { compact + 60 }
+    /// Opening the sidebar inside the window: the width before, to catch growth.
+    @State private var opening: (before: CGFloat, at: Date)?
 
     private func fitSidebar(to width: CGFloat) {
+        // Growth while you drag the window's edge is you, not the sidebar.
+        // Ryan (2026-11-20): dragging wider brought the sidebar back halfway
+        // through, the rest of his drag looked like the sidebar growing the
+        // window, and from then on the button only gave the overlay.
+        let dragging = Messages.mainWindows.first?.inLiveResize == true
+        if dragging { opening = nil }
+        // The sidebar is under 300 pt wide: more growth than that is the
+        // window being resized some other way (green button, a new screen).
+        if let o = opening, !dragging, Date().timeIntervalSince(o.at) < 1,
+           width > o.before + 1, width - o.before < 320 {
+            undoGrowth(from: o.before, to: width)
+            return
+        }
         self.width = width
-        if width < Self.compactWidth, columns != .detailOnly, !hidForSpace {
+        if width < compact, columns != .detailOnly, !hidForSpace {
             hidForSpace = true
             columns = .detailOnly
-        } else if width >= Self.roomyWidth, hidForSpace || floating {
+        } else if width >= roomy, hidForSpace || floating {
             // Room again: the floating sidebar becomes the normal one.
             hidForSpace = false
             floating = false
-            columns = .all
+            openInWindow(watch: !dragging)
+        }
+    }
+
+    /// Shows the sidebar column, watching that the window doesn't grow
+    /// (not while Ryan drags the window's edge: that growth is his).
+    private func openInWindow(watch: Bool = true, animated: Bool = false) {
+        opening = watch ? (width, Date()) : nil
+        // After this layout pass, never in the middle of it (0.1.98 crash).
+        Task { @MainActor in
+            if animated {
+                withAnimation(Self.slide) { columns = .all }
+            } else {
+                columns = .all
+            }
+        }
+    }
+
+    /// The sidebar slides in and out when Ryan clicks the button (it used
+    /// to just appear and vanish, 2026-11-20). Not while the window is being
+    /// dragged: then it follows the window's edge.
+    static let slide = Animation.snappy(duration: 0.25)
+
+    /// The window grew for the sidebar: put it back and use the overlay.
+    private func undoGrowth(from before: CGFloat, to grown: CGFloat) {
+        opening = nil
+        // Capped, so one odd case can't make the overlay take over big windows.
+        UserDefaults.standard.set(min(max(grown, compact), 1100), forKey: Self.learnedKey)
+        hidForSpace = true
+        columns = .detailOnly
+        floating = true
+        Task { @MainActor in
+            guard let window = Messages.mainWindows.first else { return }
+            var f = window.frame
+            f.size.width = before
+            window.setFrame(f, display: true, animate: false)
         }
     }
 
@@ -45,16 +109,15 @@ struct ContentView: View {
         if floating {
             floating = false // hid for space stays as it was: wide again, it comes back
         } else if columns == .detailOnly {
-            if width < Self.compactWidth {
+            if width < compact {
                 floating = true
             } else {
                 hidForSpace = false
-                // After this layout pass, never in the middle of it (0.1.98 crash).
-                Task { @MainActor in columns = .all }
+                openInWindow(animated: true)
             }
         } else {
             hidForSpace = false
-            columns = .detailOnly
+            withAnimation(Self.slide) { columns = .detailOnly }
         }
     }
 
@@ -90,7 +153,25 @@ struct ContentView: View {
                 .dropDestination(for: URL.self) { urls, _ in
                     model.importAudio(urls)
                     return true
+                } isTargeted: { fileOver = $0 }
+                .overlay {
+                    if fileOver {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                            .background(Theme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay {
+                                Label("Drop to transcribe", systemImage: "waveform.badge.plus")
+                                    .font(.title3.weight(.medium))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(.regularMaterial, in: Capsule())
+                            }
+                            .padding(8)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(.easeOut(duration: 0.15), value: fileOver)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if model.isBusy || model.stoppedNote != nil || model.deletedNote != nil || model.status != nil || updater.isReady {
                         BottomBar()
@@ -124,9 +205,11 @@ struct ContentView: View {
         .animation(.snappy(duration: 0.18), value: model.showCommandMenu)
         // Picking a recording (or Recently Deleted, or starting one) closes it.
         .onChange(of: model.selection) { floating = false }
+        .onChange(of: model.sidebarPicks) { floating = false }
         .onChange(of: model.showingDeleted) { floating = false }
         .onAppear {
             MainWindow.open = { openWindow(id: "main") }
+            UserDefaults.standard.removeObject(forKey: Self.oldLearnedKey)
             if let w = (Messages.mainWindows.first ?? NSApp.keyWindow)?.frame.width { width = w }
             LaunchTimer.shared.mark("window shown")
         }
@@ -160,7 +243,7 @@ private struct FloatingSidebar: View {
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { close() } // VoiceOver, and the smoke test's clicks
                     .transition(.opacity)
-                SidebarView()
+                SidebarView(floating: true)
                     .frame(width: ContentView.floatingWidth)
                     .frame(maxHeight: .infinity)
                     .background {
@@ -173,9 +256,8 @@ private struct FloatingSidebar: View {
                         }
                         .ignoresSafeArea()
                     }
-                    .overlay(alignment: .trailing) {
-                        Rectangle().fill(Theme.line).frame(width: 1).ignoresSafeArea()
-                    }
+                    // No line down the right edge (it looked like a scroll
+                    // bar, Ryan 2026-11-20): the shadow marks the edge.
                     .compositingGroup()
                     .shadow(color: .black.opacity(0.18), radius: 16, x: 4)
                     .background {
@@ -204,14 +286,21 @@ private struct GroupNameAlert: ViewModifier {
         content
             .alert("Name this group", isPresented: Binding(
                 get: { model.renameGroupRequest != nil },
-                set: { if !$0 { model.renameGroupRequest = nil } })
+                set: { if !$0, model.renameGroupRequest != nil {
+                    // Closed without OK (Esc): same as Cancel.
+                    model.renameGroupRequest = nil
+                    model.cancelNewGroup()
+                } })
             ) {
                 TextField("Like English 2026", text: $draft)
                 Button("OK") {
-                    if let id = model.renameGroupRequest { store.rename(id, to: draft) }
+                    if let id = model.renameGroupRequest { model.finishGroupName(id, draft) } else { model.keepNewGroup() }
                     model.renameGroupRequest = nil
                 }
-                Button("Cancel", role: .cancel) { model.renameGroupRequest = nil }
+                Button("Cancel", role: .cancel) {
+                    model.renameGroupRequest = nil
+                    model.cancelNewGroup()
+                }
             } message: {
                 Text("One group per class works well. Pick an icon by clicking the one next to its name.")
             }
@@ -251,6 +340,7 @@ struct DetailView: View {
         .onChange(of: model.selection) {
             model.searchText = ""
             model.lineTool = nil // a tool belongs to the transcript it was picked up on
+            model.selectionChanged() // its Undo link goes too
             // Audio belongs to the transcript on screen; don't keep playing behind another one.
             if Playback.shared.id != model.selection { Playback.shared.close() }
         }

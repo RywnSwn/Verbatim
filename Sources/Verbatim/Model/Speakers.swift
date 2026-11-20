@@ -204,6 +204,10 @@ extension RecorderModel {
         // Back to its own voice: just follow the voice again.
         changed.speaker = choice == line.voice.map(Speakers.token) ? nil : choice
         live.replaceLine(id, start: start, with: changed)
+        // Item 4: on ⌘Z (the bar may be offering "Change them too").
+        addUndo("Speaker changed.", in: id) {
+            LiveTranscriber.shared.replaceLine(id, start: start, with: line)
+        }
 
         let name = before.display(choice)
         guard let voice = line.voice, choice != Speakers.token(voice) else {
@@ -238,14 +242,14 @@ extension RecorderModel {
         }
         // A real name: remember the voice for next time (step 7c).
         guard Speakers.voice(of: choice) == nil, let info = info(id) else {
-            offerLineUndo(text, undo: undoName)
+            offerLineUndo(text, in: id, undo: undoName)
             return
         }
         let started = Date()
         VoiceLibrary.shared.remember(name: choice, voice: voice, in: info) { [weak self] saved in
             guard let self else { return }
-            guard saved else { return self.offerLineUndo(text, undo: undoName) }
-            self.offerLineUndo("\(text) Verbatim will know this voice next time.") {
+            guard saved else { return self.offerLineUndo(text, in: id, undo: undoName) }
+            self.offerLineUndo("\(text) Verbatim will know this voice next time.", in: id) {
                 undoName()
                 VoiceLibrary.shared.forget(named: choice, savedAfter: started)
             }

@@ -313,6 +313,8 @@ final class WordModel {
         case waiting
         case downloading(fraction: Double)
         case failed(fraction: Double)
+        /// Ryan pressed Pause (B11). Remembered after a relaunch.
+        case paused(fraction: Double)
         case preparing
         case ready
     }
@@ -323,18 +325,41 @@ final class WordModel {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     private static let preparedKey = "wordModelPrepared"
+    private static let pausedKey = "wordModelPausedAt"
 
     private init() {
-        if UserDefaults.standard.bool(forKey: Self.preparedKey), ParakeetEngine.wordSpotterOnDisk { state = .ready }
+        if UserDefaults.standard.bool(forKey: Self.preparedKey), ParakeetEngine.wordSpotterOnDisk {
+            state = .ready
+        } else if let f = UserDefaults.standard.object(forKey: Self.pausedKey) as? Double {
+            state = .paused(fraction: f)
+        }
+    }
+
+    func pause() {
+        guard case .downloading(let f) = state else { return }
+        task?.cancel()
+        task = nil
+        retryTask?.cancel()
+        retryTask = nil
+        state = .paused(fraction: f)
+        UserDefaults.standard.set(f, forKey: Self.pausedKey)
+        SpeakerModel.shared.startIfNeeded()
+    }
+
+    func resume() {
+        UserDefaults.standard.removeObject(forKey: Self.pausedKey)
+        state = .waiting
+        startIfNeeded()
     }
 
     /// Called at launch, when the speaker model is ready and when a word is added.
     func startIfNeeded() {
+        if case .paused = state { return }
         guard state != .ready, state != .preparing, task == nil,
               LiveTranscriber.shared.isModelReady, !WordList.shared.words.isEmpty else { return }
         switch SpeakerModel.shared.state {
         case .downloading, .preparing, .waiting: return // one download at a time
-        case .ready, .failed: break
+        case .ready, .failed, .paused: break
         }
         retryTask?.cancel()
         retryTask = nil
@@ -347,9 +372,15 @@ final class WordModel {
                 UserDefaults.standard.set(true, forKey: Self.preparedKey)
                 task = nil
                 state = .ready
+                SpeakerModel.shared.startIfNeeded() // its retry waited for this
             } catch {
+                // Cancelled by Pause: a Resume since then may already have
+                // started a new task; leave it alone.
+                if Task.isCancelled { return }
                 task = nil
+                if case .paused = state { return }
                 state = .failed(fraction: fraction)
+                SpeakerModel.shared.startIfNeeded()
                 retryTask = Task {
                     try? await Task.sleep(for: .seconds(30))
                     guard !Task.isCancelled else { return }
@@ -368,7 +399,7 @@ final class WordModel {
 
     private var fraction: Double {
         switch state {
-        case .downloading(let f), .failed(let f): f
+        case .downloading(let f), .failed(let f), .paused(let f): f
         case .waiting: 0
         case .preparing, .ready: 1
         }
@@ -376,6 +407,7 @@ final class WordModel {
 
     private func progress(_ f: Double, preparing: Bool) {
         guard task != nil, state != .ready else { return }
+        if case .paused = state { return }
         state = preparing ? .preparing : .downloading(fraction: f)
     }
 }

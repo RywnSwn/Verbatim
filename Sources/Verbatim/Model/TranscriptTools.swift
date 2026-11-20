@@ -23,9 +23,14 @@ enum TimeStyle: String, CaseIterable {
 
 /// One search hit: which line, and which hit inside that line.
 struct SearchMatch: Hashable {
+    /// Where on the line the hit is: the speaker's name, the words, or the
+    /// note under it (B7: names and notes on the page weren't found).
+    enum Part: Hashable { case speaker, text, note }
+
     var source: LineSource
     var start: Double
     var occurrence: Int
+    var part: Part = .text
 
     /// Same id the transcript list uses for the row, so it can scroll there.
     var rowID: String { TranscriptRow.id(source, start) }
@@ -104,6 +109,11 @@ extension RecorderModel {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(Self.text(lines, info: info, markdown: false), forType: .string)
         copyFeedback = CopyFeedback(text: lines.count == 1 ? "Copied 1 line" : "Copied \(lines.count) lines")
+        // Also in the bottom bar: the Copy button can be hidden in "»" and
+        // ⇧⌘C showed nothing (A5). Not while recording: the status spot
+        // holds warnings then, and the mini window shows its own "Copied".
+        // Never over a message with a link (Undo, Show in Finder).
+        if !isBusy, status?.action == nil { flash(copyFeedback?.text ?? "Copied") }
 
         // Remember where this copy ended, for "Copy new since last copy".
         if let end = lines.map(\.end).max() {
@@ -296,10 +306,21 @@ extension RecorderModel {
         let query = searchText.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return [] }
         var matches: [SearchMatch] = []
-        for row in shownLines(id) {
-            let count = Self.ranges(of: query, in: row.line.text).count
-            for k in 0..<count {
-                matches.append(SearchMatch(source: row.source, start: row.line.start, occurrence: k))
+        let rows = shownLines(id)
+        let labels = Speakers.labeler(id)
+        let notes = Notes.byLine(rows.map(\.line), info(id)?.notes)
+        for row in rows {
+            // Reading order on the page: name, words, then the note under it.
+            let parts: [(SearchMatch.Part, String?)] = [
+                (.speaker, row.source == .live ? labels.name(row.line).map { $0 + ":" } : nil),
+                (.text, row.line.text),
+                (.note, notes[row.line.start]),
+            ]
+            for (part, text) in parts {
+                guard let text else { continue }
+                for k in 0..<Self.ranges(of: query, in: text).count {
+                    matches.append(SearchMatch(source: row.source, start: row.line.start, occurrence: k, part: part))
+                }
             }
         }
         return matches

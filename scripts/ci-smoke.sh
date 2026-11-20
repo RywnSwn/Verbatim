@@ -262,7 +262,7 @@ same_width() {
   echo "window width after $2: $w (wanted $1)"
   if [ "$w" != "$1" ]; then echo "::error::Sidebar changed the window width ($2): $w, wanted $1"; FAILED=1; fi
 }
-for width in 800 700; do
+for width in 800 780 700; do
   resize "$width" 600; check "resize to $width"
   shot "sidebar-$width-start"
   for round in 1 2 3; do
@@ -272,6 +272,9 @@ for width in 800 700; do
     same_width "$width" "toggle at $width, round $round"
   done
 done
+# If opening the sidebar ever grew the window, the app put it back and
+# remembered the width it needed (ContentView.undoGrowth).
+echo "sidebar needs width (learned): $(defaults read com.rywnswn.verbatim sidebarNeedsWidth2 2>/dev/null || echo none)"
 # 700 wide: floating sidebar. Esc and a click on the dimmed transcript close it.
 toggle_sidebar; shot "sidebar-700-floating"
 osascript -e 'tell application "System Events" to key code 53' || true

@@ -78,6 +78,9 @@ struct MenuBarPanel: View {
     private var mini: MiniWindow { .shared }
 
     private var paused: Bool { model.phase == .paused }
+    /// Mic access off: Record can't work, so the panel says so (A8), like
+    /// the mini window and the start screen do.
+    private var blocked: Bool { model.micPermission == .denied || model.micPermission == .restricted }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -100,7 +103,13 @@ struct MenuBarPanel: View {
             Divider().padding(.horizontal, 10)
             VStack(spacing: 0) {
                 if model.isBusy {
-                    MenuRow("Copy all", shortcut: "⇧⌘C") { model.copy(.all, from: model.currentID) }
+                    MenuRow("Write a note…", shortcut: "⇧⌘N") {
+                        close()
+                        model.requestNote()
+                    }
+                    // No ⇧⌘C here: that copies the recording on screen, which
+                    // may be another one (item 10). This one is the live class.
+                    MenuRow("Copy all of this class") { model.copy(.all, from: model.currentID) }
                     MenuRow("Copy last 10 minutes") { model.copy(.lastTenMinutes, from: model.currentID) }
                 } else {
                     ForEach(groups.groups) { group in
@@ -108,6 +117,7 @@ struct MenuBarPanel: View {
                             close()
                             Task { await model.start(in: group.id) }
                         }
+                        .disabled(blocked)
                     }
                     MenuRow("Transcribe a Voice Memo…", shortcut: "⌘O") {
                         close()
@@ -136,6 +146,7 @@ struct MenuBarPanel: View {
             .padding(6)
         }
         .frame(width: 310)
+        .onAppear { model.refreshPermission() }
         .animation(.snappy(duration: 0.25), value: model.status?.id)
         .animation(.snappy(duration: 0.25), value: model.copyFeedback?.id)
     }
@@ -150,6 +161,15 @@ struct MenuBarPanel: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+        } else if blocked {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Verbatim can't hear anything")
+                    .font(.callout.weight(.medium))
+                Text("Microphone access is off for Verbatim. Turn it on, then come back.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         } else {
             Text("Not recording")
                 .font(.caption)
@@ -161,14 +181,22 @@ struct MenuBarPanel: View {
         HStack(spacing: 6) {
             if model.isBusy {
                 BigButton("Copy new", "doc.on.doc") { model.copy(.new, from: model.currentID) }
+                // Works while paused too, like ⌘D (item 8).
                 BigButton("Marker", "flag") { model.addMarker() }
-                    .disabled(!model.canMark || paused) // canMark: doesn't read the clock
+                    .disabled(!model.canMark) // canMark: doesn't read the clock
                 BigButton(paused ? "Resume" : "Pause", paused ? "play.fill" : "pause.fill") { model.togglePause() }
                 BigButton("Stop", "stop.fill") { model.stop() }
             } else {
-                BigButton("Record", "record.circle") {
-                    close()
-                    Task { await model.start() }
+                if blocked {
+                    BigButton("Mic settings", "gearshape") {
+                        close()
+                        model.openMicSettings()
+                    }
+                } else {
+                    BigButton("Record", "record.circle") {
+                        close()
+                        Task { await model.start() }
+                    }
                 }
                 BigButton("Voice Memo", "waveform.badge.plus") {
                     close()
@@ -184,8 +212,21 @@ struct MenuBarPanel: View {
         }
     }
 
-    /// Copy feedback, or the bottom bar's message, with its link.
+    /// Copy feedback, or the bottom bar's message, with its link. After Stop
+    /// from here: "Saved …" with Undo Stop (item 6: the panel said nothing).
     @ViewBuilder private var message: some View {
+        if let note = model.stoppedNote {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(note.text).font(.caption).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Undo Stop") { model.undoStop() }
+                    .buttonStyle(.link)
+                    .font(.caption.weight(.medium))
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+            .transition(.opacity)
+        }
         if let feedback = model.copyFeedback {
             Text(feedback.text)
                 .font(.caption)
@@ -266,6 +307,7 @@ private struct MenuRow: View {
     var color: IconColor = .ink
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
 
     init(_ title: String, shortcut: String? = nil, icon: String? = nil, color: IconColor = .ink, action: @escaping () -> Void) {
         self.title = title
@@ -298,6 +340,7 @@ private struct MenuRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .opacity(isEnabled ? 1 : 0.4)
+        .onHover { hovering = $0 && isEnabled }
     }
 }
