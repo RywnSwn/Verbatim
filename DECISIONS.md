@@ -293,3 +293,12 @@ listen.m4a, 64 kbps AAC) is made from the same mic sound; Parakeet keeps
 its own 16 kHz file so text stays the same. Stereo mics are mixed down so
 a 2-mic receiver in split mode keeps both mics. Echo removal: not doing
 it, it could damage his voice in the recording.
+
+## App icon: the red Ribbon (2026-11-20)
+A cream printed page with a red satin bookmark ribbon, drawn like a real
+object (paper grain, light, shadow). Ryan went through 6 rounds: flat and
+symbol icons felt generic or blank, busy ones too complex, blue and yellow
+looked bad. He liked ink on paper as a real object and picked the ribbon
+in Note red (the app's Note pen color) over black: red still shows at
+16 px and on a dark Mac. A plain .icns for now (no dark version), made on
+Linux from `Support/AppIcon.svg` by `scripts/make-icon.js`.

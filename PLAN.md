@@ -571,8 +571,8 @@ class depends on it.
 2. [x] **Record.** Record / Pause / Resume / Stop into one crash-safe audio
        file. Sleep prevention, mic picker, level meter, crash recovery.
 2b. [x] **Visual design.** "Notebook" look picked by Ryan and built.
-       App icon still to do (Ryan didn't like the first try: a waveform
-       turning into text lines; do it later, show him options first).
+       App icon: done 2026-11-20 (the red Ribbon, see "App icon" below),
+       on branch `claude/ux-round-2`, not tested by Ryan yet.
 3. [~] **Transcribe a file.** Drop a Voice Memo, WhisperKit transcribes it,
        model download with resume. Ryan tests accuracy on real classes.
 4. [x] **Live transcript.** Parakeet Unified (main) + Apple SpeechAnalyzer
@@ -694,7 +694,7 @@ Ask Mr. Yurt before recording class.
   Privacy & Security > "Open Anyway" (right-click > Open no longer skips
   the warning on recent macOS).
 - No auto update yet: Ryan downloads each new build by hand until step 11.
-- No app icon yet (generic icon). Ryan wants to pick one later.
+- App icon: the red Ribbon (2026-11-20), see "App icon" below.
 
 ## How recording works (step 2)
 - Audio: `AVCaptureSession` on the chosen mic, converted to 16 kHz mono
@@ -947,10 +947,21 @@ Ask Mr. Yurt before recording class.
 - Start screen animation (Ryan: it stopped abruptly): speech eases in and
   out, pauses at commas and full stops, words hold then fade, then repeat. Live text 62% ink, half-said
   words 45%.
-- App icon: not yet. First try (waveform bars + text lines, drawn with
-  Pillow) was rejected by Ryan. Next time show a few options first; to
-  add one, put `AppIcon.icns` in `Support/`, copy it in
-  `scripts/build-app.sh`, and set `CFBundleIconFile` in Info.plist.
+- App icon (2026-11-20, picked by Ryan after 6 rounds, all in
+  `docs/design/AppIcon.html`, live page
+  https://claude.ai/artifact/36WZyRqXNNYMaz3ziksCF5): a cream printed page
+  with a red satin bookmark ribbon (Note red), real paper grain, light and
+  shadow. Source: `Support/AppIcon.svg`. `node scripts/make-icon.js` makes
+  `Support/AppIcon.icns` (works on Linux, uses Playwright).
+  `scripts/build-app.sh` copies it; Info.plist has `CFBundleIconFile`.
+  Built on `claude/ux-round-2` (Ryan asked), not tested by Ryan yet.
+  Test: the new icon shows in the Dock, Finder and Launchpad (if the old
+  blank one sticks, drag Verbatim out of Applications and back in).
+  What Ryan said no to: waveform turning into lines, anything "generic",
+  busy icons with many ideas, the "Quote V" (looked like a suit), blue and
+  yellow together, flat single shapes ("too blank"). What worked: ink on
+  paper, made like a real object (modern skeuomorphism).
+  Not done: a separate dark-mode icon (needs Xcode's new icon format).
 
 ## How the design pass works (2026-11-12)
 - Sidebar (`Views/SidebarView.swift`) is a ScrollView + VStack, not `List`:

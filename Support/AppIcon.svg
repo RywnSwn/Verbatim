@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>
+    <clipPath id="k0b"><path d="M285 100 H739 C841 100 924 183 924 285 V739 C924 841 841 924 739 924 H285 C183 924 100 841 100 739 V285 C100 183 183 100 285 100 Z"/></clipPath>
+    <linearGradient id="k0t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFEFB"/><stop offset="1" stop-color="#ECE7DC"/></linearGradient>
+    <linearGradient id="k0d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ECE7DD"/><stop offset="1" stop-color="#D8D0C1"/></linearGradient>
+    <linearGradient id="k0s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFEFA"/><stop offset="1" stop-color="#F3EEE4"/></linearGradient>
+    <linearGradient id="k0e" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".3" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#fff" stop-opacity=".3"/></linearGradient>
+    <filter id="k0g" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .25  .22 0 0 0 -.06"/></filter>
+    <filter id="k0w" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000" flood-opacity=".30"/></filter>
+    <filter id="k0o" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity=".28"/><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".25"/></filter>
+    <filter id="k0p" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="14" dy="22" stdDeviation="12" flood-color="#000" flood-opacity=".30"/></filter>
+    <linearGradient id="k0cyl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A4643"/><stop offset=".22" stop-color="#2B2926"/><stop offset=".55" stop-color="#0E0D0C"/><stop offset=".85" stop-color="#1E1C1A"/><stop offset="1" stop-color="#0A0909"/></linearGradient>
+    <linearGradient id="k0met" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".35" stop-color="#C9C8C4"/><stop offset=".6" stop-color="#8E8C88"/><stop offset="1" stop-color="#D9D8D4"/></linearGradient>
+    <linearGradient id="k0sat" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7E2A20"/><stop offset=".3" stop-color="#E0705F"/><stop offset=".5" stop-color="#B23D30"/><stop offset=".8" stop-color="#C9564A"/><stop offset="1" stop-color="#7E2A20"/></linearGradient>
+    <linearGradient id="k0cov" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3733"/><stop offset="1" stop-color="#121110"/></linearGradient>
+    <linearGradient id="k0pg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F7F2E7"/><stop offset="1" stop-color="#E2DACA"/></linearGradient>
+    <linearGradient id="k0f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E2DACB"/><stop offset="1" stop-color="#FBF8F1"/></linearGradient>
+    <linearGradient id="k0gut" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".16"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs>
+    <path d="M285 100 H739 C841 100 924 183 924 285 V739 C924 841 841 924 739 924 H285 C183 924 100 841 100 739 V285 C100 183 183 100 285 100 Z" fill="url(#k0t)" filter="url(#k0w)"/>
+    <g clip-path="url(#k0b)"><rect x="100" y="100" width="824" height="824" filter="url(#k0g)"/>
+      <rect x="100" y="100" width="150" height="824" fill="url(#k0gut)"/>
+      <g fill="#DCD5C8"><rect x="250" y="236" width="470" height="16" rx="8"/><rect x="250" y="288" width="500" height="16" rx="8"/><rect x="250" y="340" width="430" height="16" rx="8"/><rect x="250" y="444" width="500" height="16" rx="8"/><rect x="250" y="496" width="480" height="16" rx="8"/><rect x="250" y="548" width="510" height="16" rx="8"/><rect x="250" y="600" width="360" height="16" rx="8"/><rect x="250" y="704" width="490" height="16" rx="8"/><rect x="250" y="756" width="450" height="16" rx="8"/><rect x="250" y="808" width="300" height="16" rx="8"/></g>
+      <g filter="url(#k0p)">
+        <path d="M566 60 H672 V790 L619 736 L566 790 Z" fill="url(#k0sat)"/>
+      </g>
+      <rect x="566" y="60" width="106" height="120" fill="#000" opacity=".25"/>
+      <line x1="578" y1="180" x2="578" y2="770" stroke="#fff" stroke-opacity=".10" stroke-width="3"/>
+    </g><path d="M285 100 H739 C841 100 924 183 924 285 V739 C924 841 841 924 739 924 H285 C183 924 100 841 100 739 V285 C100 183 183 100 285 100 Z" fill="none" stroke="url(#k0e)" stroke-width="5"/></svg>
