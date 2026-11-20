@@ -1648,3 +1648,33 @@ first (typing rule). `addLine` must learn checked lines
 selection highlight must not redraw the whole list (keep one view per row,
 selection in a small observable like `LineDraft`). Cursor: `NSCursor` from
 an image via `.pointerStyle(.image(...))` on macOS 15+, check the real API.
+
+UX check (2026-11-20, read from the code, worst first). FIXED in this
+branch: 1. ⌘Z after deleting a recording (not recording) skipped the delete
+and undid an older line change (`undo()` only looked at `status`; delete only
+sets `deletedNote`). Now ⌘Z brings the recording back.
+Still to do (one chat, after the line tools):
+2. Transcribe again / Find speakers again: one click, no warning, no undo;
+   voice names and speaker picks on unedited lines are lost
+   (`Transcriber.redo` doesn't copy `voiceNames`).
+3. Bottom bar: Stop/Delete notes hide every other message for 10 s (Undo of
+   a line edit, "Copied", errors). Mini window has the opposite order.
+4. No undo for: picking a speaker, renaming a recording, Move to Group by
+   menu, group rename/icon. ⌘Z then undoes something older.
+5. Lock button unlocks with one click, no message, no undo.
+6. Menu bar Stop: no "Saved" and no Undo Stop.
+7. Settings deletes (Biggest recordings > Delete Audio, Delete All): the
+   Undo is in the main window's bottom bar, hidden behind Settings.
+8. Note missing from the mini window and menu bar; menu bar Marker off
+   while paused, other Marker buttons and ⌘D work while paused.
+9. Small click targets: group +, group icon, Undo links (under 24 pt).
+10. ⇧⌘C copies the recording on screen; ⌘K and menu bar "Copy all ⇧⌘C"
+    copy the live one while recording.
+11. ⇧⌘Z does nothing outside a text box, no message.
+12. Same action, different names (Add a Voice Memo / Transcribe a
+    Recording / Transcribe a Voice Memo; Copy Layout Details / Copy
+    Details for a Bug Report).
+13. Shortcuts page says "work anywhere" but ⌘D/⇧⌘N need recording or the
+    player; ⌥⌘P, ⌘Z, ⌘G, ⌘0 missing.
+14. Emptying a line deletes it, but the line box doesn't say so.
+15. Greyed Transcribe again / Find speakers again don't say why.

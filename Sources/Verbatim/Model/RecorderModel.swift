@@ -737,6 +737,13 @@ final class RecorderModel {
             NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
             return
         }
+        // Not recording, a delete only shows `deletedNote` (no status), so
+        // ⌘Z used to skip it and undo an older line change instead.
+        // A newer change with its own Undo (status) still goes first.
+        if deletedNote != nil, status == nil || status?.action == .undoDelete {
+            undoDelete()
+            return
+        }
         switch status?.action {
         case .undoDelete?: perform(.undoDelete)
         case .undoAudioDelete?: perform(.undoAudioDelete)
