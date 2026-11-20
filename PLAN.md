@@ -1631,23 +1631,41 @@ Test list (for Ryan):
    press Esc: it slides away. Pick a recording in it: it slides away.
 3. Make the window big again: the sidebar comes back by itself.
 
-Part 2, mockup first (not built): https://claude.ai/artifact/BSvJ7utAQxyjqokGa3iQ9d
-(copy in `docs/design/LineTools.html`). Waiting for Ryan's OK. What it shows:
-- Hover a line: soft grey. One click picks it (blue box), nothing opens.
-  Double-click or Enter edits. Arrow keys move, Delete deletes (Undo).
-- Picked line shows 3 small buttons at its right: flag, note, + (add line
-  below). + works on checked lines too (now only live lines).
-- Toolbar Marker and Note become tools: pointer turns into a flag / pencil,
-  lines glow yellow / red under it, click a line puts it there. Marker stays
-  on until Esc or the button again; Note goes down after one note. Bottom
-  bar says which tool is on, with "Put it down (Esc)". ⌘D still marks
-  "right now" while recording. Right-click keeps everything.
-Build notes for the next chat: picking a tool or line closes any open box
-first (typing rule). `addLine` must learn checked lines
-(`Transcriber.shared.insertLine`, `newLineTimes` on the checked lines). The
-selection highlight must not redraw the whole list (keep one view per row,
-selection in a small observable like `LineDraft`). Cursor: `NSCursor` from
-an image via `.pointerStyle(.image(...))` on macOS 15+, check the real API.
+Part 2, line tools: BUILT in the same chat at Ryan's ask ("implement
+here"), not tested by Ryan yet. Mockup: https://claude.ai/artifact/BSvJ7utAQxyjqokGa3iQ9d
+(copy in `docs/design/LineTools.html`).
+- `TranscriptList`: one click picks a line (`picked`, blue box,
+  `LineHighlight`), double-click (`NSApp.currentEvent.clickCount`) or Enter
+  edits, arrows move, Delete deletes, Esc lets go. The list is focusable for
+  the keys. Hover: soft grey (own hover state per row, `LineHighlight`).
+- Picked line: flag, note, + buttons (`LineActionButton`, 24 pt). + only on
+  live lines; since step 5c every new recording's lines are live, also
+  after Stop (only old Whisper text is "checked").
+- `RecorderModel.lineTool` (`LineTool` in Markers.swift): toolbar Marker and
+  Note are now toggles (`LineToolToggle`), in the recording AND finished
+  recording toolbars. Pointer: `PointerStyle.image` of a round SF Symbol
+  badge (flag yellow, pencil red). Rows glow `Theme.markTint` / `noteTint`.
+  `LineToolBand` at the top says what a click does, "Put it down" = Esc.
+  Marker stays on; Note goes down after one note. Picking a tool saves and
+  closes anything being typed. Switching recordings puts the tool down.
+- ⌘D / ⇧⌘N / menus / mini window unchanged: they mark or note "now".
+- The row text no longer shows a text cursor (a click doesn't type).
+Not done: the mini window still edits a line on one click (Ryan didn't
+ask; consider the same pick / double-click rule there).
+Test list (for Ryan):
+1. Move the mouse over lines: a soft grey shows. Click one: blue box,
+   nothing opens, three small buttons on the right.
+2. Double-click a line: you're typing in it. Or click once and press Enter.
+3. With a line picked: ↑ ↓ move, Delete deletes it (Undo brings it back),
+   Esc lets go.
+4. Click + on a picked line: an empty line opens under it. Type, Enter.
+5. Click Marker in the top bar: pointer is a yellow flag, lines glow yellow,
+   a band at the top says so. Click a few lines: flags appear. Click a
+   flagged line: flag goes. Esc (or Marker again): tool goes down.
+6. Click Note: pointer is a red pencil, lines glow red. Click a line: the
+   note box opens there and the tool goes down.
+7. While recording, ⌘D still marks what's being said right now.
+8. Open an old recording: Marker and Note are in its top bar too.
 
 UX check (2026-11-20, read from the code, worst first). FIXED in this
 branch: 1. ⌘Z after deleting a recording (not recording) skipped the delete
