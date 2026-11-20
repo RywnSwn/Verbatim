@@ -11,6 +11,22 @@ enum AudioImport {
         var errorDescription: String? { "This file has no sound in it." }
     }
 
+    /// An import error in plain words (C3: it showed "OSStatus error -11829").
+    static func plainWords(_ error: Error) -> String {
+        if let e = error as? ImportError { return e.errorDescription ?? "" }
+        let ns = error as NSError
+        if ns.domain == NSOSStatusErrorDomain || ns.domain == AVFoundationErrorDomain {
+            return "the sound in it couldn't be read. The file may be damaged, or a kind Verbatim can't open."
+        }
+        if ns.domain == NSCocoaErrorDomain, ns.code == NSFileReadNoPermissionError {
+            return "Verbatim isn't allowed to open it. Drag it onto the window instead."
+        }
+        if ns.domain == NSCocoaErrorDomain, ns.code == NSFileWriteOutOfSpaceError {
+            return "the disk is full."
+        }
+        return error.localizedDescription
+    }
+
     static func canImport(_ url: URL) -> Bool {
         allowedExtensions.contains(url.pathExtension.lowercased())
     }

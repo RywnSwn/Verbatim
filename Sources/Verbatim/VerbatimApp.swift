@@ -193,7 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.addButton(withTitle: "Keep Recording")
             alert.addButton(withTitle: "Stop and Quit")
             if alert.runModal() == .alertSecondButtonReturn {
-                model.stop()
+                model.stopForQuit()
                 quitWhenSaved(sender)
                 return .terminateLater
             }
@@ -215,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Logout or restart: save without asking.
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
+            if Uninstaller.removing { return }
             if RecorderModel.shared.isBusy { RecorderModel.shared.stop() }
             LiveTranscriber.shared.saveNow()
         }

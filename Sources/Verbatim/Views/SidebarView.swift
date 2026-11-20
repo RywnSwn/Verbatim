@@ -171,6 +171,7 @@ struct SidebarView: View {
             .id(info.id)
             .onTapGesture {
                 model.selection = info.id
+                model.sidebarPicks += 1
                 focused = true
             }
             .accessibilityAddTraits(.isButton)

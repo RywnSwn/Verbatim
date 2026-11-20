@@ -18,6 +18,8 @@ struct ContentView: View {
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var hidForSpace = false
     @State private var floating = false
+    /// A file is held over the window (C3: nothing showed it could be dropped).
+    @State private var fileOver = false
     @State private var width: CGFloat = 1200
     /// 760: the system sidebar button stopped working below about 745 pt
     /// (0.1.109 test), and opening it in a window too narrow made macOS fight
@@ -90,7 +92,25 @@ struct ContentView: View {
                 .dropDestination(for: URL.self) { urls, _ in
                     model.importAudio(urls)
                     return true
+                } isTargeted: { fileOver = $0 }
+                .overlay {
+                    if fileOver {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                            .background(Theme.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay {
+                                Label("Drop to transcribe", systemImage: "waveform.badge.plus")
+                                    .font(.title3.weight(.medium))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(.regularMaterial, in: Capsule())
+                            }
+                            .padding(8)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(.easeOut(duration: 0.15), value: fileOver)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if model.isBusy || model.stoppedNote != nil || model.deletedNote != nil || model.status != nil || updater.isReady {
                         BottomBar()
@@ -124,6 +144,7 @@ struct ContentView: View {
         .animation(.snappy(duration: 0.18), value: model.showCommandMenu)
         // Picking a recording (or Recently Deleted, or starting one) closes it.
         .onChange(of: model.selection) { floating = false }
+        .onChange(of: model.sidebarPicks) { floating = false }
         .onChange(of: model.showingDeleted) { floating = false }
         .onAppear {
             MainWindow.open = { openWindow(id: "main") }

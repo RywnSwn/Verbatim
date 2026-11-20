@@ -891,7 +891,7 @@ struct TranscriptionSettings: View {
         Form {
             Section {
                 LiveModelStatusLine()
-                statusRow("Speaker labels", note: "Tells Mr. Yurt apart from students.", ready: speakers.isReady, text: speakerText)
+                statusRow("Speaker labels", note: "Tells who is talking apart, like the teacher and students.", ready: speakers.isReady, text: speakerText)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Word list helper").font(.body.weight(.medium))
                     WordModelNote(inSettings: true)

@@ -489,7 +489,7 @@ struct TranscriptList: View {
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.ink)
                             .offset(x: -15)
-                            .help("Marked. Right-click the line to remove it.")
+                            .help("Marked. To remove it, click the line, then the flag button on the right.")
                             .accessibilityLabel("Marked")
                     }
                 }

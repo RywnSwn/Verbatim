@@ -147,9 +147,10 @@ private struct HeaderMeta: View {
             let end = info.endedAt.map { " to \($0.formatted(t))" } ?? ""
             parts.append("\(day), \(info.createdAt.formatted(t))\(end), \(RecorderModel.minutesText(info.duration))")
         }
-        let markers = info.markers?.count ?? 0
+        // Count what's on the page: two ⌘D in one line is one flag (C2).
+        let markers = lines.isEmpty ? info.markers?.count ?? 0 : Markers.markedStarts(lines, info.markers).count
         if markers > 0 { parts.append(markers == 1 ? "1 marker" : "\(markers) markers") }
-        let notes = info.notes?.count ?? 0
+        let notes = lines.isEmpty ? info.notes?.count ?? 0 : Notes.byLine(lines, info.notes).count
         if notes > 0 { parts.append(notes == 1 ? "1 note" : "\(notes) notes") }
         return parts.joined(separator: ". ") + "."
     }

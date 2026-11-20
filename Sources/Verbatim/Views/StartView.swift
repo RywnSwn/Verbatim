@@ -27,7 +27,7 @@ struct StartView: View {
                     .overlay(alignment: .bottom) {
                         Text("Or drop a Voice Memo here to transcribe it.")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary) // C11: tertiary was hard to read
                             .frame(maxWidth: 760, alignment: .leading)
                             .padding(.horizontal, 32)
                             .padding(.bottom, 20)
@@ -79,9 +79,22 @@ struct StartView: View {
             // The hint sits where the first line will be. The model status
             // goes under it, so an empty status can't add a gap above it.
             VStack(alignment: .leading, spacing: 12) {
-                Text("The class shows up on this page as it's said.")
-                    .font(.body)
-                    .foregroundStyle(.tertiary)
+                if model.isBusy, let id = model.currentID {
+                    // C4: this page with a greyed Record while a class is
+                    // being recorded. Say where it is instead.
+                    HStack(spacing: 10) {
+                        Text("A class is being recorded right now.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                        Button("Show it") { model.selection = id }
+                            .buttonStyle(.link)
+                            .fontWeight(.medium)
+                    }
+                } else {
+                    Text("The class shows up on this page as it's said.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
                 PageModelStatus()
             }
         }
@@ -302,8 +315,8 @@ struct LiveModelStatusLine: View {
         case .ready:
             title("Speech model ready")
             note("Words show up a couple of seconds after they're said. A Voice Memo takes about a minute per hour. Works offline.")
-            SpeakerModelNote()
-            WordModelNote()
+            // Speaker labels and the word helper have their own rows in
+            // Settings > Transcription (C7: they showed twice).
         case .preparing:
             title("Getting the speech model ready")
             note("First time only, this can take a few minutes. Keep Verbatim open.")

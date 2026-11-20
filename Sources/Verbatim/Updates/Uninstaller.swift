@@ -5,6 +5,9 @@ import AppKit
 @MainActor
 enum Uninstaller {
     static let bundleID = "com.rywnswn.verbatim"
+    /// Set while removing: quitting then saves nothing, so the data folder
+    /// isn't made again (C9: it wrote text-index.json on the way out).
+    static private(set) var removing = false
 
     private static var dataItems: [URL] {
         let lib = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
@@ -43,6 +46,7 @@ enum Uninstaller {
         if [.connected, .moved].contains(ClaudeConnector.state()) {
             try? ClaudeConnector.disconnect()
         }
+        removing = true
         UserDefaults.standard.removePersistentDomain(forName: bundleID)
         UserDefaults.standard.synchronize()
         for item in dataItems + [Bundle.main.bundleURL] where FileManager.default.fileExists(atPath: item.path) {

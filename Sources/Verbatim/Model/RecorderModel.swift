@@ -155,6 +155,9 @@ final class RecorderModel {
     var showCommandMenu = false
     /// A group to rename in the sidebar (a new one gets named right away).
     var renameGroupRequest: UUID?
+    /// Goes up on every click on a sidebar recording, even the one already
+    /// open, so the floating sidebar closes then too (C5).
+    var sidebarPicks = 0
     /// Takes back a group just made by New Group… if its name box is cancelled.
     @ObservationIgnored var newGroupCancel: (() -> Void)?
     private(set) var micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
@@ -171,6 +174,8 @@ final class RecorderModel {
     static let pausedAskMinutes = 15
     @ObservationIgnored private var lastBatteryCheck = Date.distantPast
     @ObservationIgnored private var batteryWarned = false
+    /// "10 minutes left" was said for this recording.
+    @ObservationIgnored private var limitWarned = false
     @ObservationIgnored private var asleepSince: Date?
     @ObservationIgnored private var restartedAfterError = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -331,6 +336,7 @@ final class RecorderModel {
         lastLoud = Date()
         quietWarned = false
         batteryWarned = false
+        limitWarned = false
         lastBatteryCheck = .distantPast
         phase = .recording
         beginKeepAwake()
@@ -468,10 +474,19 @@ final class RecorderModel {
         AutoName.shared.consider(note.recordingID)
     }
 
+    /// ⌘Q > Stop and Quit: no Undo Stop in the bar (C10: it showed one, and
+    /// pressing it still quit). The bar says it's saving instead.
+    func stopForQuit() {
+        stop()
+        finishStopped()
+    }
+
     /// Continues the recording that was just stopped, in the same audio file.
     func undoStop() {
         guard phase == .idle, let note = stoppedNote,
               let info = recordings.first(where: { $0.id == note.recordingID }) else { return }
+        // The mic would pick up the speakers (C10: the player stayed open).
+        Playback.shared.close()
         let (dev, fellBack) = Microphones.resolve()
         guard let dev else {
             finishStopped()
@@ -772,7 +787,8 @@ final class RecorderModel {
     /// The file picker behind the sidebar button and File > Transcribe a Recording (⌘O).
     func chooseFilesToImport() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.audio, .movie]
+        // Only kinds Verbatim can open (C3: it offered .flac, then refused it).
+        panel.allowedContentTypes = AudioImport.allowedExtensions.compactMap { UTType(filenameExtension: $0) }
         panel.allowsMultipleSelection = true
         panel.message = "Pick a Voice Memo or other recording. Your original file isn't changed."
         panel.prompt = "Transcribe"
@@ -796,8 +812,11 @@ final class RecorderModel {
     /// Dropped on a group in the sidebar, or picked for one.
     func importAudio(_ urls: [URL], into group: UUID?) {
         let bad = urls.filter { !AudioImport.canImport($0) }
-        if let first = bad.first {
-            show("Verbatim can't open .\(first.pathExtension) files. Use \(AudioImport.allowedText).")
+        if !bad.isEmpty {
+            // Every file that was left out, not only the first (C3).
+            let names = bad.map(\.lastPathComponent)
+            let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+            show("Verbatim can't open \(list). Use \(AudioImport.allowedText).")
         }
         for url in urls where AudioImport.canImport(url) {
             importOne(url, into: group)
@@ -870,7 +889,7 @@ final class RecorderModel {
                 if error is CancellationError || Task.isCancelled {
                     self.show("Stopped importing \(url.lastPathComponent). Your original file isn't touched.")
                 } else {
-                    self.show("Couldn't import \(url.lastPathComponent): \(error.localizedDescription)")
+                    self.show("Couldn't import \(url.lastPathComponent): \(AudioImport.plainWords(error))")
                 }
             }
         }
@@ -1236,9 +1255,18 @@ final class RecorderModel {
             updateCurrent { $0.samples = samples }
             saveCurrent()
         }
+        // C10: say so 10 minutes before the 3 hour stop, not only after.
+        if !limitWarned, elapsed >= Self.maxLength - 600, elapsed < Self.maxLength {
+            limitWarned = true
+            status = Status(text: "10 minutes left: a recording stops at 3 hours. Start a new one after.", standing: true)
+        }
         if elapsed >= Self.maxLength {
             let title = current?.title ?? "The recording"
-            stop(note: "Stopped at 3 hours, the longest a recording can be. Saved.")
+            let note = "Stopped at 3 hours, the longest a recording can be. Saved."
+            stop(note: note)
+            // No Undo Stop: it would only stop again at once (C10).
+            finishStopped()
+            show(note)
             Messages.shared.post(Messages.stoppedAtLimit(title))
         }
     }

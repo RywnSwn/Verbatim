@@ -236,6 +236,10 @@ struct IconPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var category: String?
+    /// A color picked before any icon: kept for the icon picked next (C6:
+    /// it was thrown away, since a recording without an icon has no color).
+    @State private var chosen: IconColor?
+    private var shownColor: IconColor { chosen ?? color }
 
     private let columns = Array(repeating: GridItem(.fixed(30), spacing: 4), count: 9)
 
@@ -261,8 +265,8 @@ struct IconPicker: View {
                 } else {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 4) {
                         ForEach(icons) { item in
-                            IconCell(name: item.name, selected: item.name == icon, color: color) {
-                                pick(item.name, color)
+                            IconCell(name: item.name, selected: item.name == icon, color: shownColor) {
+                                pick(item.name, shownColor)
                             }
                         }
                     }
@@ -282,13 +286,14 @@ struct IconPicker: View {
                     .padding(.trailing, 4)
                 ForEach(IconColor.allCases) { c in
                     Button {
-                        pick(icon, c)
+                        chosen = c
+                        if icon != nil { pick(icon, c) }
                     } label: {
                         Circle()
                             .fill(c.color)
                             .frame(width: 16, height: 16)
                             .overlay {
-                                if c == color {
+                                if c == shownColor {
                                     Circle().stroke(Theme.ink, lineWidth: 1.5).frame(width: 22, height: 22)
                                 }
                             }
@@ -298,12 +303,17 @@ struct IconPicker: View {
                     .buttonStyle(.plain)
                     .help(c.label)
                     .accessibilityLabel(c.label)
-                    .accessibilityAddTraits(c == color ? .isSelected : [])
+                    .accessibilityAddTraits(c == shownColor ? .isSelected : [])
                 }
                 Spacer(minLength: 0)
             }
+            if icon == nil, chosen != nil {
+                Text("Now pick an icon above. It gets this color.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             HStack {
-                Button("Remove Icon") { pick(nil, color) }
+                Button("Remove Icon") { pick(nil, shownColor) }
                     .disabled(icon == nil)
                     .help("Show no icon next to the name")
                 Spacer()

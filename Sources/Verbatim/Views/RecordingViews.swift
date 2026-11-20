@@ -364,10 +364,16 @@ struct TranscriptStatusLine: View {
         let text = live.texts[id]
         if let pass = text?.pass, !pass.finished {
             let minutes = Int(pass.doneUpTo / 60)
-            if !info.hasAudio {
-                return ("Transcribed the first \(minutes) min. The audio was deleted, so the rest can't be done.", nil, nil)
+            // C3: "Transcribed the first 0 min" when nothing had run.
+            if minutes == 0, text?.lines.isEmpty ?? true {
+                if !info.hasAudio { return ("Not transcribed. The audio was deleted, so it can't be done now.", nil, nil) }
+                return ("Not transcribed yet.", "Transcribe", { transcriber.enqueue(id) })
             }
-            return ("Transcribed the first \(minutes) min.", "Continue", { transcriber.enqueue(id) })
+            let done = minutes == 0 ? "under 1 min" : "the first \(minutes) min"
+            if !info.hasAudio {
+                return ("Transcribed \(done). The audio was deleted, so the rest can't be done.", nil, nil)
+            }
+            return ("Transcribed \(done).", "Continue", { transcriber.enqueue(id) })
         }
         // An old Whisper transcript that stopped halfway, with no text after it.
         if let t = transcriber.transcripts[id], !t.finished, text?.lines.isEmpty ?? true {
@@ -399,6 +405,20 @@ struct MicBlockedView: View {
             Button("Open Microphone settings") { model.openMicSettings() }
                 .buttonStyle(.inkLarge)
                 .padding(.top, 6)
+            // C4: without the mic, Voice Memos still work, and the speech
+            // model download still matters. Both were hidden here.
+            HStack(spacing: 6) {
+                Text("Voice Memos still work without the mic.")
+                    .foregroundStyle(.secondary)
+                Button("Transcribe a Voice Memo…") { model.chooseFilesToImport() }
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+            }
+            .font(.callout)
+            .padding(.top, 18)
+            PageModelStatus()
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: 420)
         }
         .multilineTextAlignment(.center)
         .padding(40)
