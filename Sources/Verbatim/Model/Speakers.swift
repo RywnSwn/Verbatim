@@ -257,7 +257,7 @@ extension RecorderModel {
         var choice = typed
         if Speakers.voice(of: choice) == nil {
             if choice == oldName { return }
-            if let other = before.ranked.map { before.root($0) }.first(where: {
+            if let other = before.ranked.map({ before.root($0) }).first(where: {
                 $0 != v && before.name(voice: $0).caseInsensitiveCompare(typed) == .orderedSame
             }) {
                 choice = Speakers.token(other)
