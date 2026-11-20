@@ -1711,9 +1711,59 @@ Still to do (one chat, after the line tools):
 15. Greyed Transcribe again / Find speakers again don't say why.
 
 ### UX check, round 2 (2026-11-20, read from the code by 4 reviewers + CI screenshots)
-Ryan: "investigate for UX errors". Nothing fixed yet. The worst ones (A1,
-A2, A3, A4, A5) were checked by hand in the code. Item 1 above was only
-half fixed: see A4. Branch `claude/speech-model-errors` (1 commit, not
+Ryan: "investigate for UX errors". The worst ones (A1 to A5) were checked
+by hand in the code. Item 1 above was only half fixed: see A4.
+
+**BRANCH: `claude/ux-round-2`. Keep working on THIS branch (Ryan asked,
+2026-11-20): start the next chat by checking it out, not a new branch.**
+A1 to A5: BUILT on that branch, not tested by Ryan, not merged. Next chat:
+A6 to A10, then B, then C, all on the same branch. One pull request for the
+whole round when Ryan has tested.
+What was built (A1 to A5):
+- A1: `AudioCleanup.changed(from:to:)` (called from the Storage picker's
+  onChange): shorter than before, or Forever to a number, sets
+  `audioCleanupGraceUntil` = now + 3 days; `deleteDate` never goes before
+  it, so the sidebar's "audio deletes in N days" shows first and changing
+  back loses nothing. Under the picker: "N recordings lose their audio in
+  the next 3 days. The text stays." (`AudioCleanup.dueSoon`).
+- A2: `TranscriptList.boxOwner`: the recording the open box belongs to,
+  used by save / saveNote / saveNewLine. `onChange(of: info.id)` saves and
+  closes the box, clears the picked line and popups.
+  `keepNewLineAnchored` only runs in the box's own recording.
+- A3: `WavWriter.recoverAfterError` (truncate to the last good sample),
+  `AudioPipeline.hasWriteError` / `clearWriteError`. `resume()` refuses
+  with "The disk is still full. Free up space, then Resume" under about
+  10 min of room, else fixes the file and records again.
+- A4: `undoStack` holds `UndoStep` (text, recording, run). `offerLineUndo(
+  _, in: id)` everywhere a change is in one recording. ⌘Z
+  (`undoLastChange`) takes the newest step whose recording is on screen
+  or being recorded, or has none; steps of a deleted recording wait until
+  Put Back. Other recording's step: "Undid: … (in <title>)". Nothing:
+  "Nothing to undo in this recording." Recording delete is a step
+  (Put Back); the bar's Undo removes it. ⌘Z after Stop = Undo Stop if no
+  newer step (`StoppedNote.serial` vs `undoSerial`). Opening another
+  recording clears the "Line edited. Undo" link (`selectionChanged`).
+- A5: Copy all is the first toolbar item (finished and live recording),
+  since a narrow toolbar hides items from the right into "»". The bare
+  toolbar "+" (New recording) is gone (sidebar top and ⌘N still there;
+  also fixes part of C1). Copy shows "Copied N lines" in the bottom bar
+  when not recording.
+Test list (for Ryan, A1 to A5):
+1. Open a finished recording, normal window size: Copy all shows next to
+   the title buttons, not hidden in "»". Press ⇧⌘C: "Copied N lines" at
+   the bottom.
+2. Double-click a line, type something, click another recording in the
+   sidebar. Go back: your words are in the first recording; the other
+   recording didn't change.
+3. Same with a note (pencil button) and a new line (+ on a picked line).
+4. Edit a line in recording A, open recording B, press ⌘Z: "Nothing to
+   undo in this recording." Go back to A, ⌘Z: the edit is undone.
+5. Delete a recording, wait 20 seconds, press ⌘Z: it comes back.
+6. Record a few seconds, Stop, press ⌘Z right away: recording continues.
+7. Settings > Storage: change "Keep audio for" to 3 days. The line under
+   it says how many recordings lose audio in the next 3 days. Change it
+   back to 7 days. (Nothing is deleted for 3 days either way.)
+8. Disk full can't be tested easily; skip it. Branch `claude/speech-model-errors` (1 commit, not
 merged, not tested by Ryan) may already fix A10 and part of B12: check it
 first. Suggested chats: A1 to A4 together, then A5 to A10, then B, then C
 (with items 2 to 15 above where they touch the same code).
