@@ -1894,6 +1894,11 @@ Test list (for Ryan, these two):
    at the top with a line under them, the settings row stays at the bottom
    with a line over it, and recordings never slide under the window's dots
    or under the settings row.
+Faster builds (2026-11-20): Ryan hates waiting. Build 233 took 4.5 min,
+about 3 of them fetching and compiling FluidAudio. Both workflows now keep
+`.build` with actions/cache (key: Swift version + Package.swift hash), so
+from the second build on only Verbatim compiles (about 1.5 min expected).
+If a build ever fails strangely after a toolchain change, change the key.
 Lesson (2026-11-20): a review subagent ran `git checkout <sha>` in the
 shared checkout, so commits made meanwhile landed on a detached HEAD and
 weren't pushed. Tell review agents to use `git show` / `git diff` only,
