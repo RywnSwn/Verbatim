@@ -107,7 +107,8 @@ extension RecorderModel {
         // Also in the bottom bar: the Copy button can be hidden in "»" and
         // ⇧⌘C showed nothing (A5). Not while recording: the status spot
         // holds warnings then, and the mini window shows its own "Copied".
-        if !isBusy { flash(copyFeedback?.text ?? "Copied") }
+        // Never over a message with a link (Undo, Show in Finder).
+        if !isBusy, status?.action == nil { flash(copyFeedback?.text ?? "Copied") }
 
         // Remember where this copy ended, for "Copy new since last copy".
         if let end = lines.map(\.end).max() {

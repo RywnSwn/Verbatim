@@ -158,6 +158,9 @@ final class RecorderModel {
         var id = UUID()
         var text: String
         var recording: UUID?
+        /// A recording delete: the recording it puts back. Only undoable
+        /// while that recording is still in Recently deleted.
+        var restores: UUID?
         var run: () -> Void
     }
     @ObservationIgnored private var fileToShow: URL?
@@ -441,7 +444,9 @@ final class RecorderModel {
         case .undoLine:
             // The link belongs to the newest step: undo exactly that one.
             if status?.action == .undoLine { status = nil }
-            if let step = undoStack.popLast() {
+            if let i = undoStack.lastIndex(where: { undoable($0) }) {
+                let step = undoStack.remove(at: i)
+                if let id = deletedNote?.step, id == step.id { deletedNote = nil }
                 step.run()
                 flash("Undid: \(Self.undoName(step.text))")
             }
@@ -476,7 +481,7 @@ final class RecorderModel {
         forgetRecording(id)
 
         // On the ⌘Z list for good, not only while the Undo link shows.
-        let step = pushUndo("Moved \(info.title) to Recently deleted.", recording: nil) { [weak self] in
+        let step = pushUndo("Moved \(info.title) to Recently deleted.", recording: nil, restores: id) { [weak self] in
             guard RecentlyDeleted.shared.items.contains(where: { $0.id == id }) else { return }
             if self?.deletedNote?.info.id == id {
                 self?.deletedNote = nil
@@ -521,6 +526,12 @@ final class RecorderModel {
         } catch {
             status = Status(text: "Couldn't put it back: \(error.localizedDescription)")
             return
+        }
+        // Its delete step (and the 10 s Undo) is done now.
+        undoStack.removeAll { $0.restores == id }
+        if deletedNote?.info.id == id {
+            deletedNote = nil
+            if status?.action == .undoDelete { status = nil }
         }
         reload()
         Transcriber.shared.reload(id)
@@ -768,6 +779,10 @@ final class RecorderModel {
     /// like a group delete or a move).
     func offerLineUndo(_ text: String, in recording: UUID? = nil, undo: @escaping () -> Void) {
         pushUndo(text, recording: recording, run: undo)
+        // The Undo link only for a change you can see: a box saved while
+        // switching recordings goes on ⌘Z, but its link would undo a
+        // recording that's not on screen.
+        if let recording, recording != selection, recording != currentID { return }
         let s = Status(text: text, action: .undoLine)
         status = s
         Task { [weak self] in
@@ -778,8 +793,9 @@ final class RecorderModel {
     }
 
     @discardableResult
-    private func pushUndo(_ text: String, recording: UUID?, run: @escaping () -> Void) -> UUID {
-        let step = UndoStep(text: text, recording: recording, run: run)
+    private func pushUndo(_ text: String, recording: UUID?, restores: UUID? = nil,
+                          run: @escaping () -> Void) -> UUID {
+        let step = UndoStep(text: text, recording: recording, restores: restores, run: run)
         undoStack.append(step)
         if undoStack.count > 50 { undoStack.removeFirst() }
         undoSerial += 1
@@ -825,6 +841,8 @@ final class RecorderModel {
     /// screen, or the one being recorded (the mini window edits that one).
     /// Steps of a recording in Recently deleted wait (Put Back brings them back).
     private func undoable(_ step: UndoStep) -> Bool {
+        // Put back or deleted for good already: nothing left to undo.
+        if let r = step.restores { return RecentlyDeleted.shared.items.contains { $0.id == r } }
         guard let id = step.recording else { return true }
         guard recordings.contains(where: { $0.id == id }) else { return false }
         return id == selection || id == currentID
