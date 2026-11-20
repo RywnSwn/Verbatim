@@ -1890,6 +1890,10 @@ Test list (for Ryan, these two):
    one (not the overlay) from then on.
 6. The sidebar in the window has no scroll line, and slides in and out
    when you press the sidebar button (it used to just appear and vanish).
+7. Scroll the sidebar: New recording, Transcribe and Recently deleted stay
+   at the top with a line under them, the settings row stays at the bottom
+   with a line over it, and recordings never slide under the window's dots
+   or under the settings row.
 Lesson (2026-11-20): a review subagent ran `git checkout <sha>` in the
 shared checkout, so commits made meanwhile landed on a detached HEAD and
 weren't pushed. Tell review agents to use `git show` / `git diff` only,

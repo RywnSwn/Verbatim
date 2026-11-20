@@ -33,29 +33,69 @@ struct SidebarView: View {
     private var drag: SidebarDrag { .shared }
     private var solid: Bool { sidebarLook == .solid || reduceTransparency }
 
+    /// Ryan (2026-11-20): recordings scrolled up under the window's red,
+    /// yellow and green dots and down under the settings row. Now the top
+    /// rows and the bottom row stay put, each with a thin line, and only the
+    /// groups scroll between them, so nothing passes under either.
     var body: some View {
-        ScrollViewReader { proxy in
-        ScrollView {
+        VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                // Inside the scroll area (not a top inset), so they sit below
-                // the window's buttons instead of under them.
                 NewRecordingButton()
                 SidebarAction(title: "Transcribe a Voice Memo", icon: "waveform.badge.plus", shortcut: "⌘O",
                               help: "Pick a Voice Memo or other recording to turn into text. Or drop one anywhere.") {
                     model.chooseFilesToImport()
                 }
                 RecentlyDeletedButton()
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Divider()
+            list
+            Divider()
+            footer
+        }
+        .background {
+            if solid { Theme.sidebarSolid.ignoresSafeArea() }
+        }
+        .alert("Rename recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newTitle)
+            Button("Rename") {
+                if let r = renaming { model.rename(r.id, to: newTitle) }
+                renaming = nil
+            }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
+        // "Name this group" is in ContentView (GroupNameAlert), so it also
+        // shows when the sidebar is hidden.
+    }
 
-                Divider()
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 8)
+    /// Settings, under the list.
+    private var footer: some View {
+        HStack(alignment: .center) {
+            Text("Right-click empty space for a new group.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            GearMenu()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
 
+    /// The groups and Recents: the only part that scrolls.
+    private var list: some View {
+        ScrollViewReader { proxy in
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
                 ForEach(store.groups) { group in
                     groupSection(group)
                 }
                 recentsSection
             }
             .padding(.horizontal, 8)
+            .padding(.top, 8)
             .padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.snappy(duration: 0.25), value: store.groups)
@@ -90,33 +130,6 @@ struct SidebarView: View {
         .onDeleteCommand {
             if let id = model.selection, model.canDelete(id) { model.delete(id) }
         }
-        .background {
-            if solid { Theme.sidebarSolid.ignoresSafeArea() }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack(alignment: .center) {
-                Text("Right-click empty space for a new group.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                GearMenu()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            // Solid, so recordings scrolling past don't show through the text.
-            .background(solid ? AnyShapeStyle(Theme.sidebarSolid) : AnyShapeStyle(.bar))
-        }
-        .alert("Rename recording", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $newTitle)
-            Button("Rename") {
-                if let r = renaming { model.rename(r.id, to: newTitle) }
-                renaming = nil
-            }
-            Button("Cancel", role: .cancel) { renaming = nil }
-        }
-        // "Name this group" is in ContentView (GroupNameAlert), so it also
-        // shows when the sidebar is hidden.
     }
 
     /// A group: bold name with its icon and +, then its recordings indented.
