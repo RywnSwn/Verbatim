@@ -20,7 +20,12 @@ struct RecordingHeader: View {
         VStack(alignment: .leading, spacing: 6) {
             eyebrow
             title
-            HeaderMeta(info: info, isLive: isLive)
+            // C2: flags and notes as they show on the page (two ⌘D in one
+            // line is one flag). Counted here, not in HeaderMeta, which
+            // redraws with the clock.
+            HeaderMeta(info: info, isLive: isLive,
+                       markers: lines.isEmpty ? info.markers?.count ?? 0 : Markers.markedStarts(lines, info.markers).count,
+                       notes: lines.isEmpty ? info.notes?.count ?? 0 : Notes.byLine(lines, info.notes).count)
             if let who = speakersText {
                 Text(who)
                     .font(.callout)
@@ -124,6 +129,8 @@ private struct HeaderMeta: View {
     @Environment(RecorderModel.self) private var model
     let info: RecordingInfo
     let isLive: Bool
+    let markers: Int
+    let notes: Int
 
     var body: some View {
         let meta = self.meta
@@ -147,10 +154,7 @@ private struct HeaderMeta: View {
             let end = info.endedAt.map { " to \($0.formatted(t))" } ?? ""
             parts.append("\(day), \(info.createdAt.formatted(t))\(end), \(RecorderModel.minutesText(info.duration))")
         }
-        // Count what's on the page: two ⌘D in one line is one flag (C2).
-        let markers = lines.isEmpty ? info.markers?.count ?? 0 : Markers.markedStarts(lines, info.markers).count
         if markers > 0 { parts.append(markers == 1 ? "1 marker" : "\(markers) markers") }
-        let notes = lines.isEmpty ? info.notes?.count ?? 0 : Notes.byLine(lines, info.notes).count
         if notes > 0 { parts.append(notes == 1 ? "1 note" : "\(notes) notes") }
         return parts.joined(separator: ". ") + "."
     }
