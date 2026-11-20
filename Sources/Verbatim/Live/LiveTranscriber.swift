@@ -207,6 +207,13 @@ final class LiveTranscriber {
 
     private(set) var modelState: ModelState = .downloading(fraction: 0, secondsLeft: nil)
     private(set) var status: Status?
+
+    /// Where the first words go, before any (B12: it promised words while
+    /// live text was off).
+    var waitingHint: String {
+        if case .off = status { return "No live text right now. Your audio is saved, and the text comes after you press Stop." }
+        return "Words show up here a couple of seconds after they're said."
+    }
     /// Each recording's text, read as `texts[id]`. Each one is watched on
     /// its own: a new live word redraws only views showing that recording,
     /// not every view that reads any text (it used to be one dictionary, so
@@ -984,6 +991,13 @@ actor LiveRunner {
             }
         }
 
+        // B12: say why, not always "still downloading".
+        let parakeetWhy: String = switch modelState {
+        case .paused: "the speech model download is paused"
+        case .failed: "the speech model download stopped, probably the internet"
+        case .preparing: "the speech model is getting ready"
+        default: "the speech model is still downloading"
+        }
         switch await AppleSpeechEngine.readiness() {
         case .ready:
             guard await AppleSpeechEngine.authorize() else {
@@ -995,13 +1009,13 @@ actor LiveRunner {
                 await setStatus(.listening(engine: AppleSpeechEngine.name), run)
                 return (apple, AppleSpeechEngine.name)
             } catch {
-                await setStatus(.off(reason: "the live model is still downloading"), run)
+                await setStatus(.off(reason: "\(parakeetWhy), and your Mac's own engine didn't start"), run)
             }
         case .needsDownload:
             Task.detached(priority: .utility) { try? await AppleSpeechEngine.install() }
-            await setStatus(.off(reason: "the live model is still downloading"), run)
+            await setStatus(.off(reason: "\(parakeetWhy), and your Mac's own engine is still downloading"), run)
         case .unavailable:
-            await setStatus(.off(reason: "the live model is still downloading"), run)
+            await setStatus(.off(reason: "\(parakeetWhy), and your Mac has no speech engine for this language"), run)
         }
         return (nil, "")
     }

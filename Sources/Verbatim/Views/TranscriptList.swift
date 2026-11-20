@@ -495,7 +495,7 @@ struct TranscriptList: View {
                 }
             if isEditing {
                 LineEditor(draft: draft, focused: $fieldFocused, font: Theme.transcript(textSize),
-                           onSave: { save() }, onCancel: { cancel() })
+                           onSave: { save(); backToList() }, onCancel: { cancel(); backToList() })
             } else {
                 Group {
                     if !query.isEmpty {
@@ -546,7 +546,7 @@ struct TranscriptList: View {
                     .padding(.vertical, -5)
             }
         }
-        .modifier(LineHighlight(picked: isPicked, tool: tool))
+        .modifier(LineHighlight(picked: isPicked, keyboard: listFocused, tool: tool))
         .contentShape(Rectangle())
         .onTapGesture { if !isEditing { tapped(line, source, marked: marked, note: note) } }
         .contextMenu {
@@ -653,7 +653,7 @@ struct TranscriptList: View {
             VStack(alignment: .leading, spacing: 5) {
                 LineEditor(draft: noteDraft, focused: $noteFocused, font: .callout,
                            prompt: "What the mic can't hear, like what's on the board",
-                           onSave: { saveNote() }, onCancel: { finishNote() })
+                           onSave: { saveNote(); backToList() }, onCancel: { finishNote(); backToList() })
                 Text("Enter saves. Esc cancels. Empty deletes the note.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -789,11 +789,31 @@ struct TranscriptList: View {
         return lines.first { $0.start == p.start }.map { ($0, p.source) }
     }
 
+    /// Enter or Esc closed a box: the keyboard goes back to the lines, so
+    /// the arrows work at once (B8: they did nothing until a click).
+    private func backToList() {
+        Task { @MainActor in listFocused = true }
+    }
+
     private func movePick(_ step: Int) -> KeyPress.Result {
-        guard !isTyping, let p = picked else { return .ignored }
+        guard !isTyping else { return .ignored }
         let keys = lineKeys
-        guard let i = keys.firstIndex(of: p) else { return .ignored }
-        let next = keys[max(0, min(keys.count - 1, i + step))]
+        guard !keys.isEmpty else { return .ignored }
+        let next: EditKey
+        if let p = picked, let i = keys.firstIndex(of: p) {
+            next = keys[max(0, min(keys.count - 1, i + step))]
+        } else {
+            // Nothing picked yet (B8: arrows did nothing): the line being
+            // heard, else the newest line while recording, else the first
+            // (down) or last (up).
+            if let id = playingRowID, let k = keys.first(where: { TranscriptRow.id($0.source, $0.start) == id }) {
+                next = k
+            } else if isLive || step < 0 {
+                next = keys[keys.count - 1]
+            } else {
+                next = keys[0]
+            }
+        }
         picked = next
         lastUserScroll = Date() // the audio doesn't pull the view back (B5)
         position.scrollTo(id: TranscriptRow.id(next.source, next.start))
@@ -861,7 +881,7 @@ struct TranscriptList: View {
                         SpeakerLabelButton(name: labels.display(s), solid: true) { newLineSpeakerItems(options) }
                     }
                     LineEditor(draft: newDraft, focused: $newFocused, font: Theme.transcript(textSize),
-                               prompt: "New line", onSave: { saveNewLine() }, onCancel: { finishNewLine() })
+                               prompt: "New line", onSave: { saveNewLine(); backToList() }, onCancel: { finishNewLine(); backToList() })
                 }
                 Text("Enter adds the line. Esc cancels.")
                     .font(.caption2)
@@ -1246,6 +1266,9 @@ struct WordMarkRenderer: TextRenderer {
 /// line and not the whole transcript.
 private struct LineHighlight: ViewModifier {
     let picked: Bool
+    /// The lines have the keyboard. If not (the sidebar has it), the picked
+    /// line's mark is grey, so it's clear Delete won't touch it (B8).
+    var keyboard = true
     let tool: LineTool?
     @State private var hovering = false
 
@@ -1269,7 +1292,7 @@ private struct LineHighlight: ViewModifier {
         switch tool {
         case .marker?: hovering ? Theme.markPen : .clear
         case .note?: hovering ? Theme.notePen : .clear
-        case nil: picked ? Theme.accent : hovering ? Theme.ink.opacity(0.22) : .clear
+        case nil: picked ? (keyboard ? Theme.accent : Theme.ink.opacity(0.35)) : hovering ? Theme.ink.opacity(0.22) : .clear
         }
     }
 }

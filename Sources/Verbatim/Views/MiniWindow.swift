@@ -275,7 +275,7 @@ private struct MiniLines: View {
 
         VStack(alignment: .leading, spacing: 2) {
             if all.isEmpty {
-                Text(live.volatile.isEmpty ? "Words show up here a couple of seconds after they're said." : live.volatile)
+                Text(live.volatile.isEmpty ? live.waitingHint : live.volatile)
                     .font(Self.font)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
@@ -610,7 +610,7 @@ struct LastLines: View {
         let labels = Speakers.labeler(id)
         VStack(alignment: .leading, spacing: 4) {
             if lines.isEmpty {
-                Text(live.volatile.isEmpty ? "Words show up here a couple of seconds after they're said." : live.volatile)
+                Text(live.volatile.isEmpty ? live.waitingHint : live.volatile)
                     .font(.system(size: size, design: .serif))
                     .foregroundStyle(.secondary)
             }

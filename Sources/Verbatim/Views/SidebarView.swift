@@ -31,6 +31,7 @@ struct SidebarView: View {
     private var solid: Bool { sidebarLook == .solid || reduceTransparency }
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
                 // Inside the scroll area (not a top inset), so they sit below
@@ -56,6 +57,20 @@ struct SidebarView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.snappy(duration: 0.25), value: store.groups)
             .animation(.snappy(duration: 0.25), value: model.recordings.map(\.groupID))
+        }
+        // B17: the recording that opens (an imported memo, Put Back, a search
+        // hit, + on a folded group) is unfolded and scrolled into view.
+        .onChange(of: model.selection) { _, id in
+            guard let id, let info = model.info(id) else { return }
+            if let g = store.group(info.groupID) {
+                if g.collapsed { store.update(g.id) { $0.collapsed = false } }
+            } else if recentsCollapsed {
+                recentsCollapsed = false
+            }
+            Task { @MainActor in
+                withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(id) }
+            }
+        }
         }
         // Right-click on empty space. Rows and group names have their own menus.
         .contextMenu {
@@ -153,6 +168,7 @@ struct SidebarView: View {
                    isOpen: info.id == model.selection && !model.showingDeleted,
                    isHeld: drag.id == info.id,
                    look: rowLook)
+            .id(info.id)
             .onTapGesture {
                 model.selection = info.id
                 focused = true
@@ -338,12 +354,19 @@ struct SidebarDropDelegate: DropDelegate {
     }
 
     nonisolated func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.verbatimRecording])
+        info.hasItemsConforming(to: [.verbatimRecording, .fileURL])
+    }
+
+    /// A Voice Memo (or other file) from Finder, not one of our recordings
+    /// (B16: memos couldn't be dropped on a group).
+    nonisolated private func isFile(_ info: DropInfo) -> Bool {
+        !info.hasItemsConforming(to: [.verbatimRecording]) && info.hasItemsConforming(to: [.fileURL])
     }
 
     nonisolated func dropEntered(info: DropInfo) {
+        let file = isFile(info)
         MainActor.assumeIsolated {
-            guard isNewPlace() else { return }
+            guard file || isNewPlace() else { return }
             drag.target = spot
             if let id = spot.groupID, GroupStore.shared.group(id)?.collapsed == true {
                 drag.springLoad(id)
@@ -352,7 +375,12 @@ struct SidebarDropDelegate: DropDelegate {
     }
 
     nonisolated func dropUpdated(info: DropInfo) -> DropProposal? {
-        MainActor.assumeIsolated {
+        let file = isFile(info)
+        return MainActor.assumeIsolated {
+            if file {
+                if drag.target != spot { drag.target = spot }
+                return DropProposal(operation: .copy)
+            }
             let fresh = isNewPlace()
             if fresh, drag.target != spot { drag.target = spot }
             return DropProposal(operation: fresh ? .move : .forbidden)
@@ -369,7 +397,20 @@ struct SidebarDropDelegate: DropDelegate {
     }
 
     nonisolated func performDrop(info: DropInfo) -> Bool {
-        MainActor.assumeIsolated {
+        if isFile(info) {
+            let providers = info.itemProviders(for: [.fileURL])
+            let group = spot.groupID
+            MainActor.assumeIsolated { drag.end() }
+            Task { @MainActor in
+                var urls: [URL] = []
+                for p in providers {
+                    if let url = await Self.url(from: p) { urls.append(url) }
+                }
+                if !urls.isEmpty { RecorderModel.shared.importAudio(urls, into: group) }
+            }
+            return true
+        }
+        return MainActor.assumeIsolated {
             defer { drag.end() }
             guard isNewPlace(), let id = drag.id ?? drag.lastID, let rec = model.info(id) else { return false }
             let before = GroupStore.shared.group(rec.groupID)?.id
@@ -383,6 +424,13 @@ struct SidebarDropDelegate: DropDelegate {
                 withAnimation(.snappy(duration: 0.25)) { model.moveRecording(id, to: before) }
             }
             return true
+        }
+    }
+
+    /// The file a Finder drop points at.
+    @MainActor private static func url(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { done in
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in done.resume(returning: url) }
         }
     }
 }

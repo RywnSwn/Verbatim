@@ -1,5 +1,7 @@
+import AppKit
 import AVFoundation
 import SwiftUI
+import UserNotifications
 
 /// Settings (design pass, 2026-11-12): pages down the left like System
 /// Settings, instead of tabs across the top. Every page is a grouped form:
@@ -120,6 +122,12 @@ struct GeneralSettings: View {
     @AppStorage(RecorderModel.quietMinutesKey) private var quietMinutes = 5
     @AppStorage("showInMenuBar") private var showInMenuBar = true
     @AppStorage(Messages.enabledKey) private var messagesOn = true
+    @State private var bannersBlocked = false
+
+    private func checkBanners() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        bannersBlocked = settings.authorizationStatus == .denied
+    }
     @State private var mics: [Mic] = []
 
     var body: some View {
@@ -156,13 +164,24 @@ struct GeneralSettings: View {
                     Text("Show Verbatim in the menu bar")
                     Text("While recording it always shows, so you know it's on.")
                 }
-                Toggle(isOn: $messagesOn) {
+                Toggle(isOn: Binding(get: { messagesOn && !bannersBlocked }, set: { messagesOn = $0 })) {
                     Text("Tell me things when Verbatim is hidden")
                     Text("Like \u{201C}Still recording?\u{201D} or low battery, as a quiet banner. Never a sound.")
+                }
+                .disabled(bannersBlocked)
+                // B9: the switch was on while macOS blocked every banner.
+                if bannersBlocked {
+                    SettingsBlocked(text: "macOS has notifications turned off for Verbatim, so no banners can show.",
+                                    button: "Open Notifications settings",
+                                    url: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")
                 }
             }
         }
         .onAppear(perform: refresh)
+        .task { await checkBanners() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await checkBanners() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in refresh() }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in refresh() }
         .onChange(of: chosenID) { model.micSettingChanged() }
@@ -563,7 +582,7 @@ struct VoiceSettings: View {
     private var names: SpeakerNames { .shared }
     @State private var confirmForget: VoiceLibrary.Voice?
     /// The last name removed from the speaker menu list, for Undo.
-    @State private var removedName: (name: String, index: Int, id: UUID)?
+    @State private var removedName: (name: String, index: Int, id: UUID, undo: () -> Void)?
 
     var body: some View {
         let voices = library.voices.sorted { $0.savedAt > $1.savedAt }
@@ -598,7 +617,10 @@ struct VoiceSettings: View {
                         Spacer()
                         Button {
                             guard let i = Speakers.forget(name) else { return }
-                            let r = (name: name, index: i, id: UUID())
+                            let r = (name: name, index: i, id: UUID(),
+                                     undo: RecorderModel.shared.settingsUndo("Removed \(name) from the speaker menu.") {
+                                         Speakers.restore(name, at: i)
+                                     })
                             removedName = r
                             Task {
                                 try? await Task.sleep(for: .seconds(10))
@@ -619,7 +641,7 @@ struct VoiceSettings: View {
                     HStack(spacing: 8) {
                         Text("Removed \(removed.name).").font(.callout)
                         Button("Undo") {
-                            Speakers.restore(removed.name, at: removed.index)
+                            removed.undo()
                             removedName = nil
                         }
                         .buttonStyle(.link)
@@ -662,7 +684,12 @@ struct VoiceSettings: View {
             }
         } label: {
             Text(voice.name)
-            Text("From \(voice.from), \(Int(voice.seconds)) s")
+            // B9: switched on but past the newest 3, so not used: say so.
+            if voice.enabled, !library.inUse.contains(where: { $0.id == voice.id }) {
+                Text("From \(voice.from), \(Int(voice.seconds)) s. Not used now: only the \(VoiceLibrary.maxInUse) newest switched-on voices are.")
+            } else {
+                Text("From \(voice.from), \(Int(voice.seconds)) s")
+            }
         }
     }
 }
@@ -677,6 +704,7 @@ struct WordSettings: View {
     @State private var fixTo = ""
     @State private var fixProblem: String?
     @State private var undo: Removed?
+    @FocusState private var writeFocused: Bool
 
     private struct Removed: Equatable {
         var text: String
@@ -741,11 +769,16 @@ struct WordSettings: View {
                 HStack {
                     TextField("Heard as", text: $fixFrom, prompt: Text("Heard as"))
                         .labelsHidden()
+                        // Return goes on to "Write", or adds when both are filled (B13).
+                        .onSubmit {
+                            if fixTo.trimmingCharacters(in: .whitespaces).isEmpty { writeFocused = true } else { addFix() }
+                        }
                     Image(systemName: "arrow.right")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                     TextField("Write", text: $fixTo, prompt: Text("Write"))
                         .labelsHidden()
+                        .focused($writeFocused)
                         .onSubmit(addFix)
                     Button("Add", action: addFix)
                         .disabled(fixFrom.trimmingCharacters(in: .whitespaces).isEmpty
@@ -795,10 +828,12 @@ struct WordSettings: View {
         }
     }
 
+    /// Something's wrong with what was typed: red with a sign, so it
+    /// doesn't look like a grey hint (B13).
     private func problem(_ text: String) -> some View {
-        Text(text)
+        Label(text, systemImage: "exclamationmark.circle.fill")
             .font(.callout)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.red)
     }
 
     private func addWord() {
@@ -826,7 +861,7 @@ struct WordSettings: View {
     }
 
     private func offerUndo(_ text: String, inFixes: Bool = false, run: @escaping () -> Void) {
-        let r = Removed(text: text, inFixes: inFixes, run: run)
+        let r = Removed(text: text, inFixes: inFixes, run: RecorderModel.shared.settingsUndo(text, run: run))
         undo = r
         Task {
             try? await Task.sleep(for: .seconds(10))
@@ -856,14 +891,24 @@ struct TranscriptionSettings: View {
             }
 
             Section("Names") {
-                Toggle(isOn: $autoName) {
+                // B9: a Mac that can't run Apple Intelligence shows the switch
+                // off and greyed, with why, instead of on next to "can't".
+                let cannot = AutoName.cannotEverRun
+                Toggle(isOn: Binding(get: { autoName && !cannot }, set: { autoName = $0 })) {
                     Text("Name recordings from what was said")
                     Text("After you stop, your Mac's Apple Intelligence reads the transcript and picks a short name, like \u{201C}Anansi and the sky god\u{201D}. On this Mac, offline. Names you type yourself are never changed.")
                 }
-                if autoName, let reason = AutoName.unavailableReason {
-                    Text(reason)
-                        .font(.callout)
-                        .fixedSize(horizontal: false, vertical: true)
+                .disabled(cannot)
+                if autoName || cannot, let reason = AutoName.unavailableReason {
+                    if AutoName.needsTurningOn {
+                        SettingsBlocked(text: reason, button: "Open Apple Intelligence settings",
+                                        url: "x-apple.systempreferences:com.apple.Siri-Settings.extension")
+                    } else {
+                        Text(reason)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
@@ -892,6 +937,28 @@ struct TranscriptionSettings: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+}
+
+/// A setting that can't work right now because of something in macOS: the
+/// reason, and a button to the place that fixes it (B9).
+struct SettingsBlocked: View {
+    let text: String
+    let button: String
+    let url: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Label(text, systemImage: "exclamationmark.circle.fill")
+                .font(.callout)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button(button) {
+                if let u = URL(string: url) { NSWorkspace.shared.open(u) }
+            }
+            .controlSize(.small)
         }
     }
 }

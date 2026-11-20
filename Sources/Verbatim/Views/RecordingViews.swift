@@ -91,10 +91,16 @@ struct LiveStatusLine: View {
     var body: some View {
         if let text = message {
             VStack(spacing: 0) {
-                HStack {
+                HStack(spacing: 12) {
                     Text(text)
                         .font(.callout)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let fix {
+                        Button(fix.label, action: fix.run)
+                            .buttonStyle(.link)
+                            .font(.callout.weight(.medium))
+                            .fixedSize()
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 24)
@@ -121,6 +127,20 @@ struct LiveStatusLine: View {
         default:
             return nil
         }
+    }
+
+    /// Live text is off for a reason you can fix right here (B12).
+    private var fix: (label: String, run: () -> Void)? {
+        guard !paused, case .off(let reason) = live.status else { return nil }
+        if reason.hasPrefix("Speech Recognition") {
+            return ("Open Speech Recognition settings", {
+                if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") {
+                    NSWorkspace.shared.open(u)
+                }
+            })
+        }
+        if case .paused = live.modelState { return ("Resume download", { live.startDownload() }) }
+        return nil
     }
 
     private var percentText: String {

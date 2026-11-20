@@ -1,4 +1,5 @@
 import AVFoundation
+import Speech
 import SwiftUI
 
 /// The start screen (2026-11-18, Ryan picked "E, a blank notebook page"):
@@ -38,6 +39,16 @@ struct StartView: View {
         // Get the live models ready while you're on this page, so Record
         // starts listening straight away (see LiveTranscriber.warmUp).
         .onAppear { live.warmUp() }
+        // Until Parakeet is here, live text uses the Mac's own engine, which
+        // needs Speech Recognition access. Ask now, not the first time Record
+        // is pressed in class (B12). Only once the mic is allowed, so the two
+        // questions don't come at once.
+        .task {
+            if !live.isModelReady, model.micPermission == .authorized,
+               SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+                _ = await AppleSpeechEngine.authorize()
+            }
+        }
         .onChange(of: live.modelState == .ready) { if live.modelState == .ready { live.warmUp() } }
     }
 

@@ -749,18 +749,32 @@ final class RecorderModel {
         if panel.runModal() == .OK { importAudio(panel.urls) }
     }
 
-    /// Copies each file in as a new recording, then transcribes it.
+    /// Copies each file in as a new recording, then transcribes it. It goes
+    /// into the group on screen (B16: a memo dropped on the start page
+    /// showing "English" used to land in Recents).
     func importAudio(_ urls: [URL]) {
+        importAudio(urls, into: groupOnScreen)
+    }
+
+    /// The group the start page records into, or the open recording's group.
+    private var groupOnScreen: UUID? {
+        if showingDeleted { return nil }
+        guard let id = selection else { return GroupStore.shared.group(GroupStore.shared.lastUsedID)?.id }
+        return GroupStore.shared.group(info(id)?.groupID)?.id
+    }
+
+    /// Dropped on a group in the sidebar, or picked for one.
+    func importAudio(_ urls: [URL], into group: UUID?) {
         let bad = urls.filter { !AudioImport.canImport($0) }
         if let first = bad.first {
             show("Verbatim can't open .\(first.pathExtension) files. Use \(AudioImport.allowedText).")
         }
         for url in urls where AudioImport.canImport(url) {
-            importOne(url)
+            importOne(url, into: group)
         }
     }
 
-    private func importOne(_ url: URL) {
+    private func importOne(_ url: URL, into group: UUID?) {
         // Dropped twice while the first copy is still going: show that one.
         if let same = recordings.first(where: { $0.importingPath == url.path && Transcriber.shared.importing.contains($0.id) }) {
             selection = same.id
@@ -775,6 +789,7 @@ final class RecorderModel {
         )
         info.importedFrom = url.lastPathComponent
         info.importingPath = url.path
+        info.groupID = group
         info.autoTitle = true
         do {
             try RecordingStore.create(info)
@@ -784,7 +799,14 @@ final class RecorderModel {
         }
         recordings.append(info)
         recordings.sort { $0.createdAt > $1.createdAt }
-        selection = info.id
+        if let group { GroupStore.shared.update(group) { $0.collapsed = false } }
+        if isBusy {
+            // Recording: stay on the live page (B16), say where it went.
+            let place = GroupStore.shared.group(group)?.name ?? "Recents"
+            show("Importing \(url.lastPathComponent) into \(place). The text comes after you stop recording.")
+        } else {
+            selection = info.id
+        }
         runImport(info.id, from: url, access: url.startAccessingSecurityScopedResource())
     }
 
@@ -906,6 +928,24 @@ final class RecorderModel {
         if undoStack.count > 50 { undoStack.removeFirst() }
         undoSerial += 1
         return step.id
+    }
+
+    /// A change made in Settings (a word, a fix, a name removed): on the ⌘Z
+    /// list too, not only its own Undo link there (B13: only the last one
+    /// could be undone). Returns what the link runs. It undoes only once,
+    /// whichever is used.
+    func settingsUndo(_ text: String, run: @escaping () -> Void) -> () -> Void {
+        var done = false
+        let once = {
+            guard !done else { return }
+            done = true
+            run()
+        }
+        let id = pushUndo(text, recording: nil, run: once)
+        return { [weak self] in
+            once()
+            self?.undoStack.removeAll { $0.id == id }
+        }
     }
 
     /// The Undo link in the bottom bar went with the recording on screen:
