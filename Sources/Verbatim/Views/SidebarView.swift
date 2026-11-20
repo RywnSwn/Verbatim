@@ -16,6 +16,9 @@ import UniformTypeIdentifiers
 /// pointer, and shows "Moved to X. Undo" after the drop. Arrow keys, Delete
 /// and right-click work like before.
 struct SidebarView: View {
+    /// Shown as the overlay over the transcript (narrow window): no scroll
+    /// bar there (Ryan, 2026-11-20: a line down its right edge).
+    var floating = false
     @Environment(RecorderModel.self) private var model
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage(SidebarLook.key) private var sidebarLook: SidebarLook = .glass
@@ -58,6 +61,7 @@ struct SidebarView: View {
             .animation(.snappy(duration: 0.25), value: store.groups)
             .animation(.snappy(duration: 0.25), value: model.recordings.map(\.groupID))
         }
+        .scrollIndicators(floating ? .never : .automatic)
         // B17: the recording that opens (an imported memo, Put Back, a search
         // hit, + on a folded group) is unfolded and scrolled into view.
         .onChange(of: model.selection) { _, id in

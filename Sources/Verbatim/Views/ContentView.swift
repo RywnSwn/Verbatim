@@ -26,19 +26,59 @@ struct ContentView: View {
     /// over the layout until it crashed (0.1.98, 0.1.102). So below this the
     /// split view's sidebar column stays shut and the floating one is used.
     static let compactWidth: CGFloat = 760
-    private static let roomyWidth: CGFloat = 820
     static let floatingWidth: CGFloat = 270
+    /// Some pages need more room beside the sidebar than others, so a fixed
+    /// width wasn't enough (Ryan, 2026-11-20: the window grew again just
+    /// above it). If opening the sidebar ever grows the window, the window
+    /// goes back, the overlay is used, and the width it needed is
+    /// remembered here, so next time the overlay comes straight away.
+    private static let learnedKey = "sidebarNeedsWidth"
+    private var compact: CGFloat {
+        max(Self.compactWidth, UserDefaults.standard.double(forKey: Self.learnedKey))
+    }
+    private var roomy: CGFloat { compact + 60 }
+    /// Opening the sidebar inside the window: the width before, to catch growth.
+    @State private var opening: (before: CGFloat, at: Date)?
 
     private func fitSidebar(to width: CGFloat) {
+        // Growth while you drag the window's edge is you, not the sidebar.
+        let dragging = Messages.mainWindows.first?.inLiveResize == true
+        if let o = opening, !dragging, Date().timeIntervalSince(o.at) < 1, width > o.before + 1 {
+            undoGrowth(from: o.before, to: width)
+            return
+        }
         self.width = width
-        if width < Self.compactWidth, columns != .detailOnly, !hidForSpace {
+        if width < compact, columns != .detailOnly, !hidForSpace {
             hidForSpace = true
             columns = .detailOnly
-        } else if width >= Self.roomyWidth, hidForSpace || floating {
+        } else if width >= roomy, hidForSpace || floating {
             // Room again: the floating sidebar becomes the normal one.
             hidForSpace = false
             floating = false
-            columns = .all
+            openInWindow()
+        }
+    }
+
+    /// Shows the sidebar column, watching that the window doesn't grow.
+    private func openInWindow() {
+        opening = (width, Date())
+        // After this layout pass, never in the middle of it (0.1.98 crash).
+        Task { @MainActor in columns = .all }
+    }
+
+    /// The window grew for the sidebar: put it back and use the overlay.
+    private func undoGrowth(from before: CGFloat, to grown: CGFloat) {
+        opening = nil
+        // Capped, so one odd case can't make the overlay take over big windows.
+        UserDefaults.standard.set(min(max(grown, compact), 1100), forKey: Self.learnedKey)
+        hidForSpace = true
+        columns = .detailOnly
+        floating = true
+        Task { @MainActor in
+            guard let window = Messages.mainWindows.first else { return }
+            var f = window.frame
+            f.size.width = before
+            window.setFrame(f, display: true, animate: false)
         }
     }
 
@@ -47,12 +87,11 @@ struct ContentView: View {
         if floating {
             floating = false // hid for space stays as it was: wide again, it comes back
         } else if columns == .detailOnly {
-            if width < Self.compactWidth {
+            if width < compact {
                 floating = true
             } else {
                 hidForSpace = false
-                // After this layout pass, never in the middle of it (0.1.98 crash).
-                Task { @MainActor in columns = .all }
+                openInWindow()
             }
         } else {
             hidForSpace = false
@@ -181,7 +220,7 @@ private struct FloatingSidebar: View {
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { close() } // VoiceOver, and the smoke test's clicks
                     .transition(.opacity)
-                SidebarView()
+                SidebarView(floating: true)
                     .frame(width: ContentView.floatingWidth)
                     .frame(maxHeight: .infinity)
                     .background {
@@ -194,9 +233,8 @@ private struct FloatingSidebar: View {
                         }
                         .ignoresSafeArea()
                     }
-                    .overlay(alignment: .trailing) {
-                        Rectangle().fill(Theme.line).frame(width: 1).ignoresSafeArea()
-                    }
+                    // No line down the right edge (it looked like a scroll
+                    // bar, Ryan 2026-11-20): the shadow marks the edge.
                     .compositingGroup()
                     .shadow(color: .black.opacity(0.18), radius: 16, x: 4)
                     .background {
