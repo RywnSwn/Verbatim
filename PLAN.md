@@ -1603,3 +1603,48 @@ Test list (for Ryan):
 6. Add a line, press ⌘Z: it goes away. While typing in it, ⌘Z undoes typing.
 7. While the new line is open, click another line: it only saves, the
    other line does NOT open and does NOT change.
+
+## Sidebar and line tools (Ryan, 2026-11-20), branch `claude/sidebar-and-line-tools`
+Ryan's asks:
+1. Sidebar: opening it made the window wider each time ("bigger and
+   bigger"). Wants it to use the room the window has, like Claude.
+2. Lines: "how do I add a line in between", markers and notes "only apply
+   to the latest line, I can't put them anywhere". Also: one click on a
+   line starts editing, which "feels dangerous".
+3. "Investigate UX errors, I've been noticing a lot."
+
+Built (part 1, not tested by Ryan yet): `ContentView.toggleSidebar` never
+resizes the window. Window 760 pt or wider: the sidebar column opens and
+the transcript gets narrower. Narrower (680 to 759): `FloatingSidebar`
+slides in over the transcript (dimmed); a click outside, Esc, the sidebar
+button or picking a recording slides it away. It auto-hides below 760 and
+comes back from 820 (was 860 / 940). 760 because the system sidebar button
+did nothing below ~745 and opening the column in a too-narrow window
+crashed 0.1.98 / 0.1.102. Smoke test: toggles 3 times at 800 and 700 wide,
+checks the width never changes, screenshots the floating sidebar, Esc and
+click-outside.
+Test list (for Ryan):
+1. Make the window medium (sidebar showing), close and open the sidebar a
+   few times: the window never gets bigger, the transcript gets narrower.
+2. Make the window as small as it goes: the sidebar hides. Click the
+   sidebar button: it slides over the transcript. Click the transcript, or
+   press Esc: it slides away. Pick a recording in it: it slides away.
+3. Make the window big again: the sidebar comes back by itself.
+
+Part 2, mockup first (not built): https://claude.ai/artifact/BSvJ7utAQxyjqokGa3iQ9d
+(copy in `docs/design/LineTools.html`). Waiting for Ryan's OK. What it shows:
+- Hover a line: soft grey. One click picks it (blue box), nothing opens.
+  Double-click or Enter edits. Arrow keys move, Delete deletes (Undo).
+- Picked line shows 3 small buttons at its right: flag, note, + (add line
+  below). + works on checked lines too (now only live lines).
+- Toolbar Marker and Note become tools: pointer turns into a flag / pencil,
+  lines glow yellow / red under it, click a line puts it there. Marker stays
+  on until Esc or the button again; Note goes down after one note. Bottom
+  bar says which tool is on, with "Put it down (Esc)". ⌘D still marks
+  "right now" while recording. Right-click keeps everything.
+Build notes for the next chat: picking a tool or line closes any open box
+first (typing rule). `addLine` must learn checked lines
+(`Transcriber.shared.insertLine`, `newLineTimes` on the checked lines). The
+selection highlight must not redraw the whole list (keep one view per row,
+selection in a small observable like `LineDraft`). Cursor: `NSCursor` from
+an image via `.pointerStyle(.image(...))` on macOS 15+, check the real API.
