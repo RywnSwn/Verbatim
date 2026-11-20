@@ -104,15 +104,18 @@ struct ContentView: View {
                 // I'm given" makes the split view follow the window.
                 .frame(minWidth: 0, idealWidth: 400, maxWidth: .infinity,
                        minHeight: 0, idealHeight: 300, maxHeight: .infinity)
+                // In the main column, not over the whole split view: there
+                // the click on the dimmed part went to the split view under
+                // it (smoke test, 2026-11-20) and the sidebar didn't close. With
+                // the sidebar column shut, this column is the whole window.
+                .overlay(alignment: .leading) {
+                    FloatingSidebar(shown: floating) { floating = false }
+                }
+                .animation(.snappy(duration: 0.22), value: floating)
         }
         // Here, not on the sidebar: with the sidebar hidden (narrow window),
         // New Group… from the start page or ⌘K couldn't show it.
         .modifier(GroupNameAlert())
-        // Before the ⌘K overlay, so the command menu still shows on top.
-        .overlay(alignment: .leading) {
-            FloatingSidebar(shown: floating) { floating = false }
-        }
-        .animation(.snappy(duration: 0.22), value: floating)
         .overlay {
             if model.showCommandMenu {
                 CommandMenuView()

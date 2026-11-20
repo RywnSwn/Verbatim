@@ -255,7 +255,7 @@ sleep 0.5
 # time he opened it). 760 and up: it opens inside the window. Below: it slides
 # over the transcript. Open and close a few times; the width must not change.
 win_width() {
-  osascript -e 'tell application "System Events" to get item 1 of (size of window 1 of (first process whose unix id is '"$APP_PID"'))' 2>/dev/null
+  osascript -e 'tell application "System Events" to get size of window 1 of (first process whose unix id is '"$APP_PID"')' 2>/dev/null | cut -d, -f1 | tr -d ' ' 
 }
 same_width() {
   local w; w="$(win_width)"
