@@ -1727,7 +1727,7 @@ by hand in the code. Item 1 above was only half fixed: see A4.
 
 **BRANCH: `claude/ux-round-2`. Keep working on THIS branch (Ryan asked,
 2026-11-20): start the next chat by checking it out, not a new branch.**
-A1 to A5: BUILT on that branch, not tested by Ryan, not merged. Draft pull
+A1 to A10: BUILT on that branch, not tested by Ryan, not merged. Draft pull
 request RywnSwn/Verbatim#29 (one PR for the whole round; merge only when
 Ryan asks, after testing). Next chat: A6 to A10, then B, then C, all on the
 same branch. Smoke 0.1 run 89 (8e6d67b): passed; Copy all shows at 1000 and
@@ -1781,10 +1781,64 @@ Test list (for Ryan, A1 to A5):
 7. Settings > Storage: change "Keep audio for" to 3 days. The line under
    it says how many recordings lose audio in the next 3 days. Change it
    back to 7 days. (Nothing is deleted for 3 days either way.)
-8. Disk full can't be tested easily; skip it. Branch `claude/speech-model-errors` (1 commit, not
-merged, not tested by Ryan) may already fix A10 and part of B12: check it
-first. Suggested chats: A1 to A4 together, then A5 to A10, then B, then C
-(with items 2 to 15 above where they touch the same code).
+8. Disk full can't be tested easily; skip it.
+
+A6 to A10: BUILT (2026-11-20, second chat on the branch), not tested by
+Ryan. `claude/speech-model-errors` was checked first: it does NOT fix A10
+(its `recordingFinal` still needs `isModelReady`); it only clashes with this
+branch in the notes files, so it stays its own PR (RywnSwn/Verbatim#27).
+Its `recordingFinal` line will conflict with A10: keep both (`needsRedo`
+from #27, the new `!isModelReady` enqueue branch from here).
+What was built (A6 to A10):
+- A6: `AudioImport.convert` reports progress (by the file's length) and
+  stops on task cancel. `RecorderModel.runImport` keeps the task in
+  `importTasks`; `cancelImport(id)` = Cancel link in the status line
+  ("Importing X, 42%. Text comes next.", with a bar). `delete(id)` and
+  Delete All on an importing recording cancel the copy (folder removed,
+  "Stopped importing X. Your original file isn't touched."), so nothing
+  half done goes to Recently deleted. `RecordingInfo.importingPath` is set
+  until the copy is done: at launch (`recoverImports`) the copy starts over
+  if the file is still readable, else it's removed and a notice says
+  drop it in again. `Transcriber.pickUp` skips importing ids. Same file
+  dropped twice while copying: shows the first.
+- A7: queued + model download paused: "Needs the speech model. Its
+  download is paused at 42%." with "Resume download"; failed: "Try now";
+  downloading: "Starts when the speech model download is done (42%, about
+  3 min left)."
+- A8: menu bar panel with mic access off: "Verbatim can't hear anything",
+  Record becomes "Mic settings", Record in <group> rows greyed. `start()`
+  with mic off sets a status with "Open Microphone settings"
+  (`Status.Action.openMicSettings`) instead of doing nothing. The panel
+  re-reads the permission when it opens.
+- A9: `pause()` ends keep-awake (the Mac may sleep; nothing is recorded)
+  and `askIfStillPaused` asks once after 15 min: bottom bar "Paused for
+  15 minutes. Class over?" with Stop, and a "Still paused?" banner (same
+  id as Still recording, with Stop / Keep going). Off when "Still
+  recording?" is off in Settings. A pause for a problem keeps its own
+  message and Resume link. Resume takes keep-awake again.
+- A10: `recordingFinal`: no text, no pass, Parakeet not ready, audio there
+  = `enqueue`; it waits in the queue (status line says the download) and
+  `modelReady()` starts it. Picked up again after a relaunch as before.
+Test list (for Ryan, A6 to A10):
+1. Drop a long Voice Memo (10 min or more) on the window. Under the
+   title: "Importing …, N%" with a bar, then "Transcribing …".
+2. Drop it again and press Cancel while it says Importing: it goes away,
+   "Stopped importing …" at the bottom. Drop it again, press Delete
+   (⌘⌫) while Importing: same thing, nothing in Recently deleted.
+3. Drop a long memo and quit Verbatim (⌘Q) while it says Importing. Open
+   Verbatim: it imports again from the start, then transcribes all of it.
+4. Mic access: System Settings > Privacy & Security > Microphone, turn
+   Verbatim off. Click the menu bar icon: it says Verbatim can't hear
+   anything, with a Mic settings button. Press ⌘R in the main window:
+   the bottom bar says so with "Open Microphone settings". Turn it back on.
+5. Record, Pause, wait 15 minutes (or come back later): "Paused for 15
+   minutes. Class over?" with Stop. The Mac can go to sleep while paused.
+6. A7 and A10 need a fresh Mac without the speech model, so they can only
+   be checked on a test account. Skip them.
+
+Suggested chats: A1 to A4 together, then A5 to A10, then B, then C
+(with items 2 to 15 above where they touch the same code). Next: B1 to
+B17 on this same branch.
 
 A. Loses work or blocks the task
 - A1. Settings > Storage: lowering "Keep audio for" (7 to 3 days) deletes
