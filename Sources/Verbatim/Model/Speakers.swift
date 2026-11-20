@@ -238,14 +238,14 @@ extension RecorderModel {
         }
         // A real name: remember the voice for next time (step 7c).
         guard Speakers.voice(of: choice) == nil, let info = info(id) else {
-            offerLineUndo(text, undo: undoName)
+            offerLineUndo(text, in: id, undo: undoName)
             return
         }
         let started = Date()
         VoiceLibrary.shared.remember(name: choice, voice: voice, in: info) { [weak self] saved in
             guard let self else { return }
-            guard saved else { return self.offerLineUndo(text, undo: undoName) }
-            self.offerLineUndo("\(text) Verbatim will know this voice next time.") {
+            guard saved else { return self.offerLineUndo(text, in: id, undo: undoName) }
+            self.offerLineUndo("\(text) Verbatim will know this voice next time.", in: id) {
                 undoName()
                 VoiceLibrary.shared.forget(named: choice, savedAfter: started)
             }

@@ -20,7 +20,7 @@ extension RecorderModel {
         line.locked = true
         line.words = nil // word times no longer match; the player estimates
         guard let old = Self.replace(id, source, start: start, with: line) else { return }
-        offerLineUndo("Line edited.") { [weak self] in
+        offerLineUndo("Line edited.", in: id) { [weak self] in
             Self.restore(id, source, start: start, old)
             if self?.fixOffer?.start == start { self?.fixOffer = nil }
         }
@@ -50,7 +50,7 @@ extension RecorderModel {
             text += changed.count == 1 ? " Fixed it in 1 more line." : " Fixed it in \(changed.count) more lines."
         }
         if let addedWord { text += " \(addedWord) is in the word list too." }
-        offerLineUndo(text) {
+        offerLineUndo(text, in: offer.recordingID) {
             LiveTranscriber.shared.undoRule(changed, in: offer.recordingID)
             if let addedWord { list.removeWord(addedWord) }
             if let i = list.fixes.firstIndex(where: { $0.id == offer.fix.id }) {
@@ -86,7 +86,7 @@ extension RecorderModel {
         var line = Transcript.Line(start: at.start, end: at.end, text: trimmed, locked: true)
         line.speaker = speaker
         live.insertLine(id, line)
-        offerLineUndo("Added a line.") {
+        offerLineUndo("Added a line.", in: id) {
             live.discardLine(id, start: at.start)
         }
     }
@@ -113,7 +113,7 @@ extension RecorderModel {
         case .live: LiveTranscriber.shared.removeLine(id, start: start)
         }
         guard let old = removed else { return }
-        offerLineUndo("Deleted a line.") {
+        offerLineUndo("Deleted a line.", in: id) {
             if source == .live { LiveTranscriber.shared.insertLine(id, old) }
             if Self.resolved(id, source, old) == .checked { Transcriber.shared.insertLine(id, old) }
         }

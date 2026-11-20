@@ -48,7 +48,7 @@ extension RecorderModel {
         kept.sort { $0.time < $1.time }
         changeRecording(i) { $0.notes = kept.isEmpty ? nil : kept }
         let message = trimmed.isEmpty ? "Note deleted." : before == nil ? "Note added at \(info.timeLabel(line.start))." : "Note changed."
-        offerLineUndo(message) { [weak self] in
+        offerLineUndo(message, in: id) { [weak self] in
             guard let self, let i = self.recordingIndex(id) else { return }
             self.changeRecording(i) { $0.notes = old.isEmpty ? nil : old }
         }

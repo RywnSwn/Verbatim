@@ -60,6 +60,14 @@ final class WavWriter {
         }
     }
 
+    /// After a failed write (disk full): drop the bytes that only half made
+    /// it, so the next sample lands right after the last good one.
+    func recoverAfterError() throws {
+        try handle.truncate(atOffset: WavWriter.headerSize + dataBytes)
+        try patchHeader()
+        try handle.seekToEnd()
+    }
+
     func flush() throws {
         try patchHeader()
         try handle.synchronize()

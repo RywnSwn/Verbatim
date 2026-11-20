@@ -104,6 +104,10 @@ extension RecorderModel {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(Self.text(lines, info: info, markdown: false), forType: .string)
         copyFeedback = CopyFeedback(text: lines.count == 1 ? "Copied 1 line" : "Copied \(lines.count) lines")
+        // Also in the bottom bar: the Copy button can be hidden in "»" and
+        // ⇧⌘C showed nothing (A5). Not while recording: the status spot
+        // holds warnings then, and the mini window shows its own "Copied".
+        if !isBusy { flash(copyFeedback?.text ?? "Copied") }
 
         // Remember where this copy ended, for "Copy new since last copy".
         if let end = lines.map(\.end).max() {

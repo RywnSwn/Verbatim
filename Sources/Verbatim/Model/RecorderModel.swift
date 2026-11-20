@@ -23,6 +23,9 @@ final class RecorderModel {
     struct StoppedNote: Equatable {
         var recordingID: UUID
         var text: String
+        /// `undoSerial` when it stopped: ⌘Z does Undo Stop only if nothing
+        /// with its own Undo happened since (UX round 2, A4).
+        var serial = 0
     }
 
     static let barCount = 40
@@ -86,6 +89,8 @@ final class RecorderModel {
         var info: RecordingInfo
         var trashURL: URL
         var id = UUID()
+        /// Its step on the ⌘Z list, taken off when the Undo link is used.
+        var step: UUID?
     }
 
     private(set) var deletedNote: DeletedNote?
@@ -140,7 +145,21 @@ final class RecorderModel {
     /// Every change with Undo (line edits, deletes, markers, notes, speakers,
     /// moves), newest last. ⌘Z takes them back one by one, also after the
     /// Undo link in the bottom bar has gone (Ryan, 2026-11-19).
-    @ObservationIgnored private var undoStack: [(text: String, run: () -> Void)] = []
+    ///
+    /// Each step knows its recording (UX round 2, A4): ⌘Z only undoes steps
+    /// of the recording on screen (or the one recording now), and steps
+    /// with no recording (group delete, moves, recording deletes). A step
+    /// whose recording is in Recently deleted waits until it's put back.
+    @ObservationIgnored private var undoStack: [UndoStep] = []
+    /// Goes up with every new step, so Undo Stop knows if something newer came.
+    @ObservationIgnored private var undoSerial = 0
+
+    private struct UndoStep {
+        var id = UUID()
+        var text: String
+        var recording: UUID?
+        var run: () -> Void
+    }
     @ObservationIgnored private var fileToShow: URL?
     /// What the text link in the status spot does, for `offer`.
     @ObservationIgnored private var offered: (() -> Void)?
@@ -299,6 +318,17 @@ final class RecorderModel {
             status = Status(text: "No microphone found. Plug one in, then press Resume.")
             return
         }
+        if pipeline.hasWriteError {
+            // Paused because the disk was full: only go on once there's room
+            // and the file is fixed, or nothing would be saved.
+            let stillFull = (RecordingStore.freeSpace() ?? .max) < Self.bytesPerHour / 6
+            if stillFull || !pipeline.clearWriteError() {
+                status = Status(text: stillFull
+                    ? "The disk is still full. Free up space, then"
+                    : "Can't save audio to the disk. Free up space, then", action: .resume)
+                return
+            }
+        }
         do {
             try pipeline.startCapture(device: dev)
         } catch {
@@ -342,7 +372,7 @@ final class RecorderModel {
         let title = info?.title ?? "Recording"
         let length = Self.minutesText(info?.duration ?? 0)
         let text = note ?? "Saved \(title), \(length)."
-        let stopped = StoppedNote(recordingID: id, text: text)
+        let stopped = StoppedNote(recordingID: id, text: text, serial: undoSerial)
         stoppedNote = stopped
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(10))
@@ -409,8 +439,12 @@ final class RecorderModel {
         case .resume: resume()
         case .undoDelete: undoDelete()
         case .undoLine:
+            // The link belongs to the newest step: undo exactly that one.
             if status?.action == .undoLine { status = nil }
-            undoLastChange()
+            if let step = undoStack.popLast() {
+                step.run()
+                flash("Undid: \(Self.undoName(step.text))")
+            }
         case .showFile:
             if let url = fileToShow { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             status = nil
@@ -441,7 +475,16 @@ final class RecorderModel {
         }
         forgetRecording(id)
 
-        let note = DeletedNote(info: info, trashURL: moved)
+        // On the ⌘Z list for good, not only while the Undo link shows.
+        let step = pushUndo("Moved \(info.title) to Recently deleted.", recording: nil) { [weak self] in
+            guard RecentlyDeleted.shared.items.contains(where: { $0.id == id }) else { return }
+            if self?.deletedNote?.info.id == id {
+                self?.deletedNote = nil
+                if self?.status?.action == .undoDelete { self?.status = nil }
+            }
+            self?.putBack(id)
+        }
+        let note = DeletedNote(info: info, trashURL: moved, step: step)
         deletedNote = note
         if isBusy {
             status = Status(text: "Moved \(info.title) to Recently deleted.", action: .undoDelete)
@@ -467,6 +510,7 @@ final class RecorderModel {
         guard let note = deletedNote else { return }
         deletedNote = nil
         if status?.action == .undoDelete { status = nil }
+        undoStack.removeAll { $0.id == note.step }
         putBack(note.info.id)
     }
 
@@ -720,9 +764,10 @@ final class RecorderModel {
 
     /// "Line edited. Undo" in the status spot for 10 seconds, and on the
     /// ⌘Z list for good (until the app quits, last 50 changes).
-    func offerLineUndo(_ text: String, undo: @escaping () -> Void) {
-        undoStack.append((text, undo))
-        if undoStack.count > 50 { undoStack.removeFirst() }
+    /// `recording`: the recording the change is in (nil: not one recording,
+    /// like a group delete or a move).
+    func offerLineUndo(_ text: String, in recording: UUID? = nil, undo: @escaping () -> Void) {
+        pushUndo(text, recording: recording, run: undo)
         let s = Status(text: text, action: .undoLine)
         status = s
         Task { [weak self] in
@@ -732,23 +777,36 @@ final class RecorderModel {
         }
     }
 
+    @discardableResult
+    private func pushUndo(_ text: String, recording: UUID?, run: @escaping () -> Void) -> UUID {
+        let step = UndoStep(text: text, recording: recording, run: run)
+        undoStack.append(step)
+        if undoStack.count > 50 { undoStack.removeFirst() }
+        undoSerial += 1
+        return step.id
+    }
+
+    /// The Undo link in the bottom bar went with the recording on screen:
+    /// it goes when another recording opens, so it never changes one you
+    /// can't see (UX round 2, A4).
+    func selectionChanged() {
+        if status?.action == .undoLine { status = nil }
+    }
+
     /// Edit > Undo (⌘Z). Typing in a box: undoes the typing, like any Mac
-    /// app. Otherwise: a deleted recording or audio that still shows Undo,
-    /// then the newest change on the list.
+    /// app. Otherwise: Undo Stop right after Stop, audio that still shows
+    /// Undo, then the newest change in the recording on screen.
     func undo() {
         if NSApp.keyWindow?.firstResponder is NSTextView {
             NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
             return
         }
-        // Not recording, a delete only shows `deletedNote` (no status), so
-        // ⌘Z used to skip it and undo an older line change instead.
-        // A newer change with its own Undo (status) still goes first.
-        if deletedNote != nil, status == nil || status?.action == .undoDelete {
-            undoDelete()
+        // Just stopped and nothing newer: ⌘Z is Undo Stop, not an old edit.
+        if let note = stoppedNote, phase == .idle, note.serial == undoSerial {
+            undoStop()
             return
         }
         switch status?.action {
-        case .undoDelete?: perform(.undoDelete)
         case .undoAudioDelete?: perform(.undoAudioDelete)
         default:
             if status?.action == .undoLine { status = nil }
@@ -763,13 +821,28 @@ final class RecorderModel {
         }
     }
 
+    /// The newest step ⌘Z may take: not one recording, the recording on
+    /// screen, or the one being recorded (the mini window edits that one).
+    /// Steps of a recording in Recently deleted wait (Put Back brings them back).
+    private func undoable(_ step: UndoStep) -> Bool {
+        guard let id = step.recording else { return true }
+        guard recordings.contains(where: { $0.id == id }) else { return false }
+        return id == selection || id == currentID
+    }
+
     private func undoLastChange() {
-        guard let last = undoStack.popLast() else {
-            flash("Nothing to undo.")
+        guard let i = undoStack.lastIndex(where: { undoable($0) }) else {
+            flash(undoStack.isEmpty ? "Nothing to undo." : "Nothing to undo in this recording.")
             return
         }
-        last.run()
-        flash("Undid: \(Self.undoName(last.text))")
+        let step = undoStack.remove(at: i)
+        if let id = deletedNote?.step, id == step.id { deletedNote = nil }
+        step.run()
+        var text = "Undid: \(Self.undoName(step.text))"
+        if let id = step.recording, id != selection, let title = info(id)?.title {
+            text += " (in \(title))"
+        }
+        flash(text)
     }
 
     /// "Line edited." becomes "line edited." for "Undid: line edited."

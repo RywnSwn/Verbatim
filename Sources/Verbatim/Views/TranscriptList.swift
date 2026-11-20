@@ -56,6 +56,10 @@ struct TranscriptList: View {
     /// text (`saveNewLine`), so an empty one is never saved.
     @State private var adding: NewLine?
     @State private var newDraft = LineDraft()
+    /// The recording the open box (line, note or new line) belongs to. This
+    /// view is kept when another recording is opened, so saving always goes
+    /// here, never into the recording now on screen (UX round 2, A2).
+    @State private var boxOwner: UUID?
     /// Its own focus: losing it doesn't save (picking a speaker from the
     /// name menu may take focus). A click away, Enter or leaving saves.
     @FocusState private var newFocused: Bool
@@ -275,6 +279,14 @@ struct TranscriptList: View {
             if !fieldFocused, editing != nil { save() }
         }
         .onDisappear { stopTyping() }
+        .onChange(of: info.id) {
+            // Another recording opened: save and close what was open in the
+            // old one, and forget its picked line and popups.
+            stopTyping()
+            picked = nil
+            naming = nil
+            addingWord = false
+        }
         .onChange(of: live.count) { keepNewLineAnchored() }
         .onChange(of: noteFocused) {
             if !noteFocused, notingLine != nil { saveNote() }
@@ -633,6 +645,7 @@ struct TranscriptList: View {
         stopTyping()
         noteDraft = LineDraft() // a new box, same reason as in `begin`
         noteDraft.text = text
+        boxOwner = info.id
         notingLine = line
         Task { @MainActor in noteFocused = true }
     }
@@ -640,7 +653,7 @@ struct TranscriptList: View {
     private func saveNote() {
         guard let line = notingLine else { return }
         finishNote()
-        model.setNote(info.id, line: line, text: noteDraft.text)
+        model.setNote(boxOwner ?? info.id, line: line, text: noteDraft.text)
     }
 
     private func finishNote() {
@@ -675,6 +688,7 @@ struct TranscriptList: View {
         // clicked next and replaced it (Ryan, 2026-11-19).
         draft = LineDraft()
         draft.text = line.text
+        boxOwner = info.id
         editing = EditKey(source: source, start: line.start)
         picked = editing // after saving, the line stays picked
         if source == .live { liveTranscriber.editing = (info.id, line.start) }
@@ -758,6 +772,7 @@ struct TranscriptList: View {
     private func beginNewLine(below line: Transcript.Line, speaker: String?) {
         stopTyping()
         newDraft = LineDraft() // a new box, same reason as in `begin`
+        boxOwner = info.id
         adding = NewLine(below: line.start, speaker: speaker)
         Task { @MainActor in newFocused = true }
     }
@@ -765,13 +780,14 @@ struct TranscriptList: View {
     private func saveNewLine() {
         guard let a = adding else { return }
         finishNewLine()
-        model.addLine(info.id, below: a.below, text: newDraft.text, speaker: a.speaker)
+        model.addLine(boxOwner ?? info.id, below: a.below, text: newDraft.text, speaker: a.speaker)
     }
 
     /// A pass over the file can rebuild the lines while a new line is open:
     /// if the line it sits under is gone, it moves under the line now there.
     private func keepNewLineAnchored() {
-        guard let a = adding, !live.contains(where: { $0.start == a.below }) else { return }
+        // Only in its own recording: switching recordings changes `live` too.
+        guard let a = adding, boxOwner == info.id, !live.contains(where: { $0.start == a.below }) else { return }
         if let line = live.last(where: { $0.start <= a.below }) ?? live.first {
             adding?.below = line.start
         } else {
@@ -835,7 +851,7 @@ struct TranscriptList: View {
     private func save() {
         guard let key = editing else { return }
         finish()
-        model.editLine(info.id, key.source, start: key.start, text: draft.text)
+        model.editLine(boxOwner ?? info.id, key.source, start: key.start, text: draft.text)
     }
 
     private func cancel() {

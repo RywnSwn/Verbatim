@@ -146,8 +146,9 @@ struct StorageSettings: View {
                     }
                 } label: {
                     Text("Keep audio for")
-                    Text("To keep one recording's audio, right-click it in the sidebar, then Keep Audio.")
+                    Text(keepAudioNote)
                 }
+                .onChange(of: keepDays) { old, new in AudioCleanup.changed(from: old, to: new) }
             }
 
             if let sizes, !sizes.rows.isEmpty {
@@ -184,6 +185,16 @@ struct StorageSettings: View {
             Text("They move to Recently deleted, where you can put them back for \(RecentlyDeleted.keepDays) days."
                  + (model.isBusy ? " The recording in progress stays." : ""))
         }
+    }
+
+    /// UX round 2, A1: say what the setting is about to do before it does it.
+    private var keepAudioNote: String {
+        let keep = "To keep one recording's audio, right-click it in the sidebar, then Keep Audio."
+        guard keepDays > 0 else { return "Audio is never deleted by itself." }
+        let n = AudioCleanup.dueSoon(model.recordings)
+        guard n > 0 else { return keep }
+        let who = n == 1 ? "1 recording loses its audio" : "\(n) recordings lose their audio"
+        return "\(who) in the next \(AudioCleanup.graceDays) days. The text stays. " + keep
     }
 
     private func biggest(_ info: RecordingInfo, bytes: Int64) -> some View {

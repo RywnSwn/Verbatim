@@ -52,6 +52,11 @@ struct RecordingNowView: View {
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(info.groupedStartedText)
         .toolbar {
+            // Copy all first, so it's the last to go into "»" (A5).
+            ToolbarItem(placement: .primaryAction) {
+                CopyButton(id: info.id, hasLines: !(checked + lines).isEmpty)
+            }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .primaryAction) { LineToolToggle(tool: .marker) }
             ToolbarItem(placement: .primaryAction) { LineToolToggle(tool: .note) }
             ToolbarItem(placement: .primaryAction) {
@@ -65,10 +70,6 @@ struct RecordingNowView: View {
                 }
                 .help("A small window that floats on top of other apps (⇧⌘M)")
             }
-            ToolbarItem(placement: .primaryAction) {
-                CopyButton(id: info.id, hasLines: !(checked + lines).isEmpty)
-            }
-            .sharedBackgroundVisibility(.hidden)
         }
         .transcriptSearch()
     }
@@ -170,15 +171,15 @@ struct PastRecordingView: View {
         .navigationTitle(info.fullTitle)
         .navigationSubtitle(subtitle)
         .toolbar {
-            ToolbarItemGroup {
-                if !model.isBusy {
-                    Button {
-                        model.showNewRecording()
-                    } label: {
-                        Label("New recording", systemImage: "plus")
-                    }
-                    .help("New recording (⌘N)")
-                }
+            // Copy all first: a narrow toolbar hides items from the right
+            // end into "»", and Copy all is the one Ryan uses most (UX round
+            // 2, A5). New recording is not here: it's at the top of the
+            // sidebar and on ⌘N, and a bare + looked like "add a line".
+            ToolbarItem(placement: .primaryAction) {
+                CopyButton(id: info.id, hasLines: !(checked + liveLines).isEmpty)
+            }
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     if playback.isShowing(info.id) { playback.toggle() } else { model.playAudio(info.id) }
                 } label: {
@@ -211,10 +212,6 @@ struct PastRecordingView: View {
                 }
                 .help("Show in Finder, Transcribe again, Find speakers again, Delete audio only, Delete")
             }
-            ToolbarItem(placement: .primaryAction) {
-                CopyButton(id: info.id, hasLines: !(checked + liveLines).isEmpty)
-            }
-            .sharedBackgroundVisibility(.hidden)
         }
         .transcriptSearch()
     }

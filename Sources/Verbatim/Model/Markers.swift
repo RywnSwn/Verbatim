@@ -64,7 +64,7 @@ extension RecorderModel {
     private func addMarker(_ id: UUID, at time: Double, label: String) {
         let old = markers(id)
         setMarkers(id, old + [(time * 100).rounded() / 100])
-        offerLineUndo("Marker added at \(label).") { [weak self] in
+        offerLineUndo("Marker added at \(label).", in: id) { [weak self] in
             self?.setMarkers(id, old)
         }
     }
@@ -77,7 +77,7 @@ extension RecorderModel {
         let kept = old.filter { Markers.line(at: $0, in: lines).start != line.start }
         guard kept.count != old.count else { return }
         setMarkers(id, kept)
-        offerLineUndo("Marker removed.") { [weak self] in
+        offerLineUndo("Marker removed.", in: id) { [weak self] in
             self?.setMarkers(id, old)
         }
     }
