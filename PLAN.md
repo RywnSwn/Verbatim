@@ -2166,3 +2166,12 @@ only showed once text scrolled under). Build v0.1.245.
 Extra tests: click a name: "Who is Speaker 2? (N lines)" heads the menu;
 pick a person: all N lines change. The top bar has a thin line under it
 on every page, and text scrolls under a solid bar.
+Sidebar slides away too early (Ryan, same day): on the CI Mac it stays
+beside the transcript down to 760 pt on every page (smoke 780 shot: top
+bar tucks items into »), so Ryan's Mac had learned a big "needs width"
+(could be up to 1100). Now `sidebarNeedsWidth3` (old keys dropped once),
+learning capped at 860 (`ContentView.maxLearned`), and Copy Layout Details
+has a "SIDEBAR:" line (from N pt wide, learned or none).
+Test: make the window narrower: the sidebar stays beside the transcript
+until about 760 pt, then slides away; the sidebar button then opens it
+over the transcript. Paste the SIDEBAR line if it hides earlier.

@@ -33,9 +33,13 @@ struct ContentView: View {
     /// goes back, the overlay is used, and the width it needed is
     /// remembered here, so next time the overlay comes straight away.
     /// "2": the first version learned wrong widths from Ryan's own drags
-    /// (2026-11-20), so what it remembered is dropped once.
-    private static let learnedKey = "sidebarNeedsWidth2"
-    private static let oldLearnedKey = "sidebarNeedsWidth"
+    /// (2026-11-20), so what it remembered is dropped once. "3": Ryan
+    /// (2026-11-20, later): the sidebar slid away far too early, so the old
+    /// number is dropped again and it can't learn more than `maxLearned`.
+    /// The CI Mac keeps it beside the transcript down to 760 on every page.
+    static let learnedKey = "sidebarNeedsWidth3"
+    private static let oldLearnedKeys = ["sidebarNeedsWidth", "sidebarNeedsWidth2"]
+    static let maxLearned: CGFloat = 860
     private var compact: CGFloat {
         max(Self.compactWidth, UserDefaults.standard.double(forKey: Self.learnedKey))
     }
@@ -92,7 +96,7 @@ struct ContentView: View {
     private func undoGrowth(from before: CGFloat, to grown: CGFloat) {
         opening = nil
         // Capped, so one odd case can't make the overlay take over big windows.
-        UserDefaults.standard.set(min(max(grown, compact), 1100), forKey: Self.learnedKey)
+        UserDefaults.standard.set(min(max(grown, compact), Self.maxLearned), forKey: Self.learnedKey)
         hidForSpace = true
         columns = .detailOnly
         floating = true
@@ -218,7 +222,7 @@ struct ContentView: View {
         .onChange(of: model.showingDeleted) { floating = false }
         .onAppear {
             MainWindow.open = { openWindow(id: "main") }
-            UserDefaults.standard.removeObject(forKey: Self.oldLearnedKey)
+            for key in Self.oldLearnedKeys { UserDefaults.standard.removeObject(forKey: key) }
             if let w = (Messages.mainWindows.first ?? NSApp.keyWindow)?.frame.width { width = w }
             LaunchTimer.shared.mark("window shown")
         }
