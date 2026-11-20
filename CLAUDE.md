@@ -26,7 +26,8 @@ Sidebar never resizes the window, line tools (click picks, double-click
 edits, Marker/Note tools, margin mark look) and the ⌘Z-after-delete fix
 (RywnSwn/Verbatim#28): tested by Ryan ("all works") and merged 2026-11-20.
 Next: UX round 2 in `PLAN.md` on branch `claude/ux-round-2` (keep using
-that branch, PR RywnSwn/Verbatim#29): the whole list (A, B, C, items 2 to 15) is built, not tested.
+that branch, PR RywnSwn/Verbatim#29): the whole list (A, B, C, items 2 to 15) is built,
+including the last two leftovers (update download progress/resume, Whisper Undo), not tested.
 Next: Ryan tests (test lists in `PLAN.md`), then merge #29.
 See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build

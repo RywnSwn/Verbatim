@@ -433,7 +433,7 @@ struct UpdateSettings: View {
                 }
                 LabeledContent {
                     Button("Check Now") { Task { await updater.check(userInitiated: true) } }
-                        .disabled(updater.state == .checking)
+                        .disabled(updater.isWorking)
                 } label: {
                     Text("Check for an update")
                     if !statusText.isEmpty { Text(statusText) }
@@ -457,7 +457,9 @@ struct UpdateSettings: View {
     private var statusText: String {
         switch updater.state {
         case .checking: return "Checking…"
-        case .downloading(let v): return "Downloading \(v)…"
+        case .downloading(let v):
+            let p = updater.progressText
+            return p.isEmpty ? "Downloading \(v)…" : "Downloading \(v): \(p)"
         case .ready: return updater.problem ?? ""
         case .idle:
             if let problem = updater.problem { return problem }

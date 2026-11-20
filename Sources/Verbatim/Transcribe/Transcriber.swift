@@ -285,6 +285,11 @@ final class Transcriber {
         commit(t, id)
     }
 
+    /// Undo of Transcribe again: the old Whisper transcript comes back as it was.
+    func putBackOld(_ t: Transcript, _ id: UUID) {
+        commit(t, id)
+    }
+
     private func commit(_ t: Transcript, _ id: UUID) {
         setOld(t, id)
         try? TranscriptStore.save(t, for: id)

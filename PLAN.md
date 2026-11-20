@@ -1856,9 +1856,28 @@ Smoke passed for b7432ac (B8 to B17). How the trickier parts work:
   LiveText and put it back on Undo (after the pass has stopped).
 - B14: `startNewGroup` / `cancelNewGroup` / `finishGroupName`.
 - B16: imports go to `groupOnScreen`; sidebar groups take `.fileURL` drops.
-Not done: update download progress and resume (B10, needs a URLSession
-delegate); restoring an old Whisper transcript on Undo of Transcribe
-again (rare, old recordings only).
+Last two leftovers: BUILT (2026-11-20, third chat on the branch), not
+tested by Ryan:
+- B10 rest: `ZipDownload` (URLSession delegate) gives progress, shown in
+  Settings > Updates as "Downloading 0.1.N: 42% (17 of 40 MB)". If it
+  stops (internet, sleep), URLSession's resume data is kept in
+  `Updates/<build>.partial` and the next try carries on from there
+  ("The download stopped at 42%. It carries on from there in 30
+  minutes, or press Check Now."). Resume data that no longer works:
+  starts over once by itself. Check Now is greyed while downloading.
+- Undo of Transcribe again on an old recording puts its Whisper
+  transcript (transcript.json) back too (`Transcriber.putBackOld`).
+  Also works when the recording had no live text.
+Sidebar fix (5c97fd3, same branch): if opening the sidebar would grow the
+window, the window goes back and the overlay is used; the width it needed
+is remembered (`sidebarNeedsWidth`). Smoke run 98 passed.
+Test list (for Ryan, these two):
+1. Settings > Updates, Check Now when a new test build is out: the line
+   under it counts up ("Downloading …: 42% (17 of 40 MB)").
+2. Same, but turn Wi-Fi off halfway: it says the download stopped at N%.
+   Wi-Fi on, Check Now: it carries on from about N%, not from 0.
+3. Old recordings from before Parakeet are rare; skip the Whisper Undo.
+4. Open the sidebar at different window widths: the window never grows.
 Lesson (2026-11-20): a review subagent ran `git checkout <sha>` in the
 shared checkout, so commits made meanwhile landed on a detached HEAD and
 weren't pushed. Tell review agents to use `git show` / `git diff` only,

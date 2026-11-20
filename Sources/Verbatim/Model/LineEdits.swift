@@ -161,8 +161,11 @@ extension RecorderModel {
 
     private func redoWithUndo(_ id: UUID, _ text: String, start: () -> Void) {
         let old = LiveTranscriber.shared.texts[id]
+        // An old recording may still have its Whisper transcript (before step
+        // 5c). Transcribe again deletes it, so Undo has to put it back too.
+        let oldWhisper = Transcriber.shared.transcripts[id]
         start()
-        guard let old else { return }
+        guard old != nil || oldWhisper != nil else { return }
         offerLineUndo("\(text) Undo puts the text back as it was.", in: id) {
             let t = Transcriber.shared
             t.cancel(id)
@@ -170,7 +173,10 @@ extension RecorderModel {
             // back after that, or they'd land in it.
             Task { @MainActor in
                 while t.active?.id == id { try? await Task.sleep(for: .milliseconds(50)) }
-                LiveTranscriber.shared.setText(old, for: id)
+                // No live text before: an empty one (no pass), so the old
+                // transcript shows by itself and nothing starts again.
+                LiveTranscriber.shared.setText(old ?? LiveText(), for: id)
+                if let oldWhisper, t.transcripts[id] == nil { t.putBackOld(oldWhisper, id) }
             }
         }
     }
