@@ -2154,3 +2154,15 @@ Test list for Ryan:
 4. Just This Line > pick someone: only that line changes. ⌘Z undoes it.
 5. Rename box: OK can't be pressed while the name is empty.
 6. While recording: the numbers don't swap as the class goes on.
+Update (same day, Ryan: "still very confusing"): the menu is now one
+question. Section "Who is Speaker 2? (14 lines)": every other speaker and
+past name (picking one changes all those lines), then "New Name…" (alert
+"Who is Speaker 2?", OK greyed while empty). Then Divider, "Just This
+Line" submenu, Forget a Name. No separate Rename item.
+Top bar (Ryan): its own section like the sidebar's top rows:
+`.scrollEdgeEffectStyle(.hard, for: .top)` on the detail column plus an
+always-there `Divider()` in its top safe-area inset (the hard edge alone
+only showed once text scrolled under). Build v0.1.245.
+Extra tests: click a name: "Who is Speaker 2? (N lines)" heads the menu;
+pick a person: all N lines change. The top bar has a thin line under it
+on every page, and text scrolls under a solid bar.
