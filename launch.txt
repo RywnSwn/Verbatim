@@ -1,0 +1,10 @@
+----- launch first -----
+LAUNCH: texts to check 1.054 s (201)
+LAUNCH: recordings read 1.057 s (203 recordings, 0.924 s on the main thread)
+LAUNCH: window shown 2.653 s
+LAUNCH: texts checked 5.512 s (201 read in the background)
+----- text index -----
+201 entries, 201 with lines, 41207 bytes
+----- launch second -----
+LAUNCH: recordings read 0.276 s (203 recordings, 0.202 s on the main thread)
+LAUNCH: window shown 1.087 s
