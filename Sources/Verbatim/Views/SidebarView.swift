@@ -492,8 +492,7 @@ struct GroupHeader: View {
     var body: some View {
         HStack(spacing: 6) {
             Button {
-                iconBefore = (group.icon, group.color)
-                picking = true
+                openPicker()
             } label: {
                 ItemIcon(name: group.icon, color: group.color, size: 12)
                     .frame(minWidth: 24, minHeight: 24) // item 9: easier to hit
@@ -566,7 +565,7 @@ struct GroupHeader: View {
                 .disabled(model.isBusy)
             Divider()
             Button("Rename Group…") { model.renameGroupRequest = group.id }
-            Button("Change Icon…") { picking = true }
+            Button("Change Icon…") { openPicker() } // Hunt 1 bug 15: it had no Undo
             Divider()
             Button("Move Up") { store.move(group.id, by: -1) }
                 .disabled(store.groups.first?.id == group.id)
@@ -575,6 +574,13 @@ struct GroupHeader: View {
             Divider()
             Button("Delete Group") { model.deleteGroup(group.id) }
         }
+    }
+
+    /// The icon as it was goes with every way in, so closing the picker
+    /// offers Undo.
+    private func openPicker() {
+        iconBefore = (group.icon, group.color)
+        picking = true
     }
 }
 
