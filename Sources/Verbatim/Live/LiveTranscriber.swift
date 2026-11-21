@@ -75,7 +75,7 @@ final class LiveFeed: @unchecked Sendable {
     private let lock = NSLock()
     private var queue: LiveQueue?
     /// Samples handed over, and samples the engines are done with. The gap
-    /// is how far live text is behind the mic (shown by `HitchMeter`).
+    /// is how far live text is behind the mic (shown by ⌃⌘L, see `report`).
     private var given: Int64 = 0
     private var done: Int64 = 0
     private var worstBehind: Int64 = 0
@@ -83,9 +83,12 @@ final class LiveFeed: @unchecked Sendable {
     /// (should be far under a second; long = the mic side stalled).
     private var lastAt: UInt64 = 0
     private var worstGap: UInt64 = 0
-    /// How the last start went (seconds after Start): shown by `HitchMeter`.
+    /// How the last start went (seconds after Start): shown by ⌃⌘L.
     private var openedAt: UInt64 = 0
     private var startTimes: [(String, Double)] = []
+    /// The last few speech model errors since launch, newest last (⌃⌘L).
+    private var errors: [String] = []
+    private var errorCount = 0
 
     func open() -> LiveQueue {
         let q = LiveQueue()
@@ -132,31 +135,37 @@ final class LiveFeed: @unchecked Sendable {
         }
     }
 
-    /// "Parakeet listening 3.1 s, speakers 4.0 s, first words 6.2 s" for the last start.
-    func startText() -> String {
+    /// A speech model failed ("Parakeet: ..."). Kept for ⌃⌘L, never shown
+    /// as is: the app says it in plain words (`LiveStatusLine`).
+    func noteError(_ what: String) {
+        let when = Date().formatted(date: .omitted, time: .standard)
         lock.withLock {
-            guard !startTimes.isEmpty else { return "no recording started since launch" }
-            return startTimes.map { String(format: "%@ %.1f s", $0.0, $0.1) }.joined(separator: ", ")
+            errorCount += 1
+            errors.append("\(when) \(what)")
+            if errors.count > 8 { errors.removeFirst() }
         }
     }
 
     /// Pause and Stop: the wait until the next audio isn't a stall.
     func micPaused() { lock.withLock { lastAt = 0 } }
 
-    func worstGapSeconds() -> Double {
+    /// The live text part of Help > Copy Layout Details (⌃⌘L). Worst
+    /// numbers count from the last copy.
+    func report() -> String {
         lock.withLock {
-            let out = Double(worstGap) / 1e9
-            worstGap = 0
-            return out
-        }
-    }
-
-    /// Seconds of audio waiting right now, and the most since the last call.
-    func behind() -> (now: Double, worst: Double) {
-        lock.withLock {
-            let out = (Double(max(0, given - done)) / 16_000, Double(worstBehind) / 16_000)
+            var out = [
+                String(format: "LIVE TEXT BEHIND THE MIC (audio waiting for the models): %.1f s now, worst %.1f s since the last copy",
+                       Double(max(0, given - done)) / 16_000, Double(worstBehind) / 16_000),
+                "LIVE TEXT START (seconds after the last Start): "
+                    + (startTimes.isEmpty ? "no recording started since launch"
+                        : startTimes.map { String(format: "%@ %.1f s", $0.0, $0.1) }.joined(separator: ", ")),
+                String(format: "MIC: longest wait between two bits of audio %.2f s since the last copy", Double(worstGap) / 1e9),
+                "SPEECH MODEL ERRORS since launch: \(errorCount)",
+            ]
+            out += errors.map { "  " + $0 }
             worstBehind = max(0, given - done)
-            return out
+            worstGap = 0
+            return out.joined(separator: "\n")
         }
     }
 
@@ -241,6 +250,9 @@ final class LiveTranscriber {
     /// Live text is more than a few seconds behind the mic (the models were
     /// still loading, or had a slow moment) and is catching up.
     private(set) var catchingUp = false
+    /// The live model failed on some of this recording's audio, so a few
+    /// words are missing until Parakeet redoes the text after Stop.
+    private(set) var missedSome = false
     private(set) var activeID: UUID?
     /// The line being edited right now (recording, line start). New words never go into it.
     var editing: (id: UUID, start: Double)?
@@ -321,6 +333,7 @@ final class LiveTranscriber {
         generation += 1
         let run = generation
         catchingUp = false
+        missedSome = texts[id]?.missedAudio == true
         let queue = feed.open()
         let previous = runTask
         let runner = runner
@@ -740,6 +753,16 @@ final class LiveTranscriber {
         if Date().timeIntervalSince(lastSave) > 10 { save(id) }
     }
 
+    /// The live model failed on some audio of this recording: remember it
+    /// (saved in live.json), so the text is redone after Stop.
+    fileprivate func missedAudio(_ id: UUID, run: Int) {
+        if run == generation { missedSome = true }
+        guard var t = texts[id], t.missedAudio != true else { return }
+        t.missedAudio = true
+        put(t, id)
+        save(id)
+    }
+
     fileprivate func setCatchingUp(_ on: Bool, run: Int) {
         guard run == generation, catchingUp != on else { return }
         catchingUp = on
@@ -758,6 +781,7 @@ final class LiveTranscriber {
         status = nil
         volatile = ""
         catchingUp = false
+        missedSome = false
     }
 
     // MARK: - Parakeet download
@@ -863,7 +887,14 @@ actor LiveRunner {
         var nextTry: Int64 = 0
         var catchingUp = false
         var firstWords = false
+        /// The engine failed this many times in a row.
+        var failures = 0
     }
+
+    /// The engine is started again right away this many times in a row.
+    /// After that it waits `retryAfter` of audio between tries.
+    static let triesInARow = 3
+    static let retryAfter: Int64 = 30 * 16_000
 
     /// Loads Parakeet (with the word list) and the speaker model ahead of
     /// Record. `run` finds them loaded and starts at once.
@@ -922,10 +953,7 @@ actor LiveRunner {
             if state.engine == nil, state.position >= state.nextTry {
                 await pickEngine(&state)
             }
-            if let engine = state.engine {
-                let out = await engine.feed(samples)
-                await deliver(out, &state)
-            }
+            await feedEngine(samples, &state)
             state.position += Int64(samples.count)
             LiveFeed.shared.finished(samples.count)
             await showCatchingUp(queue.waitingSeconds, &state)
@@ -936,10 +964,47 @@ actor LiveRunner {
             }
             state.engine = nil
             state.nextTry = 0
+            state.failures = 0 // Resume starts afresh
             await showCatchingUp(0, &state)
             let id = state.id
             await MainActor.run { LiveTranscriber.shared.save(id) }
         }
+    }
+
+    /// Hands audio to the engine. When the model fails (code health item 4:
+    /// it used to be swallowed and the app kept saying "listening"), the
+    /// error goes into ⌃⌘L, the recording is marked so Parakeet redoes the
+    /// text after Stop, and the engine starts afresh on the same audio. After
+    /// `triesInARow` failures in a row it says so and tries again every 30 s.
+    private func feedEngine(_ samples: [Float], _ state: inout RunState) async {
+        while let engine = state.engine {
+            do {
+                let out = try await engine.feed(samples)
+                state.failures = 0
+                await deliver(out, &state)
+                return
+            } catch {
+                state.failures += 1
+                LiveFeed.shared.noteError("\(state.name), audio at \(Self.clock(state.position)): \(error.localizedDescription)")
+                let id = state.id, run = state.run
+                await MainActor.run { LiveTranscriber.shared.missedAudio(id, run: run) }
+                // A model that failed may be stuck in a bad state: load it fresh.
+                if state.name == ParakeetEngine.name { await parakeet.unload() }
+                state.engine = nil
+                if state.failures >= Self.triesInARow {
+                    state.nextTry = state.position + Self.retryAfter
+                    await setStatus(.off(reason: "the speech model ran into a problem. It tries again every 30 seconds"), run)
+                    return
+                }
+                await pickEngine(&state)
+            }
+        }
+    }
+
+    /// "12:34" for a place in the recording (samples at 16 kHz).
+    private static func clock(_ samples: Int64) -> String {
+        let s = Int(samples / 16_000)
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 
     private func pickEngine(_ state: inout RunState) async {
@@ -1007,6 +1072,7 @@ actor LiveRunner {
                 await setStatus(.listening(engine: ParakeetEngine.name), run)
                 return (parakeet, ParakeetEngine.name)
             } catch {
+                LiveFeed.shared.noteError("Parakeet didn't start: \(error.localizedDescription)")
                 await parakeet.unload()
                 await MainActor.run { LiveTranscriber.shared.modelBroken() }
             }
@@ -1030,6 +1096,7 @@ actor LiveRunner {
                 await setStatus(.listening(engine: AppleSpeechEngine.name), run)
                 return (apple, AppleSpeechEngine.name)
             } catch {
+                LiveFeed.shared.noteError("Apple's engine didn't start: \(error.localizedDescription)")
                 await setStatus(.off(reason: "\(parakeetWhy), and your Mac's own engine didn't start"), run)
             }
         case .needsDownload:

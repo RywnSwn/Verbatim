@@ -33,6 +33,16 @@ actor ParakeetEngine: LiveEngine {
 
     var isLoaded: Bool { manager != nil }
 
+    enum FeedError: LocalizedError {
+        case notLoaded, noMemory
+        var errorDescription: String? {
+            switch self {
+            case .notLoaded: "Parakeet isn't loaded"
+            case .noMemory: "no memory for the audio"
+            }
+        }
+    }
+
     /// Downloads the model (picks up where it stopped if the internet drops), then
     /// loads it once so macOS optimises it for this Mac, then frees the memory.
     static func downloadAndPrepare(progress: @escaping @Sendable (_ fraction: Double, _ preparing: Bool) -> Void) async throws {
@@ -142,18 +152,16 @@ actor ParakeetEngine: LiveEngine {
         pending = nil
     }
 
-    func feed(_ samples: [Float]) async -> LiveOutput {
-        guard let manager, !samples.isEmpty,
-              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
-              let channel = buffer.floatChannelData?[0] else { return LiveOutput() }
+    func feed(_ samples: [Float]) async throws -> LiveOutput {
+        guard !samples.isEmpty else { return LiveOutput() }
+        guard let manager else { throw FeedError.notLoaded }
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
+              let channel = buffer.floatChannelData?[0] else { throw FeedError.noMemory }
         buffer.frameLength = AVAudioFrameCount(samples.count)
         samples.withUnsafeBufferPointer { channel.update(from: $0.baseAddress!, count: samples.count) }
-        do {
-            try await manager.appendAudio(buffer)
-            try await manager.processBufferedAudio()
-        } catch {
-            return LiveOutput()
-        }
+        // An error here is passed on, never swallowed (code health item 4).
+        try await manager.appendAudio(buffer)
+        try await manager.processBufferedAudio()
         let finals = words(from: await manager.consumeTokenTimings(), flush: false)
         return LiveOutput(finals: finals, fixes: await spotted(manager))
     }

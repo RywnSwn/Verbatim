@@ -58,6 +58,9 @@ final class Transcriber {
     @ObservationIgnored private let speakers = SpeakerEngine()
     @ObservationIgnored private var workTask: Task<Void, Never>?
     @ObservationIgnored private var cancelRequested: Set<UUID> = []
+    /// Files where the speech model just failed once: one more failure in a
+    /// row stops the pass with a message (see `transcribe`).
+    @ObservationIgnored private var failedOnce: Set<UUID> = []
 
     private var live: LiveTranscriber { .shared }
     var isModelReady: Bool { live.isModelReady }
@@ -238,8 +241,9 @@ final class Transcriber {
     }
 
     /// Stopped for good (Undo Stop expired). If live text came from the Mac's
-    /// backup engine (or nobody listened), redo it with Parakeet by itself
-    /// (edits kept). If Parakeet isn't here yet, the transcript offers it later.
+    /// backup engine, nobody listened, or the live model failed on some of
+    /// the audio, redo it with Parakeet by itself (edits kept). If Parakeet
+    /// isn't here yet, the transcript offers it later.
     /// No text at all and Parakeet still coming: it waits in the queue and
     /// starts once the download is done (UX round 2, A10: it used to wait for
     /// a relaunch, though the page said text comes after Stop).
@@ -247,7 +251,7 @@ final class Transcriber {
         growing.remove(id)
         let text = live.texts[id]
         let empty = text?.lines.isEmpty ?? true
-        if isModelReady, text?.pass == nil, empty || text?.madeWithBackupEngine == true {
+        if isModelReady, text?.pass == nil, empty || text?.needsRedo == true {
             redo(id)
         } else if !isModelReady, text?.pass == nil, empty,
                   RecorderModel.shared.info(id)?.hasAudio == true {
@@ -430,7 +434,23 @@ final class Transcriber {
                 return true
             }
             if voiceBase != nil { await speakers.feed(samples) }
-            let out = await engine.feed(samples)
+            let out: LiveOutput
+            do {
+                out = try await engine.feed(samples)
+            } catch {
+                // Never carry on with a hole in the text (code health item 4).
+                // Progress is saved up to the last word, so it can go on from
+                // there: once by itself with Parakeet loaded fresh, then by
+                // "Try again".
+                LiveFeed.shared.noteError("Parakeet, file at \(Int(Double(pos) / rate / 60)) min: \(error.localizedDescription)")
+                if voiceBase != nil { await speakers.finish() }
+                await engine.unload()
+                if failedOnce.insert(id).inserted { return false }
+                failedOnce.remove(id)
+                errors[id] = "Transcribing stopped at \(Int(Double(pos) / rate / 60)) min: the speech model ran into a problem."
+                return true
+            }
+            failedOnce.remove(id)
             pos = end
             // Words come out a couple of seconds behind the audio, so after a
             // crash it carries on from the last word that made it into the text.

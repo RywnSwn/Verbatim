@@ -26,7 +26,10 @@ struct LiveOutput: Sendable {
 protocol LiveEngine: Actor {
     /// Starts a new stretch of audio (recording start, or after Pause).
     func begin() async throws
-    func feed(_ samples: [Float]) async -> LiveOutput
+    /// Throws when the model fails on this audio. The runner then restarts
+    /// the engine (see `LiveRunner.feedEngine`): an error must never be
+    /// swallowed, or the app keeps saying "listening" while nothing comes.
+    func feed(_ samples: [Float]) async throws -> LiveOutput
     /// The stretch ended: finish the last words.
     func end() async -> LiveOutput
 }
@@ -59,6 +62,9 @@ struct LiveText: Codable, Equatable {
     var voiceSessions: Int?
     /// The speaker model went over the whole file ("Find speakers").
     var speakersFound: Bool?
+    /// The live speech model failed on some of the audio while recording, so
+    /// words may be missing. After Stop, Parakeet redoes the whole text.
+    var missedAudio: Bool?
 
     struct Span: Codable, Equatable {
         var start: Double
@@ -82,6 +88,10 @@ struct LiveText: Codable, Equatable {
     }
 
     var madeWithBackupEngine: Bool { engines.contains(AppleSpeechEngine.name) }
+
+    /// Live text that Parakeet should redo over the file: made with the Mac's
+    /// backup engine, or the live model failed on some of the audio.
+    var needsRedo: Bool { pass == nil && (madeWithBackupEngine || missedAudio == true) }
 }
 
 enum LiveStore {

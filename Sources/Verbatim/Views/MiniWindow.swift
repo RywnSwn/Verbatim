@@ -310,6 +310,15 @@ private struct MiniLines: View {
                     .padding(.horizontal, 6)
                     .padding(.top, 2)
             }
+            // Same as the big window's status line, short: never look
+            // "listening" while nothing comes (code health item 4).
+            if case .off = live.status, live.activeID == id, model.phase == .recording {
+                Text("No live text right now. Your audio is saved, and the text comes after Stop.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: focused) {
