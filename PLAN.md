@@ -51,6 +51,8 @@ Each "Test list" heading is inside the file named, in `docs/plan/`.
 - Flag lands on the line above (fixed on main 2026-11-21, build 255):
   flag a few lines with the flag button and the Marker tool, check each
   flag is on the line you picked; old wrong flags should move back too.
+- Sidebar cut off at the smallest window (branch
+  `claude/fix-squeezed-sidebar`, not merged): `speaker-menu.md`, last part
 - Hunt 1 fixes (#30): `bug-hunts.md`
 - Speaker menu, top bar line, sidebar width (#31): `speaker-menu.md`
 - Speech model errors (#27): `code-health-4-speech-model-errors.md`

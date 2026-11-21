@@ -12,7 +12,8 @@ FAILED=0
 N=0
 
 launch() {
-  "$BIN" > "$OUT/app.log" 2>&1 &
+  # VERBATIM_SMOKE=1: extra keys only for this test (ContentView.SmokeHooks).
+  VERBATIM_SMOKE=1 "$BIN" > "$OUT/app.log" 2>&1 &
   APP_PID=$!
   sleep 10
   # How long launch took (see LaunchTimer), kept for comparing builds.
@@ -343,10 +344,55 @@ defaults read com.rywnswn.verbatim | grep "NSWindow Frame" || true
 # Design pass: the other look (solid sidebar, paper cards) on the relaunch.
 defaults write com.rywnswn.verbatim sidebarLook -string solid
 defaults write com.rywnswn.verbatim rowLook -string cards
+# Like Ryan's Mac (2026-11-21, build 255): the sidebar learned it needs 779 pt.
+defaults write com.rywnswn.verbatim sidebarNeedsWidth3 -float 779
 launch "second"
 check "relaunch with a short saved frame"
 osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose unix id is '"$APP_PID"')' || true
 shot "restored-short"
+
+# Ryan, 2026-11-21 (build 255): learned width 779, window at its 680 minimum,
+# and the sidebar column came open beside the transcript anyway. The split
+# view was 1032 wide in the 680 window, cut off at both sides. Whatever
+# opens it, the app must shut it again. ⌃⌥⌘O opens it behind the app's back
+# (like macOS can), ⌃⌥⌘P the AppKit way (NSSplitViewController.toggleSidebar).
+squeeze_check() {
+  : > "$OUT/app.log"
+  osascript -e 'tell application "System Events" to keystroke "l" using {control down, command down}' || true
+  sleep 2
+  local win split
+  win="$(grep -a -m1 "^  frame=" "$OUT/app.log" | sed -E 's/^  frame=x-?[0-9]+ y-?[0-9]+ w([0-9]+) .*/\1/')"
+  split="$(grep -a -m1 "NavigationSplitRepresentable" "$OUT/app.log" | sed -E 's/.*NavigationSplitRepresentable x(-?[0-9]+) y-?[0-9]+ w([0-9]+) .*/x\1 w\2/')"
+  echo "squeeze check ($1): window width $win, split view $split"
+  grep -a -E "NavigationSplitRepresentable|_NSSplitViewItemViewWrapper|NSSplitDividerView" "$OUT/app.log" | head -8 | cut -c1-170
+  if [ -z "$win" ] || [ "$split" != "x0 w$win" ]; then
+    echo "::error::Sidebar squeezed the window ($1): window $win, split view $split"
+    FAILED=1
+  fi
+}
+press_key() {
+  osascript -e 'tell application "System Events" to keystroke "'"$1"'" using {control down, option down, command down}' || echo "key $1 failed"
+  sleep 2
+}
+resize 680 600; check "resize to 680"
+shot "squeeze-680-start"
+squeeze_check "680, nothing pressed"
+press_key o; check "sidebar column forced open"
+shot "squeeze-680-column-forced-open"
+squeeze_check "680, column forced open"
+: > "$OUT/app.log"
+press_key p; check "sidebar column opened the AppKit way"
+grep -a "^SMOKE:" "$OUT/app.log" || echo "no SMOKE line (key not received?)"
+shot "squeeze-680-appkit-toggle"
+squeeze_check "680, AppKit toggle"
+# The sidebar button still gives the overlay here.
+toggle_sidebar; check "sidebar button at 680"
+shot "squeeze-680-button"
+osascript -e 'tell application "System Events" to key code 53' || true
+sleep 1
+resize 1000 600; check "back to 1000"
+shot "squeeze-1000-back"
+squeeze_check "1000"
 
 kill "$APP_PID" 2>/dev/null || true
 echo "----- app.log (tail) -----"; tail -20 "$OUT/app.log"

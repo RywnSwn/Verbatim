@@ -53,3 +53,31 @@ has a "SIDEBAR:" line (from N pt wide, learned or none).
 Test: make the window narrower: the sidebar stays beside the transcript
 until about 760 pt, then slides away; the sidebar button then opens it
 over the transcript. Paste the SIDEBAR line if it hides earlier.
+
+## Sidebar squeezed at the smallest window (Ryan, 2026-11-21, build 255)
+Branch `claude/fix-squeezed-sidebar`. Ryan's screenshot: window at its
+680 pt minimum, the sidebar column open beside the transcript, and the
+whole split view 1032 pt wide, so the sidebar's left part and the
+transcript's right part were cut off. Copy Layout Details said learned
+779 pt. Causes in `ContentView.fitSidebar`: once the sidebar had hidden
+for space (`hidForSpace`), nothing shut the column again if something
+else opened it; and with the column open the split view gets wider than
+the window, so its own width looked roomy enough to keep it open.
+Fixed: `fitSidebar` uses the window's width (`min` of the two), shuts the
+column every time it is open below `compact` (`shutForSpace`, stops after
+4 tries in 2 s so it never fights macOS), and `onChange(of: columns)`
+shuts it again whatever opened it (deferred, never mid-layout).
+Smoke test: the second launch sets learned 779, window 680, then opens
+the column behind the app's back (⌃⌥⌘O, only with `VERBATIM_SMOKE=1`,
+`ContentView.SmokeHooks`) and the AppKit way (⌃⌥⌘P), and checks the
+split view is exactly the window's width (`squeeze-680-*` shots).
+Test list for Ryan:
+1. Make the window as small as it goes. The sidebar slides away and
+   nothing is cut off at the left or right edge.
+2. Click the sidebar button: it slides over the transcript. Click the
+   transcript: it slides away.
+3. Press ⌃⌘S a few times at the smallest size: same as the button,
+   never the sidebar squeezed in beside the transcript.
+4. Make the window big again: the sidebar comes back beside the
+   transcript by itself.
+5. If you ever see it cut off again, press ⌃⌘L right then and paste it.

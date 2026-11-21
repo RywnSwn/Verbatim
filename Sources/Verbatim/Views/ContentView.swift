@@ -61,16 +61,35 @@ struct ContentView: View {
             undoGrowth(from: o.before, to: width)
             return
         }
-        self.width = width
-        if width < compact, columns != .detailOnly, !hidForSpace {
-            hidForSpace = true
-            columns = .detailOnly
-        } else if width >= roomy, hidForSpace || floating {
+        // The window's width, not only the split view's: with the column
+        // open in a window too narrow for it, the split view gets wider than
+        // the window (Ryan, 2026-11-21, build 255: 1032 pt in a 680 pt
+        // window, cut off at both sides) and looked roomy enough to stay.
+        let room = min(width, Messages.mainWindows.first?.frame.width ?? width)
+        self.width = room
+        if room < compact, columns != .detailOnly {
+            shutForSpace()
+        } else if room >= roomy, hidForSpace || floating {
             // Room again: the floating sidebar becomes the normal one.
             hidForSpace = false
             floating = false
             openInWindow(watch: !dragging)
         }
+    }
+
+    /// Times the column was shut for lack of room in the last 2 seconds.
+    @State private var shuts: [Date] = []
+
+    /// Shuts the sidebar column: the window is too narrow for it. Every
+    /// time, not only the first (Ryan, 2026-11-21, build 255: once it had
+    /// hidden for space, nothing shut it again when it came back open).
+    private func shutForSpace() {
+        let now = Date()
+        shuts = shuts.filter { now.timeIntervalSince($0) < 2 } + [now]
+        // If macOS keeps opening it, stop fighting (that crashed 0.1.98).
+        guard shuts.count <= 4 else { return }
+        hidForSpace = true
+        columns = .detailOnly
     }
 
     /// Shows the sidebar column, watching that the window doesn't grow
@@ -220,6 +239,33 @@ struct ContentView: View {
         .onChange(of: model.selection) { floating = false }
         .onChange(of: model.sidebarPicks) { floating = false }
         .onChange(of: model.showingDeleted) { floating = false }
+        // Whatever opened the column (macOS itself, a late open, a restored
+        // window), it never stays open in a window too narrow for it.
+        // After this layout pass, never in the middle of it (0.1.98 crash).
+        .onChange(of: columns) { _, now in
+            guard now != .detailOnly else { return }
+            Task { @MainActor in
+                let room = Messages.mainWindows.first?.frame.width ?? self.width
+                if room < compact, columns != .detailOnly { shutForSpace() }
+            }
+        }
+        .background {
+            // Smoke test only: opens the column behind our back, like macOS
+            // can, to check it shuts again in a narrow window.
+            if SmokeHooks.on {
+                Group {
+                    Button("Open the sidebar column") { columns = .all }
+                        .keyboardShortcut("o", modifiers: [.control, .option, .command])
+                    Button("Open the sidebar column the AppKit way") {
+                        let done = NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+                        SmokeHooks.log("AppKit toggleSidebar handled: \(done)")
+                    }
+                    .keyboardShortcut("p", modifiers: [.control, .option, .command])
+                }
+                .opacity(0)
+                .accessibilityHidden(true)
+            }
+        }
         .onAppear {
             MainWindow.open = { openWindow(id: "main") }
             for key in Self.oldLearnedKeys { UserDefaults.standard.removeObject(forKey: key) }
@@ -232,6 +278,15 @@ struct ContentView: View {
             // crash (Ryan's crash on 0.1.98).
             Task { @MainActor in fitSidebar(to: width) }
         }
+    }
+}
+
+/// Extra keys for the smoke test (scripts/ci-smoke.sh starts the app with
+/// VERBATIM_SMOKE=1). Off in Ryan's app.
+enum SmokeHooks {
+    static let on = ProcessInfo.processInfo.environment["VERBATIM_SMOKE"] == "1"
+    static func log(_ text: String) {
+        FileHandle.standardError.write(Data("SMOKE: \(text)\n".utf8))
     }
 }
 
