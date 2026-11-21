@@ -324,3 +324,11 @@ first heard first, to voices Verbatim doesn't know, and kept
 (Rename with line count, "Speaker 2 is really:" list); one line is in
 "Just This Line". A typed name another speaker already has joins them.
 The "Change them too" bottom bar offer is gone.
+
+## Main chat + agents instead of one chat per feature (2026-11-21)
+Ryan got lost with several chats each doing one feature on its own branch
+(two finished branches sat unmerged and far behind `main`). Now one main
+chat talks with him and sends each feature to a background agent on its
+own branch, then checks and merges at his word. He can brainstorm and add
+asks while work runs. Cost: each agent uses its own tokens, so 2 or 3 at
+once at most. Not chosen: keep one chat per feature (easy to lose track).

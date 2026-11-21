@@ -68,8 +68,20 @@ decided and why (read it before re-arguing a choice).
   `main` that is missing it. At the END of every chat, tell Ryan clearly
   whether the work is merged into `main` or not, and if not, which pull
   request to merge after he tests (he only merges when he asks).
-- One task per chat. At the end of each session, update `PLAN.md` (and
-  `DECISIONS.md` if something was decided) so the next chat can continue.
+- Main chat + agents (Ryan's idea, 2026-11-21): one main chat talks with
+  Ryan (brainstorm, new asks, test results) and does not do big coding
+  itself. Each feature or fix goes to a background agent (Agent tool,
+  `isolation: "worktree"`) on its own `claude/<feature>` branch, briefed
+  with the `PLAN.md` section, the files, and these rules; it pushes its
+  branch and never merges. The main chat checks each one (diff, CI build,
+  smoke screenshots), tells Ryan in plain words what is ready and which
+  test build has it, and merges only when Ryan says. At most 2 or 3
+  agents at once, never two on the same files (run those one after the
+  other). Each branch push makes a test build and Ryan's Mac takes the
+  highest number, so say which build has what. When the main chat gets
+  long, update `PLAN.md` and tell Ryan to start a new main chat.
+- At the end of each session, update `PLAN.md` (and `DECISIONS.md` if
+  something was decided) so the next chat can continue.
 - Keep this file short. Details go in `PLAN.md`, `DECISIONS.md`, `docs/`.
 - Tell Ryan clearly when a step is complete and when to switch to a new
   chat. Let him review before moving on. Explain every UX idea in plain
