@@ -92,6 +92,29 @@ struct ContentView: View {
         columns = .detailOnly
     }
 
+    /// Something other than us opened the column (macOS, a late open, a
+    /// restored window) while the window was `before` wide. Too narrow for
+    /// it: shut it, and if it made the window grow (the CI Mac went from
+    /// 680 to 948, smoke test 2026-11-21), put the window back.
+    private func shutUnasked(before: CGFloat) {
+        guard columns != .detailOnly else { return }
+        let now = Messages.mainWindows.first?.frame.width ?? before
+        guard min(before, now) < compact else { return }
+        shutForSpace()
+        guard now > before + 1, columns == .detailOnly else { return }
+        // Until the window is back it looks roomy: not "hid for space" yet,
+        // or fitSidebar would open it again at the grown width.
+        hidForSpace = false
+        Task { @MainActor in
+            if let window = Messages.mainWindows.first {
+                var f = window.frame
+                f.size.width = before
+                window.setFrame(f, display: true, animate: false)
+            }
+            hidForSpace = true
+        }
+    }
+
     /// Shows the sidebar column, watching that the window doesn't grow
     /// (not while Ryan drags the window's edge: that growth is his).
     private func openInWindow(watch: Bool = true, animated: Bool = false) {
@@ -244,10 +267,8 @@ struct ContentView: View {
         // After this layout pass, never in the middle of it (0.1.98 crash).
         .onChange(of: columns) { _, now in
             guard now != .detailOnly else { return }
-            Task { @MainActor in
-                let room = Messages.mainWindows.first?.frame.width ?? self.width
-                if room < compact, columns != .detailOnly { shutForSpace() }
-            }
+            let before = width // the window may grow for it before we look
+            Task { @MainActor in shutUnasked(before: before) }
         }
         .background {
             // Smoke test only: opens the column behind our back, like macOS

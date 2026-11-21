@@ -362,7 +362,7 @@ squeeze_check() {
   sleep 2
   local win split
   win="$(grep -a -m1 "^  frame=" "$OUT/app.log" | sed -E 's/^  frame=x-?[0-9]+ y-?[0-9]+ w([0-9]+) .*/\1/')"
-  split="$(grep -a -m1 "NavigationSplitRepresentable" "$OUT/app.log" | sed -E 's/.*NavigationSplitRepresentable x(-?[0-9]+) y-?[0-9]+ w([0-9]+) .*/x\1 w\2/')"
+  split="$(grep -a -m1 "NavigationSplitRepresentable" "$OUT/app.log" | sed -E 's/.*NavigationSplitRepresentable>* x(-?[0-9]+) y-?[0-9]+ w([0-9]+) .*/x\1 w\2/')"
   echo "squeeze check ($1): window width $win, split view $split"
   grep -a -E "NavigationSplitRepresentable|_NSSplitViewItemViewWrapper|NSSplitDividerView" "$OUT/app.log" | head -8 | cut -c1-170
   if [ -z "$win" ] || [ "$split" != "x0 w$win" ]; then
@@ -380,11 +380,13 @@ squeeze_check "680, nothing pressed"
 press_key o; check "sidebar column forced open"
 shot "squeeze-680-column-forced-open"
 squeeze_check "680, column forced open"
+same_width 680 "column forced open at 680"
 : > "$OUT/app.log"
 press_key p; check "sidebar column opened the AppKit way"
-grep -a "^SMOKE:" "$OUT/app.log" || echo "no SMOKE line (key not received?)"
+grep -a -o "SMOKE:.*" "$OUT/app.log" || echo "no SMOKE line (key not received?)"
 shot "squeeze-680-appkit-toggle"
 squeeze_check "680, AppKit toggle"
+same_width 680 "AppKit toggle at 680"
 # The sidebar button still gives the overlay here.
 toggle_sidebar; check "sidebar button at 680"
 shot "squeeze-680-button"

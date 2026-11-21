@@ -66,7 +66,9 @@ the window, so its own width looked roomy enough to keep it open.
 Fixed: `fitSidebar` uses the window's width (`min` of the two), shuts the
 column every time it is open below `compact` (`shutForSpace`, stops after
 4 tries in 2 s so it never fights macOS), and `onChange(of: columns)`
-shuts it again whatever opened it (deferred, never mid-layout).
+shuts it again whatever opened it (`shutUnasked`, deferred, never
+mid-layout). On the CI Mac an unasked open grew the window from 680 to
+948 instead, so `shutUnasked` also puts the window back.
 Smoke test: the second launch sets learned 779, window 680, then opens
 the column behind the app's back (⌃⌥⌘O, only with `VERBATIM_SMOKE=1`,
 `ContentView.SmokeHooks`) and the AppKit way (⌃⌥⌘P), and checks the
