@@ -274,7 +274,7 @@ for width in 800 780 700; do
 done
 # If opening the sidebar ever grew the window, the app put it back and
 # remembered the width it needed (ContentView.undoGrowth).
-echo "sidebar needs width (learned): $(defaults read com.rywnswn.verbatim sidebarNeedsWidth2 2>/dev/null || echo none)"
+echo "sidebar needs width (learned): $(defaults read com.rywnswn.verbatim sidebarNeedsWidth3 2>/dev/null || echo none)"
 # 700 wide: floating sidebar. Esc and a click on the dimmed transcript close it.
 toggle_sidebar; shot "sidebar-700-floating"
 osascript -e 'tell application "System Events" to key code 53' || true

@@ -161,7 +161,7 @@ final class Transcriber {
         let old = live.texts[id]
         // Edited lines are kept with the speaker they show now (their voice
         // numbers mean nothing to the new pass).
-        let labels = Speakers.Labeler(lines: old?.lines ?? [], names: old?.voiceNames)
+        let labels = Speakers.Labeler(old)
         let edited = (old?.lines ?? []).filter(\.isLocked).map { line in
             var l = line
             // A real name stays; "Speaker 2" would mean someone else in the new pass.

@@ -33,6 +33,8 @@ enum LayoutDetails {
         out.append("LAUNCH (seconds after Verbatim opened): \(LaunchTimer.shared.text())")
         out.append(HitchMeter.shared.report())
         out.append(MicReport.shared.text)
+        let learned = UserDefaults.standard.double(forKey: ContentView.learnedKey)
+        out.append("SIDEBAR: beside the transcript from \(Int(max(ContentView.compactWidth, learned))) pt wide (learned: \(learned > 0 ? "\(Int(learned)) pt" : "none"))")
         return out.joined(separator: "\n")
     }
 

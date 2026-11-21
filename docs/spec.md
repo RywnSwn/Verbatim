@@ -70,11 +70,15 @@ One screen, no tour (see `docs/design/`). It shows:
   them, and keeps deleted lines deleted. Click the lock to unlock.
 - **Recorded with Apple's backup engine** (Parakeet still downloading):
   after Stop, Parakeet redoes the whole recording by itself.
-- **Speaker labels:** voices show as "Speaker 1" (talks the most),
-  "Speaker 2"... Click a label to rename that voice everywhere, or to pick
-  who said that one line (then the bottom bar offers to change every line in
-  that voice). Typed names are offered in every recording. Old recordings
-  get labels by themselves once the speaker model is downloaded.
+- **Speaker labels:** voices Verbatim doesn't know show as "Speaker 1",
+  "Speaker 2"... in the order first heard, and a number never changes
+  (naming Speaker 2 leaves Speaker 3 as Speaker 3). Click a label: "Rename
+  Speaker 2 (14 lines)…", or pick who Speaker 2 really is from the list:
+  both change every line with that name. Typing a name another speaker in
+  the recording already has makes them one person. "Just This Line" fixes
+  one line only. Undo in the bottom bar and ⌘Z. Typed names are offered in
+  every recording. Old recordings get labels by themselves once the speaker
+  model is downloaded.
 - **Timestamps:** on every line, clock time by default (10:42), with an
   option for time since start (00:37).
 
