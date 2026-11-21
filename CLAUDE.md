@@ -36,7 +36,8 @@ mode; 2-channel mics now follow the louder mic (merged); Ryan's grammar is
 good again on the Mac's own mic, cause unproven (see `PLAN.md`).
 Speaker menu ("Who is Speaker 2? (N lines)", numbers never move), line
 under the top bar, sidebar learned-width fix (RywnSwn/Verbatim#31, build
-0.1.246): not merged, waiting for Ryan's test (list in `PLAN.md`).
+0.1.246): merged 2026-11-21 at Ryan's word, test list in `PLAN.md` not
+run yet.
 See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was
