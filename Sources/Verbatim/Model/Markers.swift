@@ -20,10 +20,17 @@ enum Markers {
     }
 
     /// The line a moment belongs to: the last one starting at or before it
-    /// (or the first line, for a moment before any text).
+    /// (or the first line, for a moment before any text). The small slack
+    /// matters: markers used to be saved rounded to 0.01 s, so one on a line
+    /// starting at 12.344 was saved as 12.34 and showed on the line above
+    /// (Ryan, 2026-11-21). The slack puts those old ones back.
     static func line(at time: Double, in lines: [Transcript.Line]) -> Transcript.Line {
-        lines.last { $0.start <= time } ?? lines[0]
+        lines.last { $0.start <= time + slack } ?? lines[0]
     }
+
+    /// Bigger than the old rounding (0.005 s), far smaller than any gap
+    /// between two lines.
+    static let slack = 0.006
 }
 
 extension RecorderModel {
@@ -58,12 +65,14 @@ extension RecorderModel {
     /// Right-click a line > Add marker here.
     func addMarker(_ id: UUID, line: Transcript.Line) {
         guard let info = info(id) else { return }
-        addMarker(id, at: line.start, label: info.timeLabel(line.start))
+        addMarker(id, at: line.start, label: info.timeLabel(line.start), exact: true)
     }
 
-    private func addMarker(_ id: UUID, at time: Double, label: String) {
+    /// `exact`: a line's own start, saved as is (rounding it could land it
+    /// just before the line, on the one above). ⌘D times are rounded.
+    private func addMarker(_ id: UUID, at time: Double, label: String, exact: Bool = false) {
         let old = markers(id)
-        setMarkers(id, old + [(time * 100).rounded() / 100])
+        setMarkers(id, old + [exact ? time : (time * 100).rounded() / 100])
         offerLineUndo("Marker added at \(label).", in: id) { [weak self] in
             self?.setMarkers(id, old)
         }
