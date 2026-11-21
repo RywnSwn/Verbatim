@@ -10,6 +10,10 @@ struct RecordingHeader: View {
     let isLive: Bool
 
     @State private var renaming = false
+    /// The recording being renamed. Hunt 1 bug 5: the page keeps this view
+    /// when another recording is clicked in the sidebar, and the name went
+    /// to that one instead.
+    @State private var renamingID: UUID?
     @State private var draft = ""
     @FocusState private var focused: Bool
     @State private var hovering = false
@@ -41,6 +45,9 @@ struct RecordingHeader: View {
         // Starts at the page edge, over the times (was 70 pt in, lined up
         // with the text; Ryan found the gap from the sidebar too big).
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Another recording now: the name typed so far goes to the one it
+        // was typed for, and the box closes (a click elsewhere saves).
+        .onChange(of: info.id) { if renaming { finish(save: true) } }
     }
 
     @ViewBuilder private var eyebrow: some View {
@@ -83,6 +90,7 @@ struct RecordingHeader: View {
                 .onHover { hovering = $0 }
                 .onTapGesture {
                     draft = info.title
+                    renamingID = info.id
                     renaming = true
                     focused = true
                 }
@@ -93,7 +101,8 @@ struct RecordingHeader: View {
     }
 
     private func finish(save: Bool) {
-        if save { model.rename(info.id, to: draft) }
+        if save, let id = renamingID { model.rename(id, to: draft) }
+        renamingID = nil
         renaming = false
     }
 

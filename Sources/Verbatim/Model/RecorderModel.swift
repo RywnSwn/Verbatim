@@ -195,9 +195,9 @@ final class RecorderModel {
         var id = UUID()
         var text: String
         var recording: UUID?
-        /// A recording delete: the recording it puts back. Only undoable
-        /// while that recording is still in Recently deleted.
-        var restores: UUID?
+        /// A recording delete: the recordings it puts back (Delete All: many).
+        /// Only undoable while one of them is still in Recently deleted.
+        var restores: [UUID] = []
         var run: () -> Void
     }
     @ObservationIgnored private var fileToShow: URL?
@@ -571,6 +571,7 @@ final class RecorderModel {
         guard canDelete(id), let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         let info = recordings[i]
         let moved: URL
+        LiveTranscriber.shared.saveBeforeMove(id)
         do {
             moved = try RecentlyDeleted.shared.add(info)
         } catch {
@@ -580,7 +581,7 @@ final class RecorderModel {
         forgetRecording(id)
 
         // On the ⌘Z list for good, not only while the Undo link shows.
-        let step = pushUndo("Moved \(info.title) to Recently deleted.", recording: nil, restores: id) { [weak self] in
+        let step = pushUndo("Moved \(info.title) to Recently deleted.", recording: nil, restores: [id]) { [weak self] in
             guard RecentlyDeleted.shared.items.contains(where: { $0.id == id }) else { return }
             if self?.deletedNote?.info.id == id {
                 self?.deletedNote = nil
@@ -605,7 +606,7 @@ final class RecorderModel {
         recordings.removeAll { $0.id == id }
         Playback.shared.forget(id)
         Transcriber.shared.forget(id)
-        LiveTranscriber.shared.forget(id)
+        LiveTranscriber.shared.moveAway(id)
         if selection == id { selection = nil }
         if stoppedNote?.recordingID == id { stoppedNote = nil }
     }
@@ -627,7 +628,7 @@ final class RecorderModel {
             return
         }
         // Its delete step (and the 10 s Undo) is done now.
-        undoStack.removeAll { $0.restores == id }
+        undoStack.removeAll { $0.restores == [id] }
         if deletedNote?.info.id == id {
             deletedNote = nil
             if status?.action == .undoDelete { status = nil }
@@ -648,6 +649,7 @@ final class RecorderModel {
                 cancelImport(info.id)
                 continue
             }
+            LiveTranscriber.shared.saveBeforeMove(info.id)
             if (try? RecentlyDeleted.shared.add(info)) != nil {
                 forgetRecording(info.id)
                 moved.append(info.id)
@@ -655,7 +657,7 @@ final class RecorderModel {
         }
         guard !moved.isEmpty else { return }
         let text = moved.count == 1 ? "Moved 1 recording to Recently deleted." : "Moved \(moved.count) recordings to Recently deleted."
-        offerLineUndo(text) { [weak self] in
+        offerLineUndo(text, restores: moved) { [weak self] in
             for id in moved { try? RecentlyDeleted.shared.restore(id) }
             self?.reload()
             for id in moved {
@@ -957,8 +959,8 @@ final class RecorderModel {
     /// ⌘Z list for good (until the app quits, last 50 changes).
     /// `recording`: the recording the change is in (nil: not one recording,
     /// like a group delete or a move).
-    func offerLineUndo(_ text: String, in recording: UUID? = nil, undo: @escaping () -> Void) {
-        pushUndo(text, recording: recording, run: undo)
+    func offerLineUndo(_ text: String, in recording: UUID? = nil, restores: [UUID] = [], undo: @escaping () -> Void) {
+        pushUndo(text, recording: recording, restores: restores, run: undo)
         // The Undo link only for a change you can see: a box saved while
         // switching recordings goes on ⌘Z, but its link would undo a
         // recording that's not on screen.
@@ -973,7 +975,7 @@ final class RecorderModel {
     }
 
     @discardableResult
-    private func pushUndo(_ text: String, recording: UUID?, restores: UUID? = nil,
+    private func pushUndo(_ text: String, recording: UUID?, restores: [UUID] = [],
                           run: @escaping () -> Void) -> UUID {
         let step = UndoStep(text: text, recording: recording, restores: restores, run: run)
         undoStack.append(step)
@@ -1043,7 +1045,11 @@ final class RecorderModel {
     /// Steps of a recording in Recently deleted wait (Put Back brings them back).
     private func undoable(_ step: UndoStep) -> Bool {
         // Put back or deleted for good already: nothing left to undo.
-        if let r = step.restores { return RecentlyDeleted.shared.items.contains { $0.id == r } }
+        // Hunt 1 bug 14: Delete All had none, so after Empty Recently Deleted
+        // ⌘Z said "Undid" and nothing came back.
+        if !step.restores.isEmpty {
+            return RecentlyDeleted.shared.items.contains { step.restores.contains($0.id) }
+        }
         guard let id = step.recording else { return true }
         guard recordings.contains(where: { $0.id == id }) else { return false }
         return id == selection || id == currentID
