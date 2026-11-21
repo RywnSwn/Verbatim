@@ -20,9 +20,25 @@ Code health quick fixes (item 2, RywnSwn/Verbatim#22) and faster start-up
 (RywnSwn/Verbatim#23) merged 2026-11-18, not tested by Ryan yet (test lists
 in `PLAN.md`). Code health item 3 (protect data, RywnSwn/Verbatim#25), 48 kHz playback
 audio, Add line below and the stereo mic fix (RywnSwn/Verbatim#26):
-tested by Ryan and merged 2026-11-19. Code health item 4 (speech model
-errors, HitchMeter removed) on `claude/speech-model-errors`, waiting for
-Ryan's test. Next: item 5 in `PLAN.md`, one chat each.
+tested by Ryan and merged 2026-11-19. Code health: one item per
+chat.
+Sidebar never resizes the window, line tools (click picks, double-click
+edits, Marker/Note tools, margin mark look) and the ⌘Z-after-delete fix
+(RywnSwn/Verbatim#28): tested by Ryan ("all works") and merged 2026-11-20.
+UX round 2 (A, B, C, items 2 to 15, update download progress/resume,
+Whisper Undo, sidebar overlay fix, pinned sidebar top/bottom rows, sidebar
+slide) (RywnSwn/Verbatim#29): merged 2026-11-20 at Ryan's word after he
+tried the sidebar; most test lists in `PLAN.md` not run yet.
+Code health item 4, speech model errors (restart, say so, redo after Stop,
+HitchMeter removed) (RywnSwn/Verbatim#27): merged 2026-11-21 at Ryan's
+word, not tested yet. Next code health: item 5 in `PLAN.md`.
+Punctuation (2026-11-20): Parakeet already punctuates as well as batch
+mode; 2-channel mics now follow the louder mic (merged); Ryan's grammar is
+good again on the Mac's own mic, cause unproven (see `PLAN.md`).
+Speaker menu ("Who is Speaker 2? (N lines)", numbers never move), line
+under the top bar, sidebar learned-width fix (RywnSwn/Verbatim#31, build
+0.1.246): merged 2026-11-21 at Ryan's word, test list in `PLAN.md` not
+run yet.
 See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was

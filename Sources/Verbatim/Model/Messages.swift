@@ -129,6 +129,13 @@ final class Messages {
                 important: true, stopButton: true)
     }
 
+    /// Same id as "Still recording?", so Stop and Resume take it away.
+    static func stillPaused(minutes: Int, elapsed: TimeInterval) -> Message {
+        Message(id: "stillRecording", title: "Still paused?",
+                body: "Paused for \(minutes) minutes. Class might be over. \(RecorderModel.minutesText(elapsed)) recorded.",
+                important: true, stopButton: true)
+    }
+
     static func battery(_ percent: Int) -> Message {
         Message(id: "battery", title: "Battery at \(percent)%",
                 body: "Plug in so the recording doesn't stop when the Mac goes to sleep.", important: true)

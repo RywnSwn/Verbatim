@@ -24,6 +24,13 @@ enum Theme {
     static let card = dynamic(light: 0xFFFFFF, dark: 0x2D2C29)
     static let sidebarSolid = dynamic(light: 0xF1EEE7, dark: 0x252421)
 
+    /// Line tools (Ryan, 2026-11-20): the pen line in the margin next to a
+    /// line under the pointer. Yellow for the Marker tool, red for Note.
+    /// Ryan picked "margin mark" over tinted boxes ("looks AI"),
+    /// docs/design/LineLook.html.
+    static let markPen = dynamic(light: 0xE3B320, dark: 0xD6A91E)
+    static let notePen = dynamic(light: 0xC2483A, dark: 0xE07A6C)
+
     /// Search hits, and the current hit (stronger).
     static let highlight = dynamic(light: 0xFBE9A6, dark: 0x5C4B16)
     static let highlightCurrent = dynamic(light: 0xF2C230, dark: 0x9A7514)

@@ -70,11 +70,15 @@ One screen, no tour (see `docs/design/`). It shows:
   them, and keeps deleted lines deleted. Click the lock to unlock.
 - **Recorded with Apple's backup engine** (Parakeet still downloading):
   after Stop, Parakeet redoes the whole recording by itself.
-- **Speaker labels:** voices show as "Speaker 1" (talks the most),
-  "Speaker 2"... Click a label to rename that voice everywhere, or to pick
-  who said that one line (then the bottom bar offers to change every line in
-  that voice). Typed names are offered in every recording. Old recordings
-  get labels by themselves once the speaker model is downloaded.
+- **Speaker labels:** voices Verbatim doesn't know show as "Speaker 1",
+  "Speaker 2"... in the order first heard, and a number never changes
+  (naming Speaker 2 leaves Speaker 3 as Speaker 3). Click a label: "Rename
+  Speaker 2 (14 lines)…", or pick who Speaker 2 really is from the list:
+  both change every line with that name. Typing a name another speaker in
+  the recording already has makes them one person. "Just This Line" fixes
+  one line only. Undo in the bottom bar and ⌘Z. Typed names are offered in
+  every recording. Old recordings get labels by themselves once the speaker
+  model is downloaded.
 - **Timestamps:** on every line, clock time by default (10:42), with an
   option for time since start (00:37).
 
@@ -85,7 +89,17 @@ One screen, no tour (see `docs/design/`). It shows:
   when there's nothing yet.
 - Copy menu also has: **Copy new since last copy**, **Copy last 10
   minutes**, **Copy marked parts only**.
-- **Markers** (⌘D, toolbar Marker, or right-click a line): flag a moment;
+- **Picking a line** (2026-11-20): one click picks a line (blue pen line in
+  the margin, no box) and
+  shows flag, note and + (add a line below) buttons on it. Double-click or
+  Enter edits. Arrow keys move, Delete deletes (Undo).
+- **Line tools**: toolbar Marker and Note are tools you pick up. The pointer
+  turns into a flag or a pencil, lines get a yellow or red margin line, a
+  click puts a
+  marker (or takes it off) or opens a note. Marker stays on until Esc;
+  Note goes down after one note.
+- **Markers** (⌘D marks what's being said now, the Marker tool, the flag
+  button, or right-click a line): flag a moment;
   shows as a flag next to the time. Copies and exports put ⚑ in front of
   marked lines. Undo in the bottom bar.
 - **Messages** (mic changes, battery, falling behind, long silence) appear

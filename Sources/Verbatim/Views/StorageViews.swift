@@ -128,6 +128,17 @@ struct StorageSettings: View {
 
     var body: some View {
         Form {
+            // Item 7: the Undo for a delete made here was only in the main
+            // window's bottom bar, hidden behind Settings.
+            if let s = model.status, let action = s.action, action == .undoAudioDelete || action == .undoLine {
+                Section {
+                    HStack(spacing: 10) {
+                        Text(s.text).font(.callout)
+                        Spacer(minLength: 8)
+                        Button("Undo") { model.perform(action) }
+                    }
+                }
+            }
             Section {
                 if let sizes {
                     SpaceBar(recordings: sizes.recordings, models: sizes.models, deleted: deleted.totalSize)
@@ -146,8 +157,9 @@ struct StorageSettings: View {
                     }
                 } label: {
                     Text("Keep audio for")
-                    Text("To keep one recording's audio, right-click it in the sidebar, then Keep Audio.")
+                    Text(keepAudioNote)
                 }
+                .onChange(of: keepDays) { old, new in AudioCleanup.changed(from: old, to: new) }
             }
 
             if let sizes, !sizes.rows.isEmpty {
@@ -186,6 +198,16 @@ struct StorageSettings: View {
         }
     }
 
+    /// UX round 2, A1: say what the setting is about to do before it does it.
+    private var keepAudioNote: String {
+        let keep = "To keep one recording's audio, right-click it in the sidebar, then Keep Audio."
+        guard keepDays > 0 else { return "Audio is never deleted by itself." }
+        let n = AudioCleanup.dueSoon(model.recordings)
+        guard n > 0 else { return keep }
+        let who = n == 1 ? "1 recording loses its audio" : "\(n) recordings lose their audio"
+        return "\(who) in the next \(AudioCleanup.graceDays) days. The text stays. " + keep
+    }
+
     private func biggest(_ info: RecordingInfo, bytes: Int64) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
@@ -202,7 +224,7 @@ struct StorageSettings: View {
                 model.deleteAudio(info.id)
             }
             .disabled(blocker != nil)
-            .help(blocker ?? "The text stays. Undo in the bottom bar of the main window.")
+            .help(blocker ?? "The text stays. Undo shows at the top of this page.")
         }
     }
 

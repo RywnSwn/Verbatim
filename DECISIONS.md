@@ -305,3 +305,22 @@ redo takes about a minute per hour). The error text itself only goes in
 ⌃⌘L; the app says it in plain words. HitchMeter removed with this (freeze
 fixed in 0.1.153); git history has it if a freeze ever comes back.
 
+## App icon: the red Ribbon (2026-11-20)
+A cream printed page with a red satin bookmark ribbon, drawn like a real
+object (paper grain, light, shadow). Ryan went through 6 rounds: flat and
+symbol icons felt generic or blank, busy ones too complex, blue and yellow
+looked bad. He liked ink on paper as a real object and picked the ribbon
+in Note red (the app's Note pen color) over black: red still shows at
+16 px and on a dark Mac. A plain .icns for now (no dark version), made on
+Linux from `Support/AppIcon.svg` by `scripts/make-icon.js`.
+
+## Speaker menu: whole speaker first, numbers never move (2026-11-20)
+Ryan found renaming confusing: picking a name changed one line, "Rename
+everywhere" skipped lines he had set one by one, and naming Speaker 1
+turned Speaker 2 into "Speaker 1" (numbers only counted unnamed voices, by
+words, so they also swapped while recording). Now: numbers are given once,
+first heard first, to voices Verbatim doesn't know, and kept
+(`LiveText.voiceNumbers`). Clicking a name acts on the whole speaker
+(Rename with line count, "Speaker 2 is really:" list); one line is in
+"Just This Line". A typed name another speaker already has joins them.
+The "Change them too" bottom bar offer is gone.

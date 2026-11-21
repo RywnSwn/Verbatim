@@ -165,8 +165,11 @@ struct MiniView: View {
                     MiniButton("Copy new", "doc.on.doc", help: "Copy new since last copy") {
                         model.copy(.new, from: model.currentID)
                     }
-                    MiniButton("Marker", "flag", help: "Mark this moment") { model.addMarker() }
+                    MiniButton("Marker", "flag", help: "Mark this moment (⌘D)") { model.addMarker() }
                         .disabled(!model.canMark) // canMark: doesn't read the clock
+                    // Item 8: Note was only in the main window.
+                    MiniButton("Note", "pencil", help: "Write a note on what's being said (⇧⌘N)") { model.requestNote() }
+                        .disabled(!model.canMark)
                     MiniButton(paused ? "Resume" : "Pause", paused ? "play.fill" : "pause.fill",
                                help: paused ? "Resume recording" : "Pause recording") { model.togglePause() }
                     MiniButton("Stop", "stop.fill", help: "Stop and save") { model.stop() }
@@ -275,7 +278,7 @@ private struct MiniLines: View {
 
         VStack(alignment: .leading, spacing: 2) {
             if all.isEmpty {
-                Text(live.volatile.isEmpty ? "Words show up here a couple of seconds after they're said." : live.volatile)
+                Text(live.volatile.isEmpty ? live.waitingHint : live.volatile)
                     .font(Self.font)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
@@ -460,18 +463,23 @@ private struct MiniMainButtonStyle: ButtonStyle {
 private struct MiniMessage: View {
     @Environment(RecorderModel.self) private var model
 
+    /// Same order as the main window's bottom bar (item 3): Undo Stop
+    /// first, then the newest message under it.
     var body: some View {
-        if let feedback = model.copyFeedback {
-            line(feedback.text) { EmptyView() }
-        } else if let status = model.status {
-            line(status.text) {
-                if let action = status.action {
-                    MiniLink(BottomBar.linkTitle(action), Self.icon(action)) { model.perform(action) }
+        VStack(spacing: 0) {
+            if let note = model.stoppedNote {
+                line(note.text) {
+                    MiniLink("Undo Stop", "arrow.uturn.backward") { model.undoStop() }
                 }
             }
-        } else if let note = model.stoppedNote {
-            line(note.text) {
-                MiniLink("Undo Stop", "arrow.uturn.backward") { model.undoStop() }
+            if let feedback = model.copyFeedback {
+                line(feedback.text) { EmptyView() }
+            } else if let status = model.status {
+                line(status.text) {
+                    if let action = status.action {
+                        MiniLink(BottomBar.linkTitle(action), Self.icon(action)) { model.perform(action) }
+                    }
+                }
             }
         }
     }
@@ -499,6 +507,7 @@ private struct MiniMessage: View {
         case .undoDelete, .undoLine, .undoAudioDelete: "arrow.uturn.backward"
         case .showFile: "folder"
         case .changeVoice: "person.2"
+        case .openMicSettings: "gearshape"
         }
     }
 }
@@ -618,7 +627,7 @@ struct LastLines: View {
         let labels = Speakers.labeler(id)
         VStack(alignment: .leading, spacing: 4) {
             if lines.isEmpty {
-                Text(live.volatile.isEmpty ? "Words show up here a couple of seconds after they're said." : live.volatile)
+                Text(live.volatile.isEmpty ? live.waitingHint : live.volatile)
                     .font(.system(size: size, design: .serif))
                     .foregroundStyle(.secondary)
             }

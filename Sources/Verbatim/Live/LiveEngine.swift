@@ -51,6 +51,12 @@ struct LiveText: Codable, Equatable {
     /// Names Ryan gave a whole voice ("Change all"), by voice number as text:
     /// a name, or "#v5" (same as voice 5).
     var voiceNames: [String: String]?
+    /// "Speaker N" number of each voice, by voice number as text. Given once,
+    /// in the order voices are first heard, to voices without a name (so not
+    /// to voices Verbatim already knew), and never changed: naming Speaker 2
+    /// doesn't turn Speaker 3 into Speaker 2. nil in older files (worked
+    /// out the same way, then kept).
+    var voiceNumbers: [String: Int]?
     /// How many times the speaker model started listening on this recording.
     /// Each time it numbers voices 0 to 3 again, so voice = time * 4 + number.
     var voiceSessions: Int?

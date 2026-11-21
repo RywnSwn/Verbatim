@@ -40,6 +40,8 @@ final class Transcriber {
     private(set) var speakerQueue: [UUID] = []
     private(set) var active: Job?
     private(set) var importing: Set<UUID> = []
+    /// How far the copy of each file being imported is, 0 to 1 (UX round 2, A6).
+    private(set) var importProgress: [UUID: Double] = [:]
     /// Old Whisper transcripts (transcript.json), from before step 5c, read
     /// as `transcripts[id]`. Read from disk the first time they're asked for.
     var transcripts: OldTranscripts { OldTranscripts(owner: self) }
@@ -87,7 +89,8 @@ final class Transcriber {
     /// Picks up anything left unfinished (quit, crash), and old recordings
     /// that never got any text.
     private func pickUp(_ r: RecordingInfo) {
-        guard !r.isActive, r.hasAudio, let facts = live.facts(r.id) else { return }
+        // A file still being copied in has only half its audio (A6).
+        guard !r.isActive, r.hasAudio, !importing.contains(r.id), let facts = live.facts(r.id) else { return }
         if facts.passFinished != nil {
             if facts.passUnfinished, !facts.passStoppedByUser { enqueue(r.id) }
         } else if !facts.hasLines {
@@ -161,7 +164,7 @@ final class Transcriber {
         let old = live.texts[id]
         // Edited lines are kept with the speaker they show now (their voice
         // numbers mean nothing to the new pass).
-        let labels = Speakers.Labeler(lines: old?.lines ?? [], names: old?.voiceNames)
+        let labels = Speakers.Labeler(old)
         let edited = (old?.lines ?? []).filter(\.isLocked).map { line in
             var l = line
             // A real name stays; "Speaker 2" would mean someone else in the new pass.
@@ -207,7 +210,18 @@ final class Transcriber {
     }
 
     func setImporting(_ id: UUID, _ on: Bool) {
-        if on { importing.insert(id) } else { importing.remove(id) }
+        if on {
+            importing.insert(id)
+            importProgress[id] = 0
+        } else {
+            importing.remove(id)
+            importProgress[id] = nil
+        }
+    }
+
+    func setImportProgress(_ id: UUID, _ fraction: Double) {
+        guard importing.contains(id) else { return }
+        importProgress[id] = fraction
     }
 
     func isQueued(_ id: UUID) -> Bool { queue.contains(id) }
@@ -230,11 +244,18 @@ final class Transcriber {
     /// backup engine, nobody listened, or the live model failed on some of
     /// the audio, redo it with Parakeet by itself (edits kept). If Parakeet
     /// isn't here yet, the transcript offers it later.
+    /// No text at all and Parakeet still coming: it waits in the queue and
+    /// starts once the download is done (UX round 2, A10: it used to wait for
+    /// a relaunch, though the page said text comes after Stop).
     func recordingFinal(_ id: UUID) {
         growing.remove(id)
         let text = live.texts[id]
-        if isModelReady, text?.pass == nil, (text?.lines.isEmpty ?? true) || text?.needsRedo == true {
+        let empty = text?.lines.isEmpty ?? true
+        if isModelReady, text?.pass == nil, empty || text?.needsRedo == true {
             redo(id)
+        } else if !isModelReady, text?.pass == nil, empty,
+                  RecorderModel.shared.info(id)?.hasAudio == true {
+            enqueue(id)
         } else if SpeakerModel.shared.isReady, needsSpeakers(id) {
             findSpeakers(id)
         }
@@ -265,6 +286,11 @@ final class Transcriber {
         guard var t = transcripts[id] else { return }
         let i = t.lines.firstIndex { $0.start > line.start } ?? t.lines.count
         t.lines.insert(line, at: i)
+        commit(t, id)
+    }
+
+    /// Undo of Transcribe again: the old Whisper transcript comes back as it was.
+    func putBackOld(_ t: Transcript, _ id: UUID) {
         commit(t, id)
     }
 

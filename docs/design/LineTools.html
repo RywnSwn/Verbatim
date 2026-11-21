@@ -1,0 +1,412 @@
+<title>Verbatim Line Tools</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: short intro, then a fake Verbatim transcript to try, then the "try this" list and open questions. */
+:root {
+  --page: #EEEBE4; --paper: #FCFBF8; --ink: #1F1D1A; --muted: #69645C; --line: #E6E2DA;
+  --accent: #24427A; --shadow: rgba(31, 29, 26, 0.22); --menu: #FFFFFF; --note: #6B5A2E;
+  --hover: rgba(31, 29, 26, 0.045); --select: rgba(36, 66, 122, 0.10); --select-edge: rgba(36, 66, 122, 0.35);
+  --mark: #FBF0C2; --mark-edge: #E3C65A; --notehue: #F8DEDA; --notehue-edge: #D98E83;
+  --bar: #F4F1EA;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+    --accent: #8FA9DD; --shadow: rgba(0, 0, 0, 0.55); --menu: #2D2C29; --note: #D6C08A;
+    --hover: rgba(235, 232, 225, 0.05); --select: rgba(143, 169, 221, 0.14); --select-edge: rgba(143, 169, 221, 0.45);
+    --mark: #4A3F12; --mark-edge: #A88A22; --notehue: #4A2723; --notehue-edge: #A85A4E;
+    --bar: #252421; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #121110; --paper: #1D1C1A; --ink: #EBE8E1; --muted: #A49F95; --line: #34322E;
+  --accent: #8FA9DD; --shadow: rgba(0, 0, 0, 0.55); --menu: #2D2C29; --note: #D6C08A;
+  --hover: rgba(235, 232, 225, 0.05); --select: rgba(143, 169, 221, 0.14); --select-edge: rgba(143, 169, 221, 0.45);
+  --mark: #4A3F12; --mark-edge: #A88A22; --notehue: #4A2723; --notehue-edge: #A85A4E;
+  --bar: #252421; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--page); color: var(--ink); font-family: var(--sans); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px; -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.page { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }
+h1 { font-family: var(--serif); font-weight: 500; font-size: 32px; margin: 0; line-height: 1.1; text-wrap: balance; }
+h2 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0; }
+p { margin: 0; line-height: 1.5; }
+.lead { color: var(--muted); max-width: 64ch; }
+.sec { display: flex; flex-direction: column; gap: 12px; }
+ol, ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; max-width: 68ch; }
+kbd { font-family: var(--sans); font-size: 12px; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+/* Fake Verbatim window */
+.win { position: relative; background: var(--paper); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--ink) 25%, transparent), 0 14px 40px var(--shadow); }
+.tb { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.lights { display: flex; gap: 7px; margin-right: 6px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.tbtitle { font-weight: 600; font-size: 13px; margin-right: auto; min-width: 0; }
+.tbtitle small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.tool { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 7px;
+  font-size: 13px; border: 1px solid transparent; }
+.tool:hover { background: var(--hover); }
+.tool svg { width: 15px; height: 15px; }
+.tool[aria-pressed="true"].m { background: var(--mark); border-color: var(--mark-edge); }
+.tool[aria-pressed="true"].n { background: var(--notehue); border-color: var(--notehue-edge); }
+.copy { height: 28px; padding: 0 12px; border-radius: 7px; background: var(--accent); color: var(--paper); font-size: 13px; font-weight: 500; }
+
+.scroll { padding: 22px 28px 18px; min-height: 380px; }
+.hdr { font-family: var(--serif); font-size: 24px; margin-bottom: 4px; }
+.meta { color: var(--muted); font-size: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+.lines { display: flex; flex-direction: column; gap: 4px; }
+
+.row { position: relative; display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+  padding: 6px 8px; margin: 0 -8px; border-radius: 7px; border: 1px solid transparent; cursor: default; }
+.row:hover { background: var(--hover); }
+.row.sel { background: var(--select); border-color: var(--select-edge); }
+.time { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; position: relative; }
+.flag { position: absolute; left: -2px; top: 1px; width: 11px; height: 11px; color: var(--ink); }
+.txt { font-family: var(--serif); font-size: 16px; line-height: 1.5; min-width: 0; }
+.who { font-weight: 700; }
+.lock { width: 12px; height: 12px; color: var(--muted); }
+.acts { display: flex; gap: 2px; visibility: hidden; }
+.row.sel .acts { visibility: visible; }
+.act { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); }
+.act:hover { background: var(--hover); color: var(--ink); }
+.act svg { width: 14px; height: 14px; }
+.noterow { display: flex; gap: 6px; align-items: baseline; padding: 0 0 6px 70px; color: var(--note); font-size: 13px; line-height: 1.45; }
+.noterow svg { width: 12px; height: 12px; flex: none; transform: translateY(1px); }
+
+/* One box open at a time */
+.box { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; padding: 4px 0 6px; }
+.box textarea { width: 100%; font-family: var(--serif); font-size: 16px; line-height: 1.5; color: var(--ink); background: transparent;
+  border: 0; border-bottom: 1.5px solid var(--accent); resize: none; padding: 0 0 2px; outline: none; field-sizing: content; min-height: 26px; }
+.box.notebox textarea { font-family: var(--sans); font-size: 13px; color: var(--note); border-bottom-color: var(--note); }
+.hint { grid-column: 2; font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+/* Tools: pointer and hover color say which tool you are holding */
+.win.tool-marker .row { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpath d='M4 2v19' stroke='%23000' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M4 2v19' stroke='%23fff' stroke-width='1.4' stroke-linecap='round'/%3E%3Cpath d='M5 3h12l-3 4 3 4H5z' fill='%23E3B320' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") 4 20, pointer; }
+.win.tool-note .row { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpath d='M3 19l1.2-4.6L15.5 3.1a1.6 1.6 0 0 1 2.3 0l1.1 1.1a1.6 1.6 0 0 1 0 2.3L7.6 17.8z' fill='%23E88A7C' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M3 19l1.2-4.6 3.4 3.4z' fill='%23fff' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") 3 19, pointer; }
+.win.tool-marker .row:hover { background: var(--mark); border-color: var(--mark-edge); }
+.win.tool-note .row:hover { background: var(--notehue); border-color: var(--notehue-edge); }
+.win.tool-marker .acts, .win.tool-note .acts { visibility: hidden !important; }
+
+.bottom { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-top: 1px solid var(--line); background: var(--bar);
+  font-size: 12.5px; min-height: 40px; flex-wrap: wrap; }
+.bottom .msg { margin-right: auto; min-width: 0; }
+.bottom .link { color: var(--accent); font-weight: 500; }
+.toolchip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-weight: 500; }
+.toolchip.m { background: var(--mark); }
+.toolchip.n { background: var(--notehue); }
+
+.qs li b { font-weight: 600; }
+@media (max-width: 560px) {
+  .scroll { padding: 18px 14px; }
+  .row { grid-template-columns: 46px minmax(0, 1fr) auto; }
+  .noterow { padding-left: 56px; }
+  .box { grid-template-columns: 46px minmax(0, 1fr); }
+  .tool span { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .row { transition: background-color .08s, border-color .08s; }
+}
+</style>
+
+<div class="page">
+  <div class="sec">
+    <h1>Line tools</h1>
+    <p class="lead">A mockup for Ryan to try before it gets built. One click picks a line, it doesn't edit it.
+      Double-click (or Enter) edits. Marker and Note are tools you pick up: your pointer turns into a flag or a pencil,
+      lines glow yellow or red under it, and clicking a line puts it there. The window below works, try it.</p>
+  </div>
+
+  <div class="win" id="win">
+    <div class="tb">
+      <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="tbtitle">English, Thu 20 Nov<small>Mr. Yurt, started 10:40</small></div>
+      <button class="tool m" id="markerTool" aria-pressed="false" title="Marker tool: click lines to mark them (⌘D marks what's being said now)">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 1.5v13h1.5V9.5h8l-2.2-3 2.2-3h-8V1.5z"/></svg><span>Marker</span>
+      </button>
+      <button class="tool n" id="noteTool" aria-pressed="false" title="Note tool: click a line to write a note on it">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.3 1.6a1.4 1.4 0 0 1 2 0l1.1 1.1a1.4 1.4 0 0 1 0 2L5.6 13.5 2 14.5l1-3.6z"/></svg><span>Note</span>
+      </button>
+      <button class="copy">Copy all</button>
+    </div>
+    <div class="scroll" id="scroll">
+      <div class="hdr">Anansi and the sky god</div>
+      <div class="meta">6 lines · Mr. Yurt and Speaker 1 spoke</div>
+      <div class="lines" id="lines" role="listbox" aria-label="Transcript lines" tabindex="0"></div>
+    </div>
+    <div class="bottom" id="bottom"><span class="msg" id="msg">Click a line to pick it. Double-click to edit.</span></div>
+  </div>
+
+  <div class="sec">
+    <h2>Try this</h2>
+    <ol>
+      <li>Move the mouse over the lines: a soft grey shows which one you're on.</li>
+      <li>Click a line once: it's picked (blue), nothing opens. Three small buttons show on its right: flag, note, and + (add a line under it).</li>
+      <li>Double-click a line (or pick it and press <kbd>Enter</kbd>): now you edit it. <kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels, clicking anywhere else only saves.</li>
+      <li>Click <b>Marker</b> in the top bar: your pointer is a flag, lines glow yellow. Click a few lines to mark them, click a marked line to take the flag off. <kbd>Esc</kbd> or Marker again puts the tool down.</li>
+      <li>Click <b>Note</b>: the pointer is a pencil, lines glow red. Click a line and type the note. The tool goes down by itself after one note.</li>
+      <li>Pick a line and click <b>+</b>: an empty line opens under it to type in.</li>
+      <li>Press <kbd>⌘Z</kbd> (or Undo at the bottom) after any change: it comes back.</li>
+      <li>With a line picked: <kbd>↑</kbd> <kbd>↓</kbd> move, <kbd>Delete</kbd> deletes it (with Undo).</li>
+    </ol>
+  </div>
+
+  <div class="sec qs">
+    <h2>What I picked, tell me if you want it different</h2>
+    <ul>
+      <li><b>Marker stays on</b> until you put it down, so you can flag several lines in a row. Note goes down after one note, because you type it right away.</li>
+      <li><b>⌘D still marks "right now"</b> while recording (the line being said), so in class you don't have to find the line. The Marker button is the tool for any other line.</li>
+      <li><b>Red for notes, yellow for markers</b>, like you said. The color is only while the tool is in your hand. Marked lines keep the flag by the time, notes stay in the brown pencil color under the line.</li>
+      <li><b>+ works on every line</b>, also after Stop (right now Add line below only shows up while it's still live text).</li>
+      <li><b>Right-click still works</b> for everything, nothing is taken away.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(() => {
+  const ICON = {
+    flag: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 1.5v13h1.5V9.5h8l-2.2-3 2.2-3h-8V1.5z"/></svg>',
+    pen: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.3 1.6a1.4 1.4 0 0 1 2 0l1.1 1.1a1.4 1.4 0 0 1 0 2L5.6 13.5 2 14.5l1-3.6z"/></svg>',
+    plus: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>',
+    lock: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 7V5a3 3 0 0 1 6 0v2h1v7H4V7zm1.5 0h3V5a1.5 1.5 0 0 0-3 0z"/></svg>'
+  };
+  let lines = [
+    { t: 41*60+2,  who: "Mr. Yurt",  text: "Okay everyone, open to page 42. Today we carry on with Anansi and the sky god." },
+    { t: 41*60+14, who: "Mr. Yurt",  text: "Remember, Anansi wanted to buy the stories from Nyame, and the price was very high." },
+    { t: 41*60+31, who: "Speaker 1", text: "Is the quiz on Friday?" },
+    { t: 41*60+35, who: "Mr. Yurt",  text: "Yes, Friday. It covers the first three folk tales.", marked: true },
+    { t: 41*60+49, who: "Mr. Yurt",  text: "Write this down. A trickster wins with his brain, the strong ones lose." },
+    { t: 42*60+6,  who: "Mr. Yurt",  text: "For homework, finish the reading and answer questions one to five.", note: "Questions are on the board, page 45." }
+  ].map((l, i) => ({ id: i + 1, marked: false, note: null, locked: false, ...l }));
+  let nextId = 100;
+  let sel = null;          // picked line id
+  let tool = null;         // "marker" | "note" | null
+  let open = null;         // { kind: "edit" | "note" | "add", id }
+  let undo = [];
+  const $ = (id) => document.getElementById(id);
+  const win = $("win"), list = $("lines"), msg = $("msg"), bottom = $("bottom");
+  const time = (s) => `10:${String(Math.floor(s / 60)).padStart(2, "0")}`;
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function snapshot(text) {
+    undo.push(JSON.stringify(lines));
+    say(text, true);
+  }
+  function doUndo() {
+    if (!undo.length) { say("Nothing to undo."); return; }
+    lines = JSON.parse(undo.pop());
+    say("Undone.");
+    render();
+  }
+  let toolHint = "";
+  function say(text, withUndo) {
+    bottom.innerHTML = "";
+    const m = document.createElement("span");
+    m.className = "msg";
+    if (tool) {
+      const chip = document.createElement("span");
+      chip.className = "toolchip " + (tool === "marker" ? "m" : "n");
+      chip.innerHTML = (tool === "marker" ? ICON.flag : ICON.pen).replace("<svg", '<svg width="12" height="12"') +
+        (tool === "marker" ? " Marker tool" : " Note tool");
+      m.append(chip, " ");
+    }
+    m.append(text);
+    bottom.append(m);
+    if (withUndo) {
+      const b = document.createElement("button");
+      b.className = "link"; b.textContent = "Undo"; b.onclick = doUndo;
+      bottom.append(b);
+    }
+    if (tool) {
+      const b = document.createElement("button");
+      b.className = "link"; b.textContent = "Put it down (Esc)"; b.onclick = () => setTool(null);
+      bottom.append(b);
+    }
+  }
+  function setTool(t) {
+    closeBox(true);
+    tool = tool === t ? null : t;
+    win.classList.toggle("tool-marker", tool === "marker");
+    win.classList.toggle("tool-note", tool === "note");
+    $("markerTool").setAttribute("aria-pressed", tool === "marker");
+    $("noteTool").setAttribute("aria-pressed", tool === "note");
+    if (tool) sel = null;
+    say(tool === "marker" ? "Click lines to mark them. Click a marked line to take the flag off."
+      : tool === "note" ? "Click the line you want a note on."
+      : "Click a line to pick it. Double-click to edit.");
+    render();
+  }
+
+  function render() {
+    list.innerHTML = "";
+    for (const l of lines) {
+      const row = document.createElement("div");
+      row.className = "row" + (sel === l.id ? " sel" : "");
+      row.dataset.id = l.id;
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", sel === l.id);
+      if (open && open.kind === "edit" && open.id === l.id) {
+        list.append(box("edit", l, l.text, "Enter saves. Esc cancels."));
+      } else {
+        row.innerHTML =
+          `<div class="time">${l.marked ? `<span class="flag" title="Marked">${ICON.flag}</span>` : ""}${time(l.t)}</div>` +
+          `<div class="txt"><span class="who">${esc(l.who)}:</span> ${esc(l.text)}</div>` +
+          `<div style="display:flex;align-items:center;gap:6px">${l.locked ? `<span class="lock" title="You edited this line">${ICON.lock}</span>` : ""}` +
+          `<div class="acts">` +
+          `<button class="act" data-a="mark" title="${l.marked ? "Remove marker" : "Add marker"}" aria-label="${l.marked ? "Remove marker" : "Add marker"}">${ICON.flag}</button>` +
+          `<button class="act" data-a="note" title="${l.note ? "Edit note" : "Add note"}" aria-label="${l.note ? "Edit note" : "Add note"}">${ICON.pen}</button>` +
+          `<button class="act" data-a="add" title="Add a line below" aria-label="Add a line below">${ICON.plus}</button>` +
+          `</div></div>`;
+        list.append(row);
+      }
+      if (open && open.kind === "note" && open.id === l.id) {
+        list.append(box("note", l, l.note || "", "Enter saves the note. Esc cancels."));
+      } else if (l.note) {
+        const n = document.createElement("div");
+        n.className = "noterow";
+        n.innerHTML = ICON.pen + `<span>${esc(l.note)}</span>`;
+        list.append(n);
+      }
+      if (open && open.kind === "add" && open.id === l.id) {
+        list.append(box("add", l, "", "New line. Enter adds it, Esc cancels."));
+      }
+    }
+    const ta = list.querySelector("textarea");
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }
+
+  function box(kind, l, value, hint) {
+    const b = document.createElement("div");
+    b.className = "box" + (kind === "note" ? " notebox" : "");
+    b.dataset.box = "1";
+    const label = kind === "edit" ? time(l.t) : kind === "add" ? time(l.t + 3) : "";
+    b.innerHTML = `<div class="time">${label}</div><textarea id="box-${kind}-${l.id}" rows="1" aria-label="${kind === "note" ? "Note" : "Line text"}" placeholder="${kind === "note" ? "Write a note" : kind === "add" ? "Type the new line" : ""}">${esc(value)}</textarea><div class="hint">${hint}</div>`;
+    const ta = b.querySelector("textarea");
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); closeBox(true); }
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeBox(false); }
+    });
+    return b;
+  }
+
+  function closeBox(save) {
+    if (!open) return;
+    const ta = list.querySelector("textarea");
+    const value = ta ? ta.value.trim() : "";
+    const l = lines.find((x) => x.id === open.id);
+    const kind = open.kind;
+    open = null;
+    if (save && l) {
+      if (kind === "edit" && value && value !== l.text) { snapshot("Line changed."); l.text = value; l.locked = true; }
+      else if (kind === "edit" && !value) { /* empty edit: keep the old text */ }
+      if (kind === "note" && value !== (l.note || "")) {
+        snapshot(value ? (l.note ? "Note changed." : `Note added at ${time(l.t)}.`) : "Note deleted.");
+        l.note = value || null;
+      }
+      if (kind === "add" && value) {
+        snapshot("Added a line.");
+        const i = lines.indexOf(l);
+        const nl = { id: nextId++, t: l.t + 3, who: l.who, text: value, marked: false, note: null, locked: true };
+        lines.splice(i + 1, 0, nl);
+        sel = nl.id;
+      }
+    }
+    render();
+    list.focus();
+  }
+
+  function openBox(kind, id) {
+    closeBox(true);
+    open = { kind, id };
+    render();
+  }
+
+  function toggleMark(l) {
+    snapshot(l.marked ? "Marker removed." : `Marker added at ${time(l.t)}.`);
+    l.marked = !l.marked;
+    render();
+  }
+
+  // A click anywhere else while typing only saves, it never does something else too.
+  document.addEventListener("mousedown", (e) => {
+    if (open && !e.target.closest("[data-box]")) {
+      e.preventDefault(); e.stopPropagation();
+      closeBox(true);
+      swallow = true;
+    }
+  }, true);
+  let swallow = false;
+  document.addEventListener("click", (e) => { if (swallow) { swallow = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  document.addEventListener("dblclick", (e) => { if (swallow) { e.stopPropagation(); } }, true);
+
+  list.addEventListener("click", (e) => {
+    const row = e.target.closest(".row");
+    if (!row) return;
+    const l = lines.find((x) => x.id === +row.dataset.id);
+    const a = e.target.closest("[data-a]");
+    if (tool === "marker") { toggleMark(l); say(l.marked ? `Marker added at ${time(l.t)}. Click more lines, or put the tool down.` : "Marker removed.", true); return; }
+    if (tool === "note") { const t = tool; tool = null; setToolUI(); openBox("note", l.id); say("Type the note. Enter saves."); return; }
+    if (a) {
+      if (a.dataset.a === "mark") toggleMark(l);
+      if (a.dataset.a === "note") openBox("note", l.id);
+      if (a.dataset.a === "add") openBox("add", l.id);
+      return;
+    }
+    list.focus();
+    if (sel === l.id) return; // no redraw, so a double-click still lands on this row
+    sel = l.id;
+    say("Picked. Double-click or Enter to edit.");
+    render();
+  });
+  list.addEventListener("dblclick", (e) => {
+    const row = e.target.closest(".row");
+    if (!row || tool || e.target.closest("[data-a]")) return;
+    sel = +row.dataset.id;
+    openBox("edit", sel);
+  });
+  function setToolUI() {
+    win.classList.toggle("tool-marker", tool === "marker");
+    win.classList.toggle("tool-note", tool === "note");
+    $("markerTool").setAttribute("aria-pressed", tool === "marker");
+    $("noteTool").setAttribute("aria-pressed", tool === "note");
+  }
+  $("markerTool").onclick = () => setTool("marker");
+  $("noteTool").onclick = () => setTool("note");
+
+  document.addEventListener("keydown", (e) => {
+    const typing = e.target.tagName === "TEXTAREA";
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !typing) { e.preventDefault(); doUndo(); return; }
+    if (typing) return;
+    if (e.key === "Escape") { if (tool) setTool(null); else if (sel) { sel = null; render(); say("Click a line to pick it. Double-click to edit."); } return; }
+    if (!sel || !win.contains(document.activeElement)) return;
+    const i = lines.findIndex((x) => x.id === sel);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const j = Math.max(0, Math.min(lines.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+      sel = lines[j].id; render(); list.focus();
+    } else if (e.key === "Enter") {
+      e.preventDefault(); openBox("edit", sel);
+    } else if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault(); snapshot("Deleted a line.");
+      lines.splice(i, 1);
+      sel = lines[Math.min(i, lines.length - 1)]?.id ?? null;
+      render(); list.focus();
+    }
+  });
+  // Clicking the page outside the window lets go of the picked line.
+  document.addEventListener("click", (e) => {
+    if (sel && !e.target.closest("#win")) { sel = null; render(); }
+  });
+  render();
+})();
+</script>

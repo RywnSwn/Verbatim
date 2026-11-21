@@ -10,9 +10,11 @@ enum CaptureError: LocalizedError {
 /// - 48 kHz (listen.wav): only for listening back (Ryan, 2026-11-19: 16 kHz
 ///   sounded muffled). Nothing that makes text ever reads it.
 /// The mic's own format comes in and Verbatim converts it. A stereo mic
-/// (a 2-mic receiver in split mode: one mic left, one right) is mixed down,
-/// so both mics are heard. (Before, macOS converted to mono and only the
-/// left channel was kept.)
+/// (a 2-mic receiver in split mode: one mic left, one right) follows the
+/// louder mic (`LouderMic`), so both voices are heard without the echo of
+/// averaging the two. (Before Nov 19, macOS converted to mono and only the
+/// left channel was kept; Nov 19 to 20 both were averaged, which cost
+/// Parakeet its punctuation.)
 /// Everything that touches the writers runs on `sampleQueue`.
 final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     private let sessionQueue = DispatchQueue(label: "verbatim.session")
@@ -29,6 +31,10 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     private var converter: AVAudioConverter?
     private var listenConverter: AVAudioConverter?
     private var converterInput: AVAudioFormat?
+    /// 2+ channel mics only: to float at the mic's rate, then one channel.
+    private var toFloat: AVAudioConverter?
+    private var mixer: LouderMic?
+    private var framesSinceReport = 0
     private var sumSquares: Double = 0
     private var levelCount = 0
     private var failed = false
@@ -52,6 +58,27 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
             // Fresh converters: none of the last recording's sound carries over.
             self.converter = nil
             self.listenConverter = nil
+            self.toFloat = nil
+            self.mixer = nil
+        }
+    }
+
+    /// A write failed (disk full) and nothing is saved until this is cleared.
+    var hasWriteError: Bool { sampleQueue.sync { failed } }
+
+    /// Before Resume after a failed write: put the file back to its last
+    /// good sample and save again. False if the file can't be fixed.
+    /// (UX round 2, A3: Resume used to look like recording but save nothing.)
+    func clearWriteError() -> Bool {
+        sampleQueue.sync {
+            guard failed else { return true }
+            do {
+                try writer?.recoverAfterError()
+                failed = false
+                return true
+            } catch {
+                return false
+            }
         }
     }
 
@@ -84,6 +111,7 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         stopCapture()
         let s = AVCaptureSession()
         let input = try AVCaptureDeviceInput(device: device)
+        MicReport.shared.set(name: device.localizedName)
         guard s.canAddInput(input) else { throw CaptureError.cannotUseMic }
         s.addInput(input)
 
@@ -132,16 +160,48 @@ final class AudioPipeline: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
 
         // A new mic (or the same one in a new format): new converters.
         if converter == nil || converterInput != inFormat {
-            converter = Self.makeConverter(from: inFormat, to: target)
-            listenConverter = Self.makeConverter(from: inFormat, to: listenTarget)
+            MicReport.shared.set(format: inFormat)
+            var source = inFormat
+            toFloat = nil
+            mixer = LouderMic(rate: inFormat.sampleRate, channels: Int(inFormat.channelCount))
+            if let mixer,
+               let floats = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: inFormat.sampleRate,
+                                          channels: inFormat.channelCount, interleaved: false) {
+                if floats != inFormat { toFloat = AVAudioConverter(from: inFormat, to: floats) }
+                source = mixer.format
+            } else {
+                mixer = nil
+            }
+            converter = Self.makeConverter(from: source, to: target)
+            listenConverter = Self.makeConverter(from: source, to: listenTarget)
             converterInput = inFormat
         }
-        guard let converter, let out = Self.convert(inBuf, with: converter, to: target) else { return }
+        guard let mono = monoBuffer(inBuf),
+              let converter, let out = Self.convert(mono, with: converter, to: target) else { return }
         deliver(out)
         if listenWriter != nil, let listenConverter,
-           let listen = Self.convert(inBuf, with: listenConverter, to: listenTarget) {
+           let listen = Self.convert(mono, with: listenConverter, to: listenTarget) {
             deliverListen(listen)
         }
+    }
+
+    /// One channel at the mic's rate: as it came for a one-channel mic,
+    /// following the louder mic for a 2+ channel one.
+    private func monoBuffer(_ inBuf: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let mixer else { return inBuf }
+        var floats = inBuf
+        if let toFloat {
+            guard let f = AVAudioPCMBuffer(pcmFormat: toFloat.outputFormat, frameCapacity: inBuf.frameLength),
+                  (try? toFloat.convert(to: f, from: inBuf)) != nil else { return nil }
+            floats = f
+        }
+        let mixed = mixer.mix(floats)
+        framesSinceReport += Int(inBuf.frameLength)
+        if framesSinceReport >= Int(inBuf.format.sampleRate) {
+            framesSinceReport = 0
+            MicReport.shared.set(weights: mixer.weightsText)
+        }
+        return mixed
     }
 
     private static func makeConverter(from input: AVAudioFormat, to output: AVAudioFormat) -> AVAudioConverter? {

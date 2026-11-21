@@ -148,12 +148,78 @@ extension RecorderModel {
     func deleteGroup(_ groupID: UUID) {
         let store = GroupStore.shared
         let members = recordings.filter { $0.groupID == groupID }.map(\.id)
+        // Undo also puts back "record into this group" (B15).
+        let wasNext = store.lastUsedID == groupID
         guard let removed = store.remove(groupID) else { return }
         for id in members { moveRecording(id, to: nil) }
         let what = members.isEmpty ? "" : members.count == 1 ? " Its recording is in Recents." : " Its \(members.count) recordings are in Recents."
         offerLineUndo("Deleted \(removed.group.name).\(what)") { [weak self] in
             store.restore(removed.group, at: removed.index)
             for id in members { self?.moveRecording(id, to: groupID) }
+            if wasNext { store.lastUsedID = groupID }
         }
     }
+
+    /// Move to Group from the menu, with Undo (item 4: it had none).
+    func moveWithUndo(_ id: UUID, to groupID: UUID?) {
+        guard let rec = info(id), rec.groupID != groupID else { return }
+        let before = GroupStore.shared.group(rec.groupID)?.id
+        moveRecording(id, to: groupID)
+        let place = GroupStore.shared.group(groupID)?.name ?? "Recents"
+        offerLineUndo("Moved \(rec.title) to \(place).") { [weak self] in
+            self?.moveRecording(id, to: before)
+        }
+    }
+
+    /// OK in the group name box. A rename (not a new group) gets an Undo.
+    func finishGroupName(_ id: UUID, _ name: String) {
+        let store = GroupStore.shared
+        let old = store.group(id)?.name
+        let isNew = newGroupCancel != nil
+        store.rename(id, to: name)
+        keepNewGroup()
+        guard !isNew, let old, let now = store.group(id)?.name, now != old else { return }
+        offerLineUndo("Renamed \(old) to \(now).") { store.rename(id, to: old) }
+    }
+
+    /// The icon picker closed: one Undo for whatever was changed in it.
+    func groupIconChanged(_ id: UUID, from old: (icon: String?, color: IconColor)) {
+        let store = GroupStore.shared
+        guard let g = store.group(id), g.icon != old.icon || g.color != old.color else { return }
+        offerLineUndo("Changed the icon of \(g.name).") {
+            store.update(id) {
+                $0.icon = old.icon
+                $0.color = old.color
+            }
+        }
+    }
+
+    /// New Group… from anywhere: makes the group, then asks for its name.
+    /// Cancel takes it all back (B14: the group used to stay, with the
+    /// recording already moved into it). `moving`: a recording to put in it
+    /// (Move to Group > New Group…). `forNext`: new recordings go there.
+    func startNewGroup(moving recording: UUID? = nil, forNext: Bool = false) {
+        let store = GroupStore.shared
+        let previousNext = store.lastUsedID
+        let oldGroup = recording.flatMap { id in recordings.first { $0.id == id }?.groupID }
+        let group = store.add()
+        if let recording { moveRecording(recording, to: group.id) }
+        if forNext { store.lastUsedID = group.id }
+        newGroupCancel = { [weak self] in
+            if let recording { self?.moveRecording(recording, to: oldGroup) }
+            _ = store.remove(group.id)
+            if forNext { store.lastUsedID = previousNext }
+        }
+        renameGroupRequest = group.id
+    }
+
+    /// The name box for a new group closed with Cancel.
+    func cancelNewGroup() {
+        let undo = newGroupCancel
+        newGroupCancel = nil
+        undo?()
+    }
+
+    /// The name box closed with OK: the new group stays.
+    func keepNewGroup() { newGroupCancel = nil }
 }

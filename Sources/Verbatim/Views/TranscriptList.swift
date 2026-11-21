@@ -10,8 +10,12 @@ import SwiftUI
 /// Speakers (step 7): "Speaker 1:" (or a name Ryan gave) in bold in front of
 /// each line. Click it to rename or pick who said it (or right-click > Speaker).
 ///
-/// Editing: click a line (Enter saves, Esc cancels, clicking away
-/// saves), or right-click for Copy / Edit / Delete. While a line is being
+/// Picking and editing (Ryan, 2026-11-20, docs/design/LineTools.html): one
+/// click picks a line (blue pen line in the margin, nothing opens) and shows its flag, note and
+/// + buttons. Double-click or Enter edits (Enter saves, Esc cancels, clicking
+/// away saves). Arrow keys move, Delete deletes. Right-click for the rest.
+/// With the Marker or Note tool on (`RecorderModel.lineTool`) a click puts a
+/// marker or a note on the line instead. While a line is being
 /// typed, the rest of the page is covered (`TypingShield`): a click there
 /// only saves. Edited lines turn full ink and get a lock; new words never go
 /// into them. Every change has Undo in the bottom bar and on ⌘Z.
@@ -37,6 +41,9 @@ struct TranscriptList: View {
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
     @State private var editing: EditKey?
+    /// The line picked with one click. Nothing is typed into it.
+    @State private var picked: EditKey?
+    @FocusState private var listFocused: Bool
     /// What's typed into the line being edited. Not watched on purpose: the
     /// typing lives in `LineEditor`, so a key press redraws that one line and
     /// not the whole transcript.
@@ -49,6 +56,10 @@ struct TranscriptList: View {
     /// text (`saveNewLine`), so an empty one is never saved.
     @State private var adding: NewLine?
     @State private var newDraft = LineDraft()
+    /// The recording the open box (line, note or new line) belongs to. This
+    /// view is kept when another recording is opened, so saving always goes
+    /// here, never into the recording now on screen (UX round 2, A2).
+    @State private var boxOwner: UUID?
     /// Its own focus: losing it doesn't save (picking a speaker from the
     /// name menu may take focus). A click away, Enter or leaving saves.
     @FocusState private var newFocused: Bool
@@ -56,6 +67,9 @@ struct TranscriptList: View {
     @FocusState private var fieldFocused: Bool
     /// Last time you scrolled by hand, so playing audio doesn't yank the view away.
     @State private var lastUserScroll = Date.distantPast
+    /// The line a Marker or Note tool click just went to: the second click of
+    /// a double-click there does nothing more (B6).
+    @State private var toolClickLine: Double?
     /// Typing a name: for a whole voice (Rename) or one line (Someone else).
     @State private var naming: Naming?
     @State private var nameDraft = ""
@@ -70,6 +84,8 @@ struct TranscriptList: View {
         var oldName: String
         /// For the line being added (not saved yet).
         var newLine = false
+        /// Renaming a voice: how many lines change.
+        var count = 0
     }
 
     private struct NewLine {
@@ -96,12 +112,15 @@ struct TranscriptList: View {
         case line(Transcript.Line, LineSource)
         case checkedUpTo(Double)
         case volatile(String)
+        /// "Paused 10:12 to 10:20" between the lines (B2).
+        case pause(RecordingInfo.Break)
 
         var id: String {
             switch self {
             case .line(let l, let s): TranscriptRow.id(s, l.start)
             case .checkedUpTo: "checked"
             case .volatile: "volatile"
+            case .pause(let b): "break-\(b.index)"
             }
         }
     }
@@ -112,9 +131,25 @@ struct TranscriptList: View {
             rows.append(.checkedUpTo(checkedUpTo ?? last.end))
         }
         rows += live.map { Row.line($0, .live) }
+        // Pauses and sleeps go before the first line after them, in old and
+        // live lines alike. One still going (paused now) goes at the end.
+        var breaks = info.breaks[...]
+        var out: [Row] = []
+        var sawLine = false
+        for row in rows {
+            if case .line(let line, _) = row {
+                sawLine = true
+                while let b = breaks.first, b.second <= line.start {
+                    out.append(.pause(b))
+                    breaks = breaks.dropFirst()
+                }
+            }
+            out.append(row)
+        }
+        if sawLine { out += breaks.map { Row.pause($0) } }
         let v = volatile.trimmingCharacters(in: .whitespaces)
-        if !v.isEmpty { rows.append(.volatile(v)) }
-        return rows
+        if !v.isEmpty { out.append(.volatile(v)) }
+        return out
     }
 
     /// The scrolling list itself. Split from `body` (which adds saving, notes,
@@ -160,7 +195,9 @@ struct TranscriptList: View {
                                 if notingLine?.start == line.start {
                                     noteEditor
                                 } else if let note = notes[line.start] {
-                                    NoteRow(text: note) { beginNote(line, note) }
+                                    NoteRow(text: note, shown: query.isEmpty ? nil : highlighted(note, source, line.start, .note)) {
+                                        beginNote(line, note)
+                                    }
                                 }
                                 if let offer = model.fixOffer, offer.recordingID == info.id, offer.start == line.start {
                                     fixOfferRow(offer.fix)
@@ -175,6 +212,16 @@ struct TranscriptList: View {
                         case .checkedUpTo(let seconds):
                             HStack(spacing: 10) {
                                 Text("Old transcript ends at \(info.timeLabel(seconds, style: timeStyle))")
+                                    .font(.system(size: 13, design: .serif).italic())
+                                    .foregroundStyle(.secondary)
+                                Rectangle().fill(Theme.line).frame(height: 1)
+                            }
+                            .padding(.leading, 70)
+                            .padding(.vertical, 4)
+                            .modifier(TypingShield(active: isTyping) { stopTyping() })
+                        case .pause(let b):
+                            HStack(spacing: 10) {
+                                Text(b.text)
                                     .font(.system(size: 13, design: .serif).italic())
                                     .foregroundStyle(.secondary)
                                 Rectangle().fill(Theme.line).frame(height: 1)
@@ -233,11 +280,49 @@ struct TranscriptList: View {
 
     var body: some View {
         scroller
+        .focusable()
+        .focused($listFocused)
+        .focusEffectDisabled()
+        .onKeyPress(.upArrow) { movePick(-1) }
+        .onKeyPress(.downArrow) { movePick(1) }
+        .onKeyPress(.return) {
+            guard !isTyping, let p = pickedLine() else { return .ignored }
+            begin(p.line, p.source)
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            guard !isTyping, picked != nil else { return .ignored }
+            picked = nil
+            return .handled
+        }
+        .onDeleteCommand { deletePicked() }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let tool = model.lineTool {
+                LineToolBand(tool: tool) { model.lineTool = nil }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: model.lineTool)
+        .onChange(of: model.lineTool) { _, tool in
+            // Picking up a tool saves and closes whatever was being typed.
+            if tool != nil {
+                stopTyping()
+                picked = nil
+            }
+        }
         .onChange(of: fieldFocused) {
             // Clicking somewhere else saves, like a text field in Notes.
             if !fieldFocused, editing != nil { save() }
         }
         .onDisappear { stopTyping() }
+        .onChange(of: info.id) {
+            // Another recording opened: save and close what was open in the
+            // old one, and forget its picked line and popups.
+            stopTyping()
+            picked = nil
+            naming = nil
+            addingWord = false
+        }
         .onChange(of: live.count) { keepNewLineAnchored() }
         .onChange(of: noteFocused) {
             if !noteFocused, notingLine != nil { saveNote() }
@@ -250,13 +335,14 @@ struct TranscriptList: View {
             if byHand.contains(phase) { lastUserScroll = Date() }
         }
         .onChange(of: playingRowID) { _, id in
-            // Follow the audio, unless you scrolled in the last 8 seconds or are editing/searching.
-            guard let id, playback.isPlaying, editing == nil, model.searchText.isEmpty,
+            // Follow the audio, unless you scrolled or moved the picked line in
+            // the last 8 seconds, or are typing (line, note or new line, B5) or searching.
+            guard let id, playback.isPlaying, !isTyping, model.searchText.isEmpty,
                   Date().timeIntervalSince(lastUserScroll) > 8 else { return }
             withAnimation(.easeOut(duration: 0.3)) { position.scrollTo(id: id, anchor: .center) }
         }
         .onChange(of: model.matchJump) { jumpToMatch() }
-        .alert(naming?.voice != nil ? "Rename \(naming?.oldName ?? "")" : "Who said this line?",
+        .alert(naming?.voice != nil ? "Who is \(naming?.oldName ?? "")?" : "Who said this line?",
                isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil } })) {
             TextField("Name", text: $nameDraft)
             Button("OK") {
@@ -273,11 +359,14 @@ struct TranscriptList: View {
                 }
                 naming = nil
             }
+            .disabled(nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button("Cancel", role: .cancel) { naming = nil }
         } message: {
-            Text(naming?.voice != nil
-                 ? "Every line in this voice changes. Names you type are offered in your other recordings too."
-                 : "Only this line changes. Names you type are offered in your other recordings too.")
+            if let n = naming, n.voice != nil {
+                Text("All \(n.count == 1 ? "1 line" : "\(n.count) lines") of \(n.oldName) get this name, and Verbatim learns the voice for next time.")
+            } else {
+                Text("Only this line changes. Names you type are offered in your other recordings too.")
+            }
         }
         .alert("Add to the word list", isPresented: $addingWord) {
             TextField("Name, like Kweku Tsin", text: $wordDraft)
@@ -307,7 +396,7 @@ struct TranscriptList: View {
 
     /// Don't scroll away from a line you're editing or a search hit.
     private var followsLive: Bool {
-        isLive && atBottom && editing == nil && notingLine == nil && model.searchText.isEmpty
+        isLive && atBottom && !isTyping && model.searchText.isEmpty
     }
 
     // MARK: - Search
@@ -328,10 +417,11 @@ struct TranscriptList: View {
     }
 
     /// The line's text with search hits in yellow; the current hit stronger.
-    private func highlighted(_ text: String, _ source: LineSource, _ start: Double) -> AttributedString {
+    private func highlighted(_ text: String, _ source: LineSource, _ start: Double,
+                             _ part: SearchMatch.Part = .text) -> AttributedString {
         let ranges = RecorderModel.ranges(of: query, in: text)
         guard !ranges.isEmpty else { return AttributedString(text) }
-        let current = currentMatch.flatMap { $0.source == source && $0.start == start ? $0.occurrence : nil }
+        let current = currentMatch.flatMap { $0.source == source && $0.start == start && $0.part == part ? $0.occurrence : nil }
         var result = AttributedString()
         var cursor = text.startIndex
         for (k, r) in ranges.enumerated() {
@@ -352,28 +442,32 @@ struct TranscriptList: View {
         return Text("\(Text(name + ":").fontWeight(.semibold)) \(text)")
     }
 
-    /// Rename this voice everywhere, or pick who said this line: this
-    /// recording's speakers, names used before, or a new name.
+    /// Click a name: one question, "Who is Speaker 2? (14 lines)". Picking a
+    /// person or typing a new name changes every line with that name.
+    /// Fixing one line is in "Just This Line". A line with a name typed for
+    /// just that line, or no voice, gets the one-line choices only.
     @ViewBuilder private func speakerItems(_ line: Transcript.Line, current: String?, name: String?,
                                            options: [Speakers.SpeakerOption]) -> some View {
-        if let voice = line.voice, let name {
-            Button("Rename \(name) everywhere…") {
-                nameDraft = name.hasPrefix("Speaker ") ? "" : name
-                naming = Naming(start: line.start, voice: voice, oldName: name)
+        let labels = Speakers.labeler(info.id)
+        if let voice = labels.root(of: line), let name {
+            let count = labels.count(voice, in: live)
+            let lineText = count == 1 ? "1 line" : "\(count) lines"
+            let others = options.filter { o in
+                o.name != name && (Speakers.voice(of: o.choice).map { labels.root($0) != voice } ?? true)
+            }
+            Section("Who is \(name)? (\(lineText))") {
+                ForEach(others, id: \.choice) { o in
+                    Button(o.name) { model.renameVoice(info.id, voice: voice, to: o.choice) }
+                }
+                Button("New Name…") {
+                    nameDraft = name.hasPrefix("Speaker ") ? "" : name
+                    naming = Naming(start: line.start, voice: voice, oldName: name, count: count)
+                }
             }
             Divider()
-        }
-        let pick = Binding<String>(
-            get: { current ?? "" },
-            set: { model.setSpeaker(info.id, start: line.start, to: $0) }
-        )
-        Picker("This line is:", selection: pick) {
-            ForEach(options, id: \.choice) { Text($0.name).tag($0.choice) }
-        }
-        .pickerStyle(.inline)
-        Button("Someone else…") {
-            nameDraft = ""
-            naming = Naming(start: line.start, voice: nil, oldName: name ?? "")
+            Menu("Just This Line") { lineOnlyItems(line, current: current, name: name, options: options) }
+        } else {
+            lineOnlyItems(line, current: current, name: name, options: options)
         }
         let past = Speakers.recentNames
         if !past.isEmpty {
@@ -393,14 +487,34 @@ struct TranscriptList: View {
         }
     }
 
+    /// Who said just this one line: this recording's speakers, names used
+    /// before, or a new name.
+    @ViewBuilder private func lineOnlyItems(_ line: Transcript.Line, current: String?, name: String?,
+                                            options: [Speakers.SpeakerOption]) -> some View {
+        let pick = Binding<String>(
+            get: { current ?? "" },
+            set: { model.setSpeaker(info.id, start: line.start, to: $0) }
+        )
+        Picker("This line is:", selection: pick) {
+            ForEach(options, id: \.choice) { Text($0.name).tag($0.choice) }
+        }
+        .pickerStyle(.inline)
+        Button("Someone Else…") {
+            nameDraft = ""
+            naming = Naming(start: line.start, voice: nil, oldName: name ?? "")
+        }
+    }
+
     private func lineRow(_ line: Transcript.Line, _ source: LineSource, speaker: String?, name: String?,
                          options: [Speakers.SpeakerOption], marked: Bool, note: String?) -> some View {
         let key = EditKey(source: source, start: line.start)
         let isEditing = editing == key
+        let isPicked = picked == key && !isEditing
+        let tool = isEditing ? nil : model.lineTool
         let isPlaying = playingRowID == TranscriptRow.id(source, line.start)
         // Gutter 60 + gap 10 = the 70 pt that notes and offers line up with.
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
-            timeGutter(line, isPlaying: isPlaying)
+            timeGutter(line, isPlaying: isPlaying || isPicked)
                 .overlay(alignment: .leading) {
                     // The flag sits just left of the time, so long times still fit.
                     if marked {
@@ -408,17 +522,21 @@ struct TranscriptList: View {
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.ink)
                             .offset(x: -15)
-                            .help("Marked. Right-click the line to remove it.")
+                            .help("Marked. To remove it, click the line, then the flag button on the right.")
                             .accessibilityLabel("Marked")
                     }
                 }
             if isEditing {
                 LineEditor(draft: draft, focused: $fieldFocused, font: Theme.transcript(textSize),
-                           onSave: { save() }, onCancel: { cancel() })
+                           onSave: { save(); backToList() }, onCancel: { cancel(); backToList() })
             } else {
                 Group {
                     if !query.isEmpty {
-                        Self.labelled(Text(highlighted(line.text, source, line.start)), name)
+                        if let name {
+                            Text("\(Text(highlighted(name + ":", source, line.start, .speaker)).fontWeight(.semibold)) \(Text(highlighted(line.text, source, line.start)))")
+                        } else {
+                            Text(highlighted(line.text, source, line.start))
+                        }
                     } else if isPlaying {
                         PlayingLineText(line: line, name: name)
                     } else {
@@ -434,7 +552,6 @@ struct TranscriptList: View {
                     .lineSpacing(Theme.transcriptLineSpacing)
                     .foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .pointerStyle(.horizontalText) // text cursor: says "you can type here"
             }
             if line.isLocked, !isEditing {
                 Button {
@@ -450,6 +567,9 @@ struct TranscriptList: View {
                 .help("You edited this line. Click to unlock.")
                 .accessibilityLabel("Unlock line")
             }
+            if isPicked, tool == nil {
+                lineActions(line, source, speaker: speaker, marked: marked, note: note)
+            }
         }
         .background {
             if isPlaying {
@@ -459,8 +579,9 @@ struct TranscriptList: View {
                     .padding(.vertical, -5)
             }
         }
+        .modifier(LineHighlight(picked: isPicked, keyboard: listFocused, tool: tool))
         .contentShape(Rectangle())
-        .onTapGesture { if !isEditing { begin(line, source) } }
+        .onTapGesture { if !isEditing { tapped(line, source, marked: marked, note: note) } }
         .contextMenu {
             if canPlay {
                 Button("Play from here") { model.playAudio(info.id, from: line.start) }
@@ -492,6 +613,8 @@ struct TranscriptList: View {
                 Button("Unlock") { model.unlockLine(info.id, source, start: line.start) }
             }
         }
+        // Press (VoiceOver, the smoke test's clicks): same as one click.
+        .accessibilityAction { if !isEditing { tapped(line, source, marked: marked, note: note) } }
         .accessibilityAction(named: "Edit line") { begin(line, source) }
         .accessibilityAction(named: "Delete line") { model.deleteLine(info.id, source, start: line.start) }
         .accessibilityAction(named: "Add line below") {
@@ -563,7 +686,7 @@ struct TranscriptList: View {
             VStack(alignment: .leading, spacing: 5) {
                 LineEditor(draft: noteDraft, focused: $noteFocused, font: .callout,
                            prompt: "What the mic can't hear, like what's on the board",
-                           onSave: { saveNote() }, onCancel: { finishNote() })
+                           onSave: { saveNote(); backToList() }, onCancel: { finishNote(); backToList() })
                 Text("Enter saves. Esc cancels. Empty deletes the note.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -589,6 +712,7 @@ struct TranscriptList: View {
         stopTyping()
         noteDraft = LineDraft() // a new box, same reason as in `begin`
         noteDraft.text = text
+        boxOwner = info.id
         notingLine = line
         Task { @MainActor in noteFocused = true }
     }
@@ -596,7 +720,7 @@ struct TranscriptList: View {
     private func saveNote() {
         guard let line = notingLine else { return }
         finishNote()
-        model.setNote(info.id, line: line, text: noteDraft.text)
+        model.setNote(boxOwner ?? info.id, line: line, text: noteDraft.text)
     }
 
     private func finishNote() {
@@ -631,9 +755,111 @@ struct TranscriptList: View {
         // clicked next and replaced it (Ryan, 2026-11-19).
         draft = LineDraft()
         draft.text = line.text
+        boxOwner = info.id
         editing = EditKey(source: source, start: line.start)
+        picked = editing // after saving, the line stays picked
         if source == .live { liveTranscriber.editing = (info.id, line.start) }
         Task { @MainActor in fieldFocused = true }
+    }
+
+    // MARK: - Picking a line, line tools
+
+    /// One click: with a tool, put a marker (or take it off) or open a note.
+    /// Without: pick the line. A double-click edits it.
+    private func tapped(_ line: Transcript.Line, _ source: LineSource, marked: Bool, note: String?) {
+        // B6: a double-click with a tool used to add then remove the flag, or
+        // open the line's text instead of the note.
+        let clicks = NSApp.currentEvent?.clickCount ?? 1
+        if clicks >= 2, toolClickLine == line.start { return }
+        toolClickLine = nil
+        switch model.lineTool {
+        case .marker?:
+            toolClickLine = line.start
+            if marked { model.removeMarker(info.id, line: line) } else { model.addMarker(info.id, line: line) }
+        case .note?:
+            toolClickLine = line.start
+            model.lineTool = nil // goes down after one note: you type it right away
+            beginNote(line, note ?? "")
+        case nil:
+            if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
+                begin(line, source)
+            } else {
+                stopTyping()
+                picked = EditKey(source: source, start: line.start)
+                listFocused = true
+            }
+        }
+    }
+
+    /// Flag, note and + on the picked line, so they're never hidden in the
+    /// right-click menu only.
+    @ViewBuilder private func lineActions(_ line: Transcript.Line, _ source: LineSource, speaker: String?,
+                                          marked: Bool, note: String?) -> some View {
+        HStack(spacing: 2) {
+            LineActionButton(icon: marked ? "flag.slash" : "flag", help: marked ? "Remove marker" : "Add marker here") {
+                if marked { model.removeMarker(info.id, line: line) } else { model.addMarker(info.id, line: line) }
+            }
+            LineActionButton(icon: "pencil", help: note == nil ? "Add note" : "Edit note") {
+                beginNote(line, note ?? "")
+            }
+            if source == .live {
+                LineActionButton(icon: "plus", help: "Add a line below") {
+                    beginNewLine(below: line, speaker: speaker)
+                }
+            }
+        }
+        .transition(.opacity)
+    }
+
+    /// The lines in the order they're shown, for the arrow keys.
+    private var lineKeys: [EditKey] {
+        checked.map { EditKey(source: .checked, start: $0.start) } + live.map { EditKey(source: .live, start: $0.start) }
+    }
+
+    private func pickedLine() -> (line: Transcript.Line, source: LineSource)? {
+        guard let p = picked else { return nil }
+        let lines = p.source == .checked ? checked : live
+        return lines.first { $0.start == p.start }.map { ($0, p.source) }
+    }
+
+    /// Enter or Esc closed a box: the keyboard goes back to the lines, so
+    /// the arrows work at once (B8: they did nothing until a click).
+    private func backToList() {
+        Task { @MainActor in listFocused = true }
+    }
+
+    private func movePick(_ step: Int) -> KeyPress.Result {
+        guard !isTyping else { return .ignored }
+        let keys = lineKeys
+        guard !keys.isEmpty else { return .ignored }
+        let next: EditKey
+        if let p = picked, let i = keys.firstIndex(of: p) {
+            next = keys[max(0, min(keys.count - 1, i + step))]
+        } else {
+            // Nothing picked yet (B8: arrows did nothing): the line being
+            // heard, else the newest line while recording, else the first
+            // (down) or last (up).
+            if let id = playingRowID, let k = keys.first(where: { TranscriptRow.id($0.source, $0.start) == id }) {
+                next = k
+            } else if isLive || step < 0 {
+                next = keys[keys.count - 1]
+            } else {
+                next = keys[0]
+            }
+        }
+        picked = next
+        lastUserScroll = Date() // the audio doesn't pull the view back (B5)
+        position.scrollTo(id: TranscriptRow.id(next.source, next.start))
+        return .handled
+    }
+
+    private func deletePicked() {
+        guard !isTyping, let p = pickedLine() else { return }
+        let keys = lineKeys
+        let i = keys.firstIndex(of: EditKey(source: p.source, start: p.line.start)) ?? 0
+        model.deleteLine(info.id, p.source, start: p.line.start)
+        let rest = keys.filter { $0 != picked }
+        picked = rest.isEmpty ? nil : rest[min(i, rest.count - 1)]
     }
 
     // MARK: - Add line below
@@ -641,6 +867,7 @@ struct TranscriptList: View {
     private func beginNewLine(below line: Transcript.Line, speaker: String?) {
         stopTyping()
         newDraft = LineDraft() // a new box, same reason as in `begin`
+        boxOwner = info.id
         adding = NewLine(below: line.start, speaker: speaker)
         Task { @MainActor in newFocused = true }
     }
@@ -648,13 +875,14 @@ struct TranscriptList: View {
     private func saveNewLine() {
         guard let a = adding else { return }
         finishNewLine()
-        model.addLine(info.id, below: a.below, text: newDraft.text, speaker: a.speaker)
+        model.addLine(boxOwner ?? info.id, below: a.below, text: newDraft.text, speaker: a.speaker)
     }
 
     /// A pass over the file can rebuild the lines while a new line is open:
     /// if the line it sits under is gone, it moves under the line now there.
     private func keepNewLineAnchored() {
-        guard let a = adding, !live.contains(where: { $0.start == a.below }) else { return }
+        // Only in its own recording: switching recordings changes `live` too.
+        guard let a = adding, boxOwner == info.id, !live.contains(where: { $0.start == a.below }) else { return }
         if let line = live.last(where: { $0.start <= a.below }) ?? live.first {
             adding?.below = line.start
         } else {
@@ -686,7 +914,7 @@ struct TranscriptList: View {
                         SpeakerLabelButton(name: labels.display(s), solid: true) { newLineSpeakerItems(options) }
                     }
                     LineEditor(draft: newDraft, focused: $newFocused, font: Theme.transcript(textSize),
-                               prompt: "New line", onSave: { saveNewLine() }, onCancel: { finishNewLine() })
+                               prompt: "New line", onSave: { saveNewLine(); backToList() }, onCancel: { finishNewLine(); backToList() })
                 }
                 Text("Enter adds the line. Esc cancels.")
                     .font(.caption2)
@@ -718,7 +946,7 @@ struct TranscriptList: View {
     private func save() {
         guard let key = editing else { return }
         finish()
-        model.editLine(info.id, key.source, start: key.start, text: draft.text)
+        model.editLine(boxOwner ?? info.id, key.source, start: key.start, text: draft.text)
     }
 
     private func cancel() {
@@ -787,7 +1015,8 @@ struct LineEditor: View {
     let onCancel: () -> Void
     @State private var text: String
 
-    init(draft: LineDraft, focused: FocusState<Bool>.Binding, font: Font, prompt: String = "Line",
+    init(draft: LineDraft, focused: FocusState<Bool>.Binding, font: Font,
+         prompt: String = "Empty: Enter deletes the line", // item 14: it didn't say so
          onSave: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.draft = draft
         self.focused = focused
@@ -825,6 +1054,8 @@ struct LineEditor: View {
 /// smaller than the transcript, so it never looks like speech. Click to change it.
 private struct NoteRow: View {
     let text: String
+    /// The note with search hits marked, while searching.
+    var shown: AttributedString?
     let action: () -> Void
     @State private var hovering = false
 
@@ -833,7 +1064,7 @@ private struct NoteRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 Image(systemName: "pencil")
                     .font(.caption)
-                Text(text)
+                Text(shown ?? AttributedString(text))
                     .font(.callout)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1058,5 +1289,103 @@ struct WordMarkRenderer: TextRenderer {
         for line in layout {
             for run in line { ctx.draw(run) }
         }
+    }
+}
+
+/// Margin mark (Ryan's pick, docs/design/LineLook.html): no box or fill
+/// over the words, just a short pen line in the margin left of the time.
+/// Grey under the pointer, blue when picked, yellow (Marker tool) or red
+/// (Note tool) under the pointer with a tool on, which also sets the pointer.
+/// Its own view with its own hover state, so moving the mouse redraws one
+/// line and not the whole transcript.
+private struct LineHighlight: ViewModifier {
+    let picked: Bool
+    /// The lines have the keyboard. If not (the sidebar has it), the picked
+    /// line's mark is grey, so it's clear Delete won't touch it (B8).
+    var keyboard = true
+    let tool: LineTool?
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .leading) {
+                // Left of the flag (which sits 15 pt left of the time).
+                Capsule()
+                    .fill(pen)
+                    .frame(width: tool != nil && hovering ? 4 : 3)
+                    .padding(.vertical, 3)
+                    .offset(x: -24)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .onHover { hovering = $0 }
+            .pointerStyle(tool?.pointer ?? .default)
+    }
+
+    private var pen: Color {
+        switch tool {
+        case .marker?: hovering ? Theme.markPen : .clear
+        case .note?: hovering ? Theme.notePen : .clear
+        case nil: picked ? (keyboard ? Theme.accent : Theme.ink.opacity(0.35)) : hovering ? Theme.ink.opacity(0.22) : .clear
+        }
+    }
+}
+
+/// A small button on the picked line (flag, note, +). 24 pt, easy to hit.
+private struct LineActionButton: View {
+    let icon: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(hovering ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(.secondary))
+                .frame(width: 24, height: 24)
+                .background(Theme.ink.opacity(hovering ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// While a tool is on: a band at the top of the page with the tool's pen
+/// color, saying what a click does, with a way to put the tool down (Esc).
+private struct LineToolBand: View {
+    let tool: LineTool
+    let putDown: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Capsule()
+                    .fill(tool == .marker ? Theme.markPen : Theme.notePen)
+                    .frame(width: 4, height: 16)
+                Image(systemName: tool == .marker ? "flag.fill" : "pencil")
+                    .font(.callout)
+                Text(tool == .marker
+                     ? "Marker tool: click lines to mark them. Click a marked line to take the flag off."
+                     : "Note tool: click the line you want a note on.")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Button("Put it down", action: putDown)
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+                    .keyboardShortcut(.cancelAction)
+                    .help("Put the tool down (Esc)")
+            }
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 8)
+            .background(Theme.paper)
+            Divider()
+        }
+        .accessibilityElement(children: .contain)
     }
 }

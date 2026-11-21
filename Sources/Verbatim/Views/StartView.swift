@@ -1,4 +1,5 @@
 import AVFoundation
+import Speech
 import SwiftUI
 
 /// The start screen (2026-11-18, Ryan picked "E, a blank notebook page"):
@@ -26,7 +27,7 @@ struct StartView: View {
                     .overlay(alignment: .bottom) {
                         Text("Or drop a Voice Memo here to transcribe it.")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary) // C11: tertiary was hard to read
                             .frame(maxWidth: 760, alignment: .leading)
                             .padding(.horizontal, 32)
                             .padding(.bottom, 20)
@@ -38,6 +39,16 @@ struct StartView: View {
         // Get the live models ready while you're on this page, so Record
         // starts listening straight away (see LiveTranscriber.warmUp).
         .onAppear { live.warmUp() }
+        // Until Parakeet is here, live text uses the Mac's own engine, which
+        // needs Speech Recognition access. Ask now, not the first time Record
+        // is pressed in class (B12). Only once the mic is allowed, so the two
+        // questions don't come at once.
+        .task {
+            if !live.isModelReady, model.micPermission == .authorized,
+               SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+                _ = await AppleSpeechEngine.authorize()
+            }
+        }
         .onChange(of: live.modelState == .ready) { if live.modelState == .ready { live.warmUp() } }
     }
 
@@ -68,9 +79,22 @@ struct StartView: View {
             // The hint sits where the first line will be. The model status
             // goes under it, so an empty status can't add a gap above it.
             VStack(alignment: .leading, spacing: 12) {
-                Text("The class shows up on this page as it's said.")
-                    .font(.body)
-                    .foregroundStyle(.tertiary)
+                if model.isBusy, let id = model.currentID {
+                    // C4: this page with a greyed Record while a class is
+                    // being recorded. Say where it is instead.
+                    HStack(spacing: 10) {
+                        Text("A class is being recorded right now.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                        Button("Show it") { model.selection = id }
+                            .buttonStyle(.link)
+                            .fontWeight(.medium)
+                    }
+                } else {
+                    Text("The class shows up on this page as it's said.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
                 PageModelStatus()
             }
         }
@@ -143,11 +167,7 @@ struct GroupTitleMenu: View {
             } label: {
                 Label("Recents (no group)", systemImage: current == nil ? "checkmark" : "clock")
             }
-            Button("New Group…") {
-                let group = store.add()
-                store.lastUsedID = group.id
-                model.renameGroupRequest = group.id
-            }
+            Button("New Group…") { model.startNewGroup(forNext: true) }
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(current?.name ?? "Recents")
@@ -225,7 +245,7 @@ struct PageModelStatus: View {
         case .downloading(let fraction, let left):
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Getting the speech model, first time only")
+                    Text("Getting the speech model (1 of 3), first time only")
                     Spacer()
                     Text(LiveModelStatusLine.progressText(fraction, left)).monospacedDigit()
                 }
@@ -236,7 +256,7 @@ struct PageModelStatus: View {
                     .controlSize(.small)
                     .tint(Theme.ink)
                 HStack(alignment: .firstTextBaseline) {
-                    note("You can record now. Until it's done, live text uses your Mac's own speech engine, and Voice Memos wait.")
+                    note("You can record now. Until it's done, live text uses your Mac's own speech engine, and Voice Memos wait. Then speaker labels and the word list helper (about 100 MB each) come by themselves.")
                     Spacer()
                     Button("Pause") { live.pauseDownload() }
                         .controlSize(.small)
@@ -295,8 +315,8 @@ struct LiveModelStatusLine: View {
         case .ready:
             title("Speech model ready")
             note("Words show up a couple of seconds after they're said. A Voice Memo takes about a minute per hour. Works offline.")
-            SpeakerModelNote()
-            WordModelNote()
+            // Speaker labels and the word helper have their own rows in
+            // Settings > Transcription (C7: they showed twice).
         case .preparing:
             title("Getting the speech model ready")
             note("First time only, this can take a few minutes. Keep Verbatim open.")
@@ -360,9 +380,12 @@ struct SpeakerModelNote: View {
         case .downloading(let f):
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Downloading speaker labels")
+                    Text("Downloading speaker labels (2 of 3)")
                     Spacer()
                     Text("\(Int(f * 100))% of \(SpeakerEngine.sizeText)").monospacedDigit()
+                    Button("Pause") { speakers.pause() }
+                        .buttonStyle(.link)
+                        .fontWeight(.medium)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -379,6 +402,15 @@ struct SpeakerModelNote: View {
             Text("Getting speaker labels ready. First time only.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        case .paused(let f):
+            HStack(spacing: 8) {
+                Text("Speaker labels download paused at \(Int(f * 100))%.")
+                Button("Resume") { speakers.resume() }
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         case .failed(let f):
             HStack(spacing: 8) {
                 Text("Speaker labels download stopped at \(Int(f * 100))%. Trying again by itself.")
@@ -412,9 +444,12 @@ struct WordModelNote: View {
         case .downloading(let f):
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Downloading the word list helper")
+                    Text("Downloading the word list helper (3 of 3)")
                     Spacer()
                     Text("\(Int(f * 100))% of \(ParakeetEngine.wordSpotterSizeText)").monospacedDigit()
+                    Button("Pause") { model.pause() }
+                        .buttonStyle(.link)
+                        .fontWeight(.medium)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -426,6 +461,15 @@ struct WordModelNote: View {
             .padding(.top, 2)
         case .preparing:
             line("Getting the word list ready. First time only.")
+        case .paused(let f):
+            HStack(spacing: 8) {
+                Text("Word list helper download paused at \(Int(f * 100))%.")
+                Button("Resume") { model.resume() }
+                    .buttonStyle(.link)
+                    .fontWeight(.medium)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         case .failed(let f):
             HStack(spacing: 8) {
                 Text("Word list download stopped at \(Int(f * 100))%. Trying again by itself.")

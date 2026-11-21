@@ -13,15 +13,24 @@ struct BottomBar: View {
             Group {
                 if model.isBusy {
                     recordingBar
-                } else if let note = model.stoppedNote {
-                    undoBar(note.text, undo: "Undo Stop") { model.undoStop() }
-                } else if let note = model.deletedNote {
-                    undoBar("Moved \(note.info.title) to Recently deleted.", undo: "Undo") { model.undoDelete() }
-                } else if let status = model.status {
-                    if let action = status.action {
-                        undoBar(status.text, undo: Self.linkTitle(action)) { model.perform(action) }
-                    } else {
-                        undoBar(status.text, undo: "OK") { model.clearStatus() }
+                } else if model.stoppedNote != nil || model.deletedNote != nil || model.status != nil {
+                    // Item 3: the Stop and Delete notes used to hide every other
+                    // message (a line edit's Undo, "Copied", an error) for 10 s.
+                    // Now they stack, newest kind last.
+                    VStack(alignment: .trailing, spacing: 4) {
+                        if let note = model.stoppedNote {
+                            undoBar(note.text, undo: "Undo Stop") { model.undoStop() }
+                        }
+                        if let note = model.deletedNote, model.status?.action != .undoDelete {
+                            undoBar("Moved \(note.info.title) to Recently deleted.", undo: "Undo") { model.undoDelete() }
+                        }
+                        if let status = model.status {
+                            if let action = status.action {
+                                undoBar(status.text, undo: Self.linkTitle(action)) { model.perform(action) }
+                            } else {
+                                undoBar(status.text, undo: "OK") { model.clearStatus() }
+                            }
+                        }
                     }
                 } else if case .ready(let version) = updater.state {
                     if let problem = updater.installProblem {
@@ -131,6 +140,7 @@ struct BottomBar: View {
         case .undoDelete, .undoLine, .undoAudioDelete: "Undo"
         case .showFile: "Show in Finder"
         case .changeVoice: "Change them too"
+        case .openMicSettings: "Open Microphone settings"
         }
     }
 
@@ -142,10 +152,16 @@ struct BottomBar: View {
                 .lineLimit(3)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
-            Button(undo, action: action)
-                .buttonStyle(.link)
-                .font(.callout.weight(.medium))
-                .fixedSize() // the link never wraps or gets cut
+            Button(action: action) {
+                // Item 9: a 24 pt tall target, not just the word.
+                Text(undo)
+                    .padding(.vertical, 5)
+                    .padding(.horizontal, 3)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.link)
+            .font(.callout.weight(.medium))
+            .fixedSize() // the link never wraps or gets cut
         }
     }
 }

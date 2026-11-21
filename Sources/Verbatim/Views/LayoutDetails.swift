@@ -10,7 +10,7 @@ enum LayoutDetails {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         FileHandle.standardError.write(Data((text + "\n").utf8))
-        RecorderModel.shared.show("Layout details copied. Paste them to Claude.")
+        RecorderModel.shared.show("Layout details copied. Paste them wherever you report the problem.")
     }
 
     static func report() -> String {
@@ -32,6 +32,9 @@ enum LayoutDetails {
         out.append("")
         out.append("LAUNCH (seconds after Verbatim opened): \(LaunchTimer.shared.text())")
         out.append(LiveFeed.shared.report())
+        out.append(MicReport.shared.text)
+        let learned = UserDefaults.standard.double(forKey: ContentView.learnedKey)
+        out.append("SIDEBAR: beside the transcript from \(Int(max(ContentView.compactWidth, learned))) pt wide (learned: \(learned > 0 ? "\(Int(learned)) pt" : "none"))")
         return out.joined(separator: "\n")
     }
 

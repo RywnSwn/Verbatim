@@ -1,4 +1,5 @@
-import Foundation
+import AppKit
+import SwiftUI
 
 /// Markers (step 7b): flag a moment that matters ("write this down").
 /// Saved as times (seconds into the audio) in recording.json, not on lines,
@@ -63,7 +64,7 @@ extension RecorderModel {
     private func addMarker(_ id: UUID, at time: Double, label: String) {
         let old = markers(id)
         setMarkers(id, old + [(time * 100).rounded() / 100])
-        offerLineUndo("Marker added at \(label).") { [weak self] in
+        offerLineUndo("Marker added at \(label).", in: id) { [weak self] in
             self?.setMarkers(id, old)
         }
     }
@@ -76,8 +77,32 @@ extension RecorderModel {
         let kept = old.filter { Markers.line(at: $0, in: lines).start != line.start }
         guard kept.count != old.count else { return }
         setMarkers(id, kept)
-        offerLineUndo("Marker removed.") { [weak self] in
+        offerLineUndo("Marker removed.", in: id) { [weak self] in
             self?.setMarkers(id, old)
         }
     }
+}
+
+/// Tools you pick up in the toolbar (Ryan, 2026-11-20, mockup
+/// docs/design/LineTools.html). The pointer turns into a flag or a pencil and
+/// lines glow yellow or red under it. Marker stays on (flag several lines)
+/// until Esc or the button again; Note goes down after one note, because you
+/// type it right away. ⌘D still marks what's being said right now.
+enum LineTool: Equatable {
+    case marker, note
+
+    var pointer: PointerStyle {
+        .image(Image(nsImage: self == .marker ? Self.flagCursor : Self.pencilCursor), hotSpot: .center)
+    }
+
+    /// A round badge, so it shows on light and dark pages alike.
+    private static func badge(_ symbol: String, _ colors: [NSColor]) -> NSImage {
+        let config = NSImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: colors))
+        return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config) ?? NSImage()
+    }
+
+    private static let flagCursor = badge("flag.circle.fill", [.black, NSColor(srgbRed: 0.95, green: 0.78, blue: 0.19, alpha: 1)])
+    private static let pencilCursor = badge("pencil.circle.fill", [.white, NSColor(srgbRed: 0.85, green: 0.42, blue: 0.36, alpha: 1)])
 }

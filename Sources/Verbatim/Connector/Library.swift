@@ -31,7 +31,7 @@ enum Library {
         if transcript?.finished != true {
             lines += live?.unchecked(after: transcript?.doneUpTo ?? 0) ?? []
         }
-        return (lines, Speakers.Labeler(lines: live?.lines ?? [], names: live?.voiceNames))
+        return (lines, Speakers.Labeler(live))
     }
 
     static func isLive(_ info: RecordingInfo) -> Bool { info.state != .stopped }

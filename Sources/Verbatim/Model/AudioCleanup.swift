@@ -12,6 +12,30 @@ enum AudioCleanup {
     /// When this feature first ran: nothing is deleted in the 2 days after
     /// that, so an update never wipes audio without a warning first.
     private static let firstRunKey = "audioCleanupSince"
+    /// UX round 2, A1: making "Keep audio for" shorter (or turning it on
+    /// from Forever) never deletes anything for 3 days, so the sidebar's
+    /// "audio deletes in N days" warning shows first and changing it back
+    /// loses nothing.
+    private static let graceUntilKey = "audioCleanupGraceUntil"
+    static let graceDays = 3
+
+    /// Call when the setting changes. Shorter than before: start the grace.
+    static func changed(from old: Int, to new: Int) {
+        guard new > 0, old == 0 || new < old else { return }
+        let until = Date().addingTimeInterval(Double(graceDays) * 86_400)
+        let current = UserDefaults.standard.object(forKey: graceUntilKey) as? Date ?? .distantPast
+        UserDefaults.standard.set(max(until, current), forKey: graceUntilKey)
+    }
+
+    /// How many recordings lose their audio in the next `graceDays` days
+    /// (for the line under the picker).
+    static func dueSoon(_ recordings: [RecordingInfo]) -> Int {
+        let soon = Date().addingTimeInterval(Double(graceDays) * 86_400)
+        return recordings.filter { info in
+            guard let due = deleteDate(info) else { return false }
+            return due <= soon
+        }.count
+    }
 
     static var days: Int {
         UserDefaults.standard.object(forKey: daysKey) as? Int ?? 7
@@ -42,6 +66,9 @@ enum AudioCleanup {
         var due = from.addingTimeInterval(Double(d) * 86_400)
         if let first = UserDefaults.standard.object(forKey: firstRunKey) as? Date {
             due = max(due, first.addingTimeInterval(2 * 86_400))
+        }
+        if let grace = UserDefaults.standard.object(forKey: graceUntilKey) as? Date {
+            due = max(due, grace)
         }
         return due
     }

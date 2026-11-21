@@ -242,6 +242,54 @@ sleep 2
 check "open a recording"
 shot "opened-recording"
 
+# Line tools: one click on a line only picks it (blue box with flag, note
+# and + buttons), nothing opens for typing. Down arrow moves the pick.
+click_at 620 265
+sleep 1; check "pick a line"; shot "line-picked"
+osascript -e 'tell application "System Events" to key code 125' || true
+sleep 1; shot "line-picked-down-arrow"
+osascript -e 'tell application "System Events" to key code 53' || true
+sleep 0.5
+
+# The sidebar never resizes the window (Ryan, 2026-11-20: it grew wider each
+# time he opened it). 760 and up: it opens inside the window. Below: it slides
+# over the transcript. Open and close a few times; the width must not change.
+win_width() {
+  osascript -e 'tell application "System Events" to get size of window 1 of (first process whose unix id is '"$APP_PID"')' 2>/dev/null | cut -d, -f1 | tr -d ' ' 
+}
+same_width() {
+  local w; w="$(win_width)"
+  echo "window width after $2: $w (wanted $1)"
+  if [ "$w" != "$1" ]; then echo "::error::Sidebar changed the window width ($2): $w, wanted $1"; FAILED=1; fi
+}
+for width in 800 780 700; do
+  resize "$width" 600; check "resize to $width"
+  shot "sidebar-$width-start"
+  for round in 1 2 3; do
+    toggle_sidebar; check "sidebar toggle $width #$round"
+    [ "$round" = 1 ] && shot "sidebar-$width-toggled-once"
+    toggle_sidebar; check "sidebar toggle back $width #$round"
+    same_width "$width" "toggle at $width, round $round"
+  done
+done
+# If opening the sidebar ever grew the window, the app put it back and
+# remembered the width it needed (ContentView.undoGrowth).
+echo "sidebar needs width (learned): $(defaults read com.rywnswn.verbatim sidebarNeedsWidth3 2>/dev/null || echo none)"
+# 700 wide: floating sidebar. Esc and a click on the dimmed transcript close it.
+toggle_sidebar; shot "sidebar-700-floating"
+osascript -e 'tell application "System Events" to key code 53' || true
+sleep 1; shot "sidebar-700-after-esc"
+toggle_sidebar
+click_at 600 400
+sleep 1; shot "sidebar-700-after-click-outside"
+same_width 700 "floating sidebar"
+check "floating sidebar"
+resize 960 620; check "back to 960"
+sleep 1; shot "sidebar-960-back"
+
+# Back to part 1 (the steps above may have moved on), then copy it.
+click_at 160 218
+sleep 1.5
 # Copy All (⇧⌘C) and Export as Markdown read the same text: check the
 # speaker names are in it (Ryan, 2026-11-19: "a copy doesn't show the speaker").
 pbcopy < /dev/null
