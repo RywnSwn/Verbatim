@@ -35,6 +35,9 @@ Punctuation (2026-11-20): Parakeet already punctuates as well as batch
 mode; 2-channel mics now follow the louder mic (merged); Ryan's grammar is
 good again on the Mac's own mic, cause unproven (see `PLAN.md`). Next:
 speaker rename UX, new chat.
+Bug hunt 1 (2026-11-21, list in `PLAN.md` "Weekly bug hunts"): bugs 1,
+2, 3, 5, 14, 15 fixed on `claude/hunt-1-fixes` (not merged, not tested).
+Next chat: more hunt 1 bugs (4, 6 to 13, 16).
 See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was

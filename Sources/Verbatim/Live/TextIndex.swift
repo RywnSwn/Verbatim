@@ -14,6 +14,9 @@ struct TextFacts: Codable, Equatable {
     var hasVoices = false
     /// Made (partly) with Apple's backup engine.
     var backupEngine = false
+    /// The live run never got to the end of the audio (see
+    /// `LiveText.liveUnfinished`). Optional: index files from before don't have it.
+    var liveUnfinished: Bool?
 
     init() {}
 
@@ -25,6 +28,7 @@ struct TextFacts: Codable, Equatable {
         speakersFound = t.speakersFound == true
         hasVoices = t.lines.contains { $0.voice != nil }
         backupEngine = t.madeWithBackupEngine
+        liveUnfinished = t.liveUnfinished == true ? true : nil
     }
 
     /// A file pass started and isn't finished.

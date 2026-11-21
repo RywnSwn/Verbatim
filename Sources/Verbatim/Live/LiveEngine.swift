@@ -53,6 +53,11 @@ struct LiveText: Codable, Equatable {
     var voiceSessions: Int?
     /// The speaker model went over the whole file ("Find speakers").
     var speakersFound: Bool?
+    /// Live text hasn't got to the end of the audio yet: set at Record,
+    /// cleared when the live run is done with the last audio. Still set at
+    /// launch = Verbatim crashed or quit first, and the end of the class is
+    /// filled in from the audio (Hunt 1 bug 3).
+    var liveUnfinished: Bool?
 
     struct Span: Codable, Equatable {
         var start: Double
@@ -88,10 +93,11 @@ enum LiveStore {
         return try? JSONDecoder().decode(LiveText.self, from: data)
     }
 
-    static func save(_ live: LiveText, for id: UUID) throws {
+    /// `to`: somewhere else than the recording's folder (Recently deleted).
+    static func save(_ live: LiveText, for id: UUID, to other: URL? = nil) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(live).write(to: url(id), options: .atomic)
+        try encoder.encode(live).write(to: other ?? url(id), options: .atomic)
     }
 }
 
