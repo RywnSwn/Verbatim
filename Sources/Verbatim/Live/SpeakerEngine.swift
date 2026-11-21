@@ -28,7 +28,7 @@ actor SpeakerEngine {
     /// FluidAudio's own default for this model ("all": the Mac picks, and it
     /// may use the graphics chip). On 2026-11-12 this was forced to CPU and
     /// Neural Engine as a guess at a lag fix. It didn't help, and after the
-    /// real fix (see PLAN.md, "Lag while recording") builds with that setting
+    /// real fix (see docs/plan/lag-and-freeze.md, "Lag while recording") builds with that setting
     /// lagged again for Ryan while builds without it didn't. On the Neural
     /// Engine the speaker model waits in line with Parakeet, and live text is
     /// fed only after the speaker model has had each bit of audio, so text

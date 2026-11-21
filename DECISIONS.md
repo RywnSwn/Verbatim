@@ -159,7 +159,7 @@ good". Whisper's accurate pass skipped, doubled and invented text; fixes
 worse than live. Parakeet Unified's streaming WER is within 0.05 points of
 its own batch mode, and it doesn't hallucinate. One model also means one
 download and less memory on the 8 GB Mac. Replaces "Two passes: live +
-accurate" and the step 5 choices. Plan: `PLAN.md`, step 5c.
+accurate" and the step 5 choices. Plan: `docs/plan/step-05c-parakeet-only.md`.
 
 ## Step 5c choices (2026-11-10)
 - A file job (import, "Transcribe again") waits while a recording is going,

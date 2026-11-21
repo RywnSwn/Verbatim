@@ -5,7 +5,7 @@ import AVFoundation
 /// one someone is talking into gets most of the weight, with a smooth fade
 /// when it changes. Averaging both (Nov 19 to 20) halved the teacher's voice
 /// and added the far mic's late copy of it plus room noise: Parakeet then
-/// wrote run-on text with no capitals or commas (punctuation test, PLAN.md).
+/// wrote run-on text with no capitals or commas (punctuation test, docs/plan/punctuation.md).
 /// A mic with one channel never comes here.
 /// sampleQueue only (AudioPipeline).
 final class LouderMic {

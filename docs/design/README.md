@@ -60,7 +60,7 @@ Grey bars when someone talks, grey dots when it's quiet. No color.
    line at the top of the transcript with text links.
 
 ## Final look (step 2b)
-"Notebook": see `Sources/Verbatim/Views/Theme.swift` and PLAN.md "How the look works".
+"Notebook": see `Sources/Verbatim/Views/Theme.swift` and `docs/plan/step-02b-look-and-icon.md` "How the look works".
 
 ## Style rules learned from Ryan's feedback
 - No soft boxes with light borders and rounded corners around everything (reads as

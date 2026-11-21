@@ -48,7 +48,7 @@ jobs:
         working-directory: tools/PunctTest
         run: |
           # The four-way run (story.mp3, classroom.wav) was done on 2026-11-20,
-          # results in PLAN.md. Now: the two-mic mix.
+          # results in docs/plan/punctuation.md. Now: the two-mic mix.
           .build/release/PunctTest --two-mics ../../audio/two_mics.wav | tee "$RUNNER_TEMP/out.txt"
           { echo '```'; cat "$RUNNER_TEMP/out.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
