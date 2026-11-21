@@ -278,7 +278,7 @@ struct LookSettings: View {
                 }
                 Toggle(isOn: $timesInCopies) {
                     Text("Include times when copying and exporting")
-                    Text(timesInCopies ? "Each line starts with its time, like [10:42]." : "Just the words. Cleaner for pasting into Claude.")
+                    Text(timesInCopies ? "Each line starts with its time, like [10:42]." : "Just the words. Cleaner for pasting into other apps.")
                 }
             }
         }

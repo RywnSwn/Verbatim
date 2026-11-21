@@ -303,7 +303,7 @@ final class Updater {
         try? FileManager.default.removeItem(at: zip)
         guard ok else {
             try? FileManager.default.removeItem(at: folder)
-            throw Problem(text: "The download didn't pass the safety check (signature), so it wasn't installed. Tell Claude.")
+            throw Problem(text: "The download didn't pass the safety check (signature), so it wasn't installed. The version you have still works.")
         }
         return app
     }

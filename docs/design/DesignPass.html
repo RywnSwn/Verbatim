@@ -623,7 +623,7 @@ select { font: inherit; font-size: 12.5px; padding: 3px 6px; border-radius: 6px;
           `<div class="size"><span style="font-size:11px">A</span><input id="sizeRange" type="range" min="13" max="26" step="1" value="${textSize}" aria-label="Transcript text size"><span style="font-size:17px">A</span></div>`) +
         `<div class="sample" id="sample" style="font-size:${textSize}px"><b>Mr. Yurt:</b> Kweku Tsin carried the pot up to the sky.</div>` +
         row('Times', 'Imported files always show time since start.', '<select aria-label="Times"><option>Clock time (10:42)</option><option>Time since start (37:12)</option></select>') +
-        row('Include times when copying and exporting', 'Off: just the words. Cleaner for pasting into Claude.', sw(false, 'Include times'))),
+        row('Include times when copying and exporting', 'Off: just the words. Cleaner for pasting into other apps.', sw(false, 'Include times'))),
     transcription: () => head('Transcription', 'Everything runs on this Mac and works offline. These download once. If one breaks, Verbatim downloads it again by itself.') +
       box('Downloads',
         row('<span class="ok">✓</span> Speech model', 'Turns speech into text, live and from Voice Memos. Ready.', '') +
