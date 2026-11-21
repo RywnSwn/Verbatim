@@ -239,8 +239,12 @@ extension RecorderModel {
         // Back to its own voice: just follow the voice again.
         changed.speaker = choice == line.voice.map(Speakers.token) ? nil : choice
         live.replaceLine(id, start: start, with: changed)
+        // Hunt 1 bug 1: on Undo only the pick goes back. While recording the
+        // newest line keeps growing, and putting back the whole old line
+        // threw away every word said since the pick.
+        let oldSpeaker = line.speaker
         offerLineUndo("Just this line is now \(before.display(choice)).", in: id) {
-            LiveTranscriber.shared.replaceLine(id, start: start, with: line)
+            LiveTranscriber.shared.changeLine(id, start: start) { $0.speaker = oldSpeaker }
         }
     }
 

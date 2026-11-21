@@ -317,9 +317,12 @@ final class LiveTranscriber {
         activeID = id
         volatile = ""
         status = .starting
-        if texts[id] == nil { put(LiveText(), id) }
+        var t = texts[id] ?? LiveText()
+        t.liveUnfinished = true
+        put(t, id)
         generation += 1
         let run = generation
+        runs[run] = id
         catchingUp = false
         let queue = feed.open()
         let previous = runTask
@@ -373,6 +376,41 @@ final class LiveTranscriber {
 
     func forget(_ id: UUID) { put(nil, id) }
 
+    // MARK: - Delete while live text is still finishing (Hunt 1 bug 2)
+
+    /// Recordings moved to Recently deleted while the live run was still
+    /// going through their last audio (Delete right after Stop). The run
+    /// keeps going and saves into the moved folder, so Undo and Put Back
+    /// bring back the whole text. It used to be dropped: the last words
+    /// (up to 10 s, more if live text was behind) were gone for good.
+    @ObservationIgnored private var movedAway: Set<UUID> = []
+    /// Live runs not finished yet (run number: recording). After Stop a run
+    /// can still be going through the last audio while the next recording
+    /// has started, so `activeID` alone doesn't say.
+    @ObservationIgnored private var runs: [Int: UUID] = [:]
+
+    private func isRunning(_ id: UUID) -> Bool { runs.values.contains(id) }
+
+    /// Just before a recording's folder moves to Recently deleted: its
+    /// newest text, and every save still waiting, are on disk.
+    func saveBeforeMove(_ id: UUID) {
+        if isRunning(id), let t = boxes[id]?.text, !t.lines.isEmpty { write(t, id) }
+        Self.disk.sync {}
+    }
+
+    /// The recording went to Recently deleted. Its text goes too, unless the
+    /// live run is still finishing it: then it stays until the run is done.
+    func moveAway(_ id: UUID) {
+        guard isRunning(id) else { return forget(id) }
+        movedAway.insert(id)
+        index[id] = nil
+        saveIndexSoon()
+    }
+
+    private static func movedURL(_ id: UUID) -> URL {
+        RecentlyDeleted.folder(id).appending(path: "live.json")
+    }
+
     // MARK: - Editing lines
 
     /// Replaces the line that starts at `start`. Returns the old line.
@@ -383,6 +421,14 @@ final class LiveTranscriber {
         t.lines[i] = line
         commit(t, id)
         return old
+    }
+
+    /// Changes the line as it is NOW (for Undo of a speaker pick or an
+    /// unlock: the newest line may have grown since, keep its new words).
+    func changeLine(_ id: UUID, start: Double, _ change: (inout Transcript.Line) -> Void) {
+        guard var t = texts[id], let i = t.lines.firstIndex(where: { $0.start == start }) else { return }
+        change(&t.lines[i])
+        commit(t, id)
     }
 
     func removeLine(_ id: UUID, start: Double) -> Transcript.Line? {
@@ -430,13 +476,19 @@ final class LiveTranscriber {
     private func write(_ t: LiveText, _ id: UUID, background: Bool = false) {
         let n = (writes[id] ?? 0) + 1
         writes[id] = n
+        // In Recently deleted: saved there, and no index entry (it isn't in
+        // the sidebar). A failed save there is not worth a message (it may
+        // have been emptied meanwhile).
+        let moved = movedAway.contains(id) ? Self.movedURL(id) : nil
         guard background else {
-            let saved = Self.disk.sync { (try? LiveStore.save(t, for: id)) != nil }
+            let saved = Self.disk.sync { (try? LiveStore.save(t, for: id, to: moved)) != nil }
+            guard moved == nil else { return }
             if saved { remember(t, id) } else { saveFailed(id) }
             return
         }
         Self.disk.async {
-            let saved = (try? LiveStore.save(t, for: id)) != nil
+            let saved = (try? LiveStore.save(t, for: id, to: moved)) != nil
+            guard moved == nil else { return }
             Task { @MainActor in
                 let me = LiveTranscriber.shared
                 guard me.writes[id] == n else { return } // a newer save came after
@@ -454,7 +506,11 @@ final class LiveTranscriber {
     /// Before quitting: the text of the recording in progress, and every save
     /// still waiting, are on disk when this returns.
     func saveNow() {
-        if let id = activeID, let t = texts[id], !t.lines.isEmpty { write(t, id) }
+        // Also a run still going through the last audio of the class before
+        // (or of one just moved to Recently deleted).
+        for id in Set(runs.values).union(activeID.map { [$0] } ?? []) {
+            if let t = boxes[id]?.text, !t.lines.isEmpty { write(t, id) }
+        }
         Self.disk.sync {}
         saveIndexNow()
     }
@@ -464,7 +520,7 @@ final class LiveTranscriber {
     /// after `seconds`: the audio file is complete either way.
     func finishBeforeQuit(upTo seconds: Double) async {
         let deadline = Date().addingTimeInterval(seconds)
-        while activeID != nil, Date() < deadline {
+        while activeID != nil || !runs.isEmpty, Date() < deadline {
             try? await Task.sleep(for: .milliseconds(100))
         }
         saveNow()
@@ -474,6 +530,15 @@ final class LiveTranscriber {
     /// again when something asks for it, and its facts in the background
     /// (Undo of Delete All puts back every recording at once).
     func reload(_ id: UUID) {
+        // Put Back while the live run is still finishing it: the text in
+        // memory is the newest. It goes back to its own folder and keeps
+        // growing there.
+        if movedAway.remove(id) != nil, let t = boxes[id]?.text {
+            Self.disk.sync {}
+            write(t, id)
+            added += 1
+            return
+        }
         noFile.remove(id)
         index[id] = nil
         boxes[id] = nil
@@ -752,7 +817,21 @@ final class LiveTranscriber {
     }
 
     fileprivate func finished(_ id: UUID, run: Int) {
-        save(id)
+        runs[run] = nil
+        // Done with the last audio. Not if Undo Stop already started a newer
+        // run on this recording: that one clears it when it's done.
+        let last = !isRunning(id)
+        if last, var t = texts[id], t.liveUnfinished == true {
+            t.liveUnfinished = nil
+            put(t, id)
+            write(t, id, background: true)
+            lastSave = Date()
+        } else {
+            save(id)
+        }
+        // Deleted while finishing: the whole text is saved in Recently
+        // deleted now, so it can go from memory.
+        if last, movedAway.remove(id) != nil { put(nil, id) }
         guard run == generation else { return }
         activeID = nil
         status = nil

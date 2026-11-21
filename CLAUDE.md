@@ -38,6 +38,9 @@ Speaker menu ("Who is Speaker 2? (N lines)", numbers never move), line
 under the top bar, sidebar learned-width fix (RywnSwn/Verbatim#31, build
 0.1.246): merged 2026-11-21 at Ryan's word, test list in `PLAN.md` not
 run yet.
+Bug hunt 1 (2026-11-21, list in `PLAN.md` "Weekly bug hunts"): bugs 1,
+2, 3, 5, 14, 15 fixed (RywnSwn/Verbatim#30), merged 2026-11-21 at Ryan's
+word, not tested yet. Next: more hunt 1 bugs (4, 6 to 13, 16).
 See `PLAN.md` for build order and progress,
 `docs/spec.md` for behaviour, `docs/design/` for the approved layout (build
 to match it), `DECISIONS.md` for what was

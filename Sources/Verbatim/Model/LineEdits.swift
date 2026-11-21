@@ -205,12 +205,17 @@ extension RecorderModel {
     /// Lets later passes change the line again.
     func unlockLine(_ id: UUID, _ source: LineSource, start: Double) {
         guard var line = Self.line(id, source, start: start), line.isLocked else { return }
-        let old = line
+        let oldLocked = line.locked
         line.locked = nil
         Self.replace(id, source, start: start, with: line)
         // Item 5: it unlocked silently, with no way back.
+        // Hunt 1 bug 1: Undo only locks it again. An unlocked newest line
+        // grows while recording, and putting back the old copy deleted the
+        // new words.
         offerLineUndo("Line unlocked. Transcribe again may change it now.", in: id) {
-            Self.replace(id, source, start: start, with: old)
+            guard var now = Self.line(id, source, start: start) else { return }
+            now.locked = oldLocked
+            Self.replace(id, source, start: start, with: now)
         }
     }
 

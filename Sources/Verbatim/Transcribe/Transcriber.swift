@@ -88,12 +88,35 @@ final class Transcriber {
     private func pickUp(_ r: RecordingInfo) {
         // A file still being copied in has only half its audio (A6).
         guard !r.isActive, r.hasAudio, !importing.contains(r.id), let facts = live.facts(r.id) else { return }
-        if facts.passFinished != nil {
+        if facts.liveUnfinished == true {
+            finishLive(r)
+        } else if facts.passFinished != nil {
             if facts.passUnfinished, !facts.passStoppedByUser { enqueue(r.id) }
         } else if !facts.hasLines {
             let old = transcripts[r.id]
             if old == nil || (old?.finished == false && old?.stoppedByUser == false) { enqueue(r.id) }
         }
+    }
+
+    /// Live text never got to the end of the audio (crash, force quit, Stop
+    /// and Quit while it was behind). Hunt 1 bug 3: the end of the class
+    /// used to stay missing unless Ryan pressed Transcribe again. Now
+    /// Parakeet goes over the audio after the last line, and only that.
+    /// Text from the Mac's backup engine is redone whole, like after a
+    /// normal Stop, once Parakeet is here (until then the Mac's text stays).
+    private func finishLive(_ r: RecordingInfo) {
+        guard var text = live.texts[r.id] else { return }
+        if text.madeWithBackupEngine {
+            if isModelReady { redo(r.id) }
+            return
+        }
+        // Where live text got to. Lines Ryan deleted at the end count too.
+        let from = max(text.lines.map(\.end).max() ?? 0, text.removed?.map(\.end).max() ?? 0)
+        text.liveUnfinished = nil
+        let left = from < r.duration - 2
+        if left { text.pass = LiveText.FilePass(doneUpTo: from) }
+        live.setText(text, for: r.id)
+        if left { enqueue(r.id) }
     }
 
     /// The speaker model finished downloading: label what's already there.
