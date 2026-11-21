@@ -42,7 +42,9 @@ why (read it before re-arguing a choice).
   request to merge after he tests (he only merges when he asks).
 - Main chat + agents (Ryan's idea, 2026-11-21): one main chat talks with
   Ryan (brainstorm, new asks, test results) and does not do big coding
-  itself. Each feature or fix goes to a background agent (Agent tool,
+  itself, except small bug fixes (a few lines, one place): the main
+  chat fixes those itself (Ryan, 2026-11-21). Each feature or bigger fix
+  goes to a background agent (Agent tool,
   `isolation: "worktree"`) on its own `claude/<feature>` branch, briefed
   with the `PLAN.md` section, the files, and these rules; it pushes its
   branch and never merges. The main chat checks each one (diff, CI build,
